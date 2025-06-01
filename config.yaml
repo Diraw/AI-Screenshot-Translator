@@ -1,7 +1,7 @@
 api:
   model: "qwen-vl-ocr-latest"
   prompt_text: "请将图中的英文翻译成中文后以中文回复文本，如果包含数学公式请用tex格式输出。"
-  api_key: "YOUR_API_KEY_HERE" # 替换为您的实际API Key
+  api_key: "sk-30f87cf4e89b4fe585dd951fceb2d8b7" # 替换为您的实际API Key
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 app_settings:
