@@ -1,0 +1,55 @@
+# AI 截图翻译工具 (AI Screenshot Translator)
+
+[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/) [![PyQt5 Version](https://img.shields.io/badge/PyQt5-5.15+-green.svg)](https://pypi.org/project/PyQt5/) [![License](https://img.shields.io/badge/license-GNU%20GPLv2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0.html)
+
+# 简介
+
+本工具通过**简单的截图操作**，将图片发送给 AI 模型进行文本识别和翻译，并将翻译结果以可交互的 HTML 格式显示在独立的窗口中。
+
+本工具支持**自定义快捷键触发、多窗口结果管理以及系统托盘运行**，极大提升了日常工作和学习中的翻译效率。
+
+# 演示
+
+![](./doc/0.1.gif)
+
+# 安装
+
+### 1. 克隆仓库
+
+```bash
+git clone https://github.com/YourUsername/AI-Screenshot-Translator.git
+cd AI-Screenshot-Translator
+```
+
+### 2. 修改配置信息
+
+您可以通过编辑 `config.yaml` 文件自定义应用程序的行为：
+
+```yaml
+api:
+  model: "qwen-vl-ocr-latest"        # 使用的AI模型
+  prompt_text: "请将图中的英文翻译成中文后以中文回复文本，如果包含数学公式请用tex格式输出。" # 发送给模型的提示文本
+  api_key: "YOUR_API_KEY_HERE"       # API密钥
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1" # API服务地址
+
+app_settings:
+  max_windows: 0                     # 最大窗口数量，0表示无限制
+  zoom_sensitivity: 500              # 缩放敏感度
+  screenshot_hotkey: "ctrl+alt+s"    # 截图快捷键
+  debug_mode: true                   # 是否启用调试模式
+  initial_font_size: 24              # 结果窗口的默认字体大小
+```
+**注：**
+
+- 请将 **YOUR_API_KEY_HERE** 替换为您的实际 API 密钥。
+- 根据您选择的 AI 模型，**model** 和 **base_url** 可能需要相应调整。
+
+### 3. 创建虚拟环境并运行
+
+```bash
+conda create -n AI-Translator python=3.8
+conda activate AI-Translator
+pip install -r requirements.txt
+python -m main.py
+```
+

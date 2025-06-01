@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>模型返回结果</title>
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({
+            tex2jax: {
+                inlineMath: [['$','$'], ['\$$','\\$$']],
+                displayMath: [['$$','$$'], ['\$$','\\$$']],
+                processEscapes: true,
+                ignoreClass: "no-mathjax"
+            },
+            "HTML-CSS": {
+                linebreaks: { automatic: true }
+            },
+            SVG: {
+                linebreaks: { automatic: true }
+            }
+        });
+    </script>
+    <script type="text/javascript" async
+        src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML">
+        </script>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+            /* 移除或减小body的margin，或者在计算高度时考虑进去 */
+            /* 确保body没有固定的高度或最大高度，以便内容可以撑开 */
+            overflow-y: hidden;
+            /* 隐藏滚动条，因为窗口会自适应高度 */
+            font-size: <!-- FONT_SIZE_PLACEHOLDER -->px;
+        }
+    
+        pre {
+            background-color: #f4f4f4;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    
+        code {
+            font-family: monospace;
+        }
+    
+        .hidden {
+            display: none;
+        }
+    
+        /* 为渲染内容区域设置字体大小 */
+        #renderedContent {
+            font-size: <!-- FONT_SIZE_PLACEHOLDER -->px;
+        }
+    
+        #renderedContent * {
+            font-size: inherit;
+        }
+    
+        #rawContent pre {
+            font-size: <!-- FONT_SIZE_PLACEHOLDER -->px;
+        }
+    
+    </style>
+    <script>
+        // JavaScript 函数来切换显示模式
+        function showRendered() {
+            document.getElementById('renderedContent').classList.remove('hidden');
+            document.getElementById('rawContent').classList.add('hidden');
+            // 重新渲染 MathJax，以防内容是后来添加的
+            if (typeof MathJax !== 'undefined' && MathJax.Hub) {
+                MathJax.Hub.Queue(["Typeset", MathJax.Hub, "renderedContent"]);
+            }
+            // 切换后获取高度
+            if (window.updateHeight) { // 检查Python注入的函数是否存在
+                window.updateHeight();
+            }
+        }
+
+        function showRaw() {
+            document.getElementById('rawContent').classList.remove('hidden');
+            document.getElementById('renderedContent').classList.add('hidden');
+            // 切换后获取高度
+            if (window.updateHeight) { // 检查Python注入的函数是否存在
+                window.updateHeight();
+            }
+        }
+
+        // 获取文档高度的JavaScript函数
+        function getDocumentHeight() {
+            // 获取body的实际滚动高度，包括内容溢出部分
+            const body = document.body;
+            const html = document.documentElement;
+            const height = Math.max(
+                body.scrollHeight,
+                body.offsetHeight,
+                html.clientHeight,
+                html.scrollHeight,
+                html.offsetHeight
+            );
+            return height;
+        }
+
+        // 当内容大小改变时通知Qt
+        // MutationObserver 可以在 DOM 结构改变时触发
+        const observer = new MutationObserver(function (mutations) {
+            if (window.updateHeight) {
+                window.updateHeight();
+            }
+        });
+
+        // 监听body及其子元素的DOM变化
+        document.addEventListener('DOMContentLoaded', () => {
+            observer.observe(document.body, {
+                attributes: true,
+                childList: true,
+                subtree: true,
+                characterData: true
+            });
+
+            // 初始加载完成后也获取一次高度
+            if (window.updateHeight) {
+                window.updateHeight();
+            }
+        });
+
+        // MathJax 渲染完成事件监听
+        // MathJax 渲染是异步的，渲染完成后内容高度可能会变化
+        if (typeof MathJax !== 'undefined' && MathJax.Hub) {
+            MathJax.Hub.Queue(function () {
+                MathJax.Hub.Register.MessageHook("End Typeset", function (message) {
+                    if (window.updateHeight) {
+                        window.updateHeight();
+                    }
+                });
+            });
+        }
+
+    </script>
+</head>
+
+<body>
+
+    <div id="renderedContent">
+        <!-- RENDERED_CONTENT_PLACEHOLDER -->
+    </div>
+
+    <div id="rawContent" class="hidden">
+        <pre><!-- RAW_CONTENT_PLACEHOLDER --></pre>
+    </div>
+</body>
+
+</html>
