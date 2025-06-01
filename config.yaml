@@ -1,12 +1,12 @@
 api:
-  model: "qwen-vl-ocr-latest"
-  prompt_text: "请将图中的英文翻译成中文后以中文回复文本，如果包含数学公式请用tex格式输出。"
-  api_key: "sk-30f87cf4e89b4fe585dd951fceb2d8b7" # 替换为您的实际API Key
-  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  model: "qwen-vl-ocr-latest"        # 使用的AI模型
+  prompt_text: "请将图中的英文翻译成中文后以中文回复文本，如果包含数学公式请用tex格式输出。" # 发送给模型的提示文本
+  api_key: "YOUR_API_KEY_HERE"       # API密钥
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1" # API服务地址
 
 app_settings:
-  max_windows: 0
-  zoom_sensitivity: 500
-  screenshot_hotkey: "ctrl+alt+s"
-  debug_mode: true # 或者 false
-  initial_font_size: 24 # 设置默认字体大小为 16px
+  max_windows: 0                     # 最大窗口数量，0表示无限制
+  zoom_sensitivity: 500              # 缩放敏感度
+  screenshot_hotkey: "ctrl+alt+s"    # 截图快捷键
+  debug_mode: true                   # 是否启用调试模式
+  initial_font_size: 24              # 结果窗口的默认字体大小
