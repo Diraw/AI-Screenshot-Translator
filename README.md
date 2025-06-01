@@ -1,6 +1,6 @@
 # AI 截图翻译工具 (AI Screenshot Translator)
 
-[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/) [![PyQt5 Version](https://img.shields.io/badge/PyQt5-5.15+-green.svg)](https://pypi.org/project/PyQt5/) [![License](https://img.shields.io/badge/license-GNU%20GPLv2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0.html)
+[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/) [![PyQt5 Version](https://img.shields.io/badge/PyQt5-5.15+-green.svg)](https://pypi.org/project/PyQt5/) [![Nuitka](https://img.shields.io/badge/Nuitka-Compiled-blue)](https://nuitka.net/) [![License](https://img.shields.io/badge/license-GNU%20GPLv2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0.html)
 
 # 简介
 
@@ -59,3 +59,7 @@ pip install -r requirements.txt
 python -m main.py
 ```
 
+# 其他
+
+- 软件icon来自 [iconfinder](https://www.iconfinder.com/search?q=screenshot&price=free)
+- 特别感谢 Gemini 2.5 Flash 和 DeepSeek-V3-0324 帮我找bug
