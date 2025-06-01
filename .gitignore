@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+*.egg
+*.egg-info/
+dist/
+build/
+*.so
+.idea/  # PyCharm project files
+.vscode/ # VS Code project files
+
+# Nuitka
+main.build/
+main.dist/
+main.onefile-build/
+main.exe
+nuitka/
+nuitka-crash-report.xml
+
+# Pyinstaller
+build/
+dist/
+*.spec
+
+# Debugging and Testingq
+logs/
+test.py
