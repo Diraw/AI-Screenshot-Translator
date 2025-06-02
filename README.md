@@ -23,7 +23,7 @@
 ### 1. 克隆仓库
 
 ```bash
-git clone https://github.com/YourUsername/AI-Screenshot-Translator.git
+git clone https://github.com/Diraw/AI-Screenshot-Translator.git
 cd AI-Screenshot-Translator/src
 ```
 
