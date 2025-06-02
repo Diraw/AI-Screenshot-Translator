@@ -27,7 +27,8 @@ build/
 dist/
 *.spec
 
-# Debugging and Testingq
+# Debugging and Testing
 logs/
 test.py
 *.log
+my.yaml
