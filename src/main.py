@@ -144,12 +144,18 @@ class IntegratedApp(QWidget):
     def _load_config(self):
         # 仅从应用程序的当前工作目录加载 config.yaml
         config_path = os.path.join(os.getcwd(), "config.yaml")
+        debug_config_path=os.path.join(os.getcwd(), "my.yaml") # 用于开发阶段调试
 
         config = {}
         config_loaded_from = None
 
         try:
-            if os.path.exists(config_path):
+            if os.path.exists(debug_config_path):
+                with open(debug_config_path, "r", encoding="utf-8") as f:
+                    config = yaml.safe_load(f)
+                config_loaded_from = debug_config_path
+
+            elif os.path.exists(config_path):
                 with open(config_path, "r", encoding="utf-8") as f:
                     config = yaml.safe_load(f)
                 config_loaded_from = config_path
@@ -175,7 +181,7 @@ class IntegratedApp(QWidget):
                 "screenshot_hotkey", "ctrl+alt+s" # 提供默认值
             )
             # 托盘图标路径配置：始终使用 _get_resource_path 获取内部资源
-            icon_filename = config.get("app_settings", {}).get("icon_path", "icon.ico")
+            icon_filename = config.get("app_settings", {}).get("icon_path", "./assets/icon.ico")
             self.icon_path = self._get_resource_path(icon_filename)
             # 读取 debug_mode
             self.debug_mode = config.get("app_settings", {}).get("debug_mode", False) # 提供默认值
@@ -407,7 +413,7 @@ class IntegratedApp(QWidget):
         if self.debug_mode:
             print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 收到 AI 成功响应信号。")
         try:
-            html_template_path = self._get_resource_path("template.html")
+            html_template_path = self._get_resource_path("./assets/template.html")
             self.api_client.set_html_template_path(html_template_path)
 
             html_content = self.api_client.create_html_content(model_response_markdown,initial_font_size=self.initial_font_size)

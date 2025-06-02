@@ -43,13 +43,13 @@ def get_model_response(image_data_base64, prompt_text, api_key=None, base_url=No
     )
     return completion.choices[0].message.content
 
-def create_unified_html(markdown_text, template_path="template.html", font_size: int = 16):
+def create_unified_html(markdown_text, template_path="./assets/template.html", font_size: int = 16):
     """从模板文件加载HTML，并用渲染内容和原始文本填充占位符"""
     try:
         # 确保 template_path 是一个有效的文件路径
         if not os.path.exists(template_path):
             print(f"错误: 模板文件 '{template_path}' 未找到。")
-            return "<h1>错误: HTML 模板文件未找到。</h1><p>请确保 template.html 文件存在于正确的位置。</p>"
+            return "<h1>错误: HTML 模板文件未找到。</h1><p>请确保 ./assets/template.html 文件存在于正确的位置。</p>"
 
         with open(template_path, "r", encoding="utf-8") as f:
             html_template = f.read()
@@ -81,7 +81,7 @@ class APIClient:
     def __init__(self, api_key=None, base_url=None):
         self.api_key = api_key
         self.base_url = base_url
-        self.html_template_path = "template.html" # 添加一个属性来存储模板路径，设置默认值
+        self.html_template_path = "./assets/template.html" # 添加一个属性来存储模板路径，设置默认值
 
     def set_html_template_path(self, path):
         """设置 HTML 模板文件的路径"""

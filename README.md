@@ -14,15 +14,17 @@
 
 # 演示
 
-![](./doc/0.1.gif)
+![](./img/0.1.gif)
 
 # 安装
+
+您可以选择下载源码运行，或者前往 [Releases](https://github.com/Diraw/AI-Screenshot-Translator/releases) 界面下载可执行文件
 
 ### 1. 克隆仓库
 
 ```bash
 git clone https://github.com/YourUsername/AI-Screenshot-Translator.git
-cd AI-Screenshot-Translator
+cd AI-Screenshot-Translator/src
 ```
 
 ### 2. 修改配置信息

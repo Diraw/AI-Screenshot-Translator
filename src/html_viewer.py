@@ -395,7 +395,7 @@ class HTMLViewer:
             base_path = os.path.dirname(os.path.abspath(__file__))
         return os.path.join(base_path, relative_path)
 
-    def _load_html_template(self, template_filename="template.html"):
+    def _load_html_template(self, template_filename="./assets/template.html"):
         """
         加载指定的 HTML 模板文件。
         """
