@@ -9,13 +9,16 @@ def encode_image(image_path):
         return base64.b64encode(image_file.read()).decode("utf-8")
 
 
-def get_model_response(image_data_base64, prompt_text, api_key=None, base_url=None):
+def get_model_response(image_data_base64, prompt_text, api_key=None, base_url=None, model_name=None):
     """获取模型响应"""
     if api_key is None:
         raise ValueError("API key must be provided.")
 
     if base_url is None:
         raise ValueError("Base URL must be provided.")
+    
+    if model_name is None:
+        raise ValueError("Model name must be provided.")
 
     client = OpenAI(
         api_key=api_key,
@@ -23,7 +26,7 @@ def get_model_response(image_data_base64, prompt_text, api_key=None, base_url=No
     )
 
     completion = client.chat.completions.create(
-        model="qwen-vl-ocr-latest",
+        model=model_name,
         messages=[
             {
                 "role": "system",
@@ -69,8 +72,8 @@ def create_unified_html(markdown_text, template_path="./assets/template.html", f
     full_html = html_template.replace(
         "<!-- RENDERED_CONTENT_PLACEHOLDER -->", rendered_html_content
     )
-    full_html = full_html.replace("<!-- RAW_CONTENT_PLACEHOLDER -->", escaped_raw_text)
-    full_html = full_html.replace("<!-- FONT_SIZE_PLACEHOLDER -->", str(font_size))
+    full_html = full_html.replace("< !-- RAW_CONTENT_PLACEHOLDER -->", escaped_raw_text)
+    full_html = full_html.replace("< !-- FONT_SIZE_PLACEHOLDER -->", str(font_size))
 
     return full_html
 
@@ -78,10 +81,12 @@ def create_unified_html(markdown_text, template_path="./assets/template.html", f
 class APIClient:
     """API 客户端类，封装所有 API 相关操作"""
 
-    def __init__(self, api_key=None, base_url=None):
+    def __init__(self, api_key=None, base_url=None, model_name=None):
+        """初始化 API 客户端"""
         self.api_key = api_key
         self.base_url = base_url
-        self.html_template_path = "./assets/template.html" # 添加一个属性来存储模板路径，设置默认值
+        self.model_name = model_name
+        self.html_template_path = "./assets/template.html" # 默认值
 
     def set_html_template_path(self, path):
         """设置 HTML 模板文件的路径"""
@@ -90,10 +95,9 @@ class APIClient:
     def process_image(self, image_data_base64, prompt_text):
         """处理图片并返回模型响应"""
         return get_model_response(
-            image_data_base64, prompt_text, self.api_key, self.base_url
+            image_data_base64, prompt_text, self.api_key, self.base_url, self.model_name
         )
 
     def create_html_content(self, markdown_text, initial_font_size: int = 16):
         """创建 HTML 内容，使用内部存储的模板路径"""
-        # 移除 template_path 参数，因为它现在从 self.html_template_path 获取
         return create_unified_html(markdown_text, self.html_template_path, initial_font_size)
