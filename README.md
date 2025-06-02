@@ -1,6 +1,6 @@
 # AI 截图翻译工具 (AI Screenshot Translator)
 
-[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/) [![PyQt5 Version](https://img.shields.io/badge/PyQt5-5.15+-green.svg)](https://pypi.org/project/PyQt5/) [![Nuitka](https://img.shields.io/badge/Nuitka-Compiled-blue)](https://nuitka.net/) [![License](https://img.shields.io/badge/license-GNU%20GPLv2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0.html)
+[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/) [![Nuitka](https://img.shields.io/badge/Nuitka-Compiled-purple)](https://nuitka.net/) [![Release Version](https://img.shields.io/badge/Release-v0.2-red)](https://github.com/Diraw/AI-Screenshot-Translator/releases/tag/v0.2-test)
 
 # 简介
 
