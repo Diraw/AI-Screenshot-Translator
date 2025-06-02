@@ -58,7 +58,7 @@ app_settings:
 conda create -n AI-Translator python=3.8
 conda activate AI-Translator
 pip install -r requirements.txt
-python -m main.py
+python main.py
 ```
 
 # 其他
