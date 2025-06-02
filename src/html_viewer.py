@@ -12,13 +12,20 @@ from PyQt5.QtWebEngineWidgets import (
     QWebEngineView,
     QWebEngineScript,
 )
-from PyQt5.QtCore import Qt, QTimer, pyqtSlot, QPoint
+from PyQt5.QtCore import Qt, QTimer, pyqtSlot, QPoint, pyqtSignal, QObject
 from PyQt5.QtWebChannel import QWebChannel
+
+class HTMLWindowSignals(QObject):
+    """HTMLWindow 的信号类"""
+    retranslate_requested = pyqtSignal(str, str, int, object)
 
 class HTMLWindow(QMainWindow):
     """HTML 显示窗口类"""
 
-    def __init__(self, html_content, title="模型返回结果", width=400, height=300):
+    # 添加一个信号，用于从 JavaScript 接收就绪状态
+    js_ready_signal = pyqtSignal()
+
+    def __init__(self, html_content, title="模型返回结果", width=400, height=300, base64_image_data=None, prompt_text=None, group_id=None, screenshot_card=None):
         super().__init__()
         self.setWindowTitle(title)
         self.setGeometry(100, 100, width, height)
@@ -26,25 +33,51 @@ class HTMLWindow(QMainWindow):
         self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Tool)
         self.setWindowOpacity(1)
 
+        # 存储原始数据，以便重新请求
+        self.original_base64_image_data = base64_image_data
+        self.original_prompt_text = prompt_text
+        self.original_group_id = group_id
+        self.original_screeenshot_card = screenshot_card
+
+        self.signals = HTMLWindowSignals() # 初始化信号对象
+
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
         self.web_view = QWebEngineView()
-        self.web_view.setHtml(html_content)
+        # 确保在设置HTML之前，QWebChannel和其对象都已注册
+        self.channel = QWebChannel()
+        self.web_view.page().setWebChannel(self.channel)
+        self.channel.registerObject("qt_webchannel", self)
+        
+        self.web_view.setHtml(html_content) # setHtml会重新加载页面，所以注册必须在其之前
         main_layout.addWidget(self.web_view)
+
+        # 连接就绪信号
+        self.js_ready_signal.connect(self._on_js_ready)
 
         # --- 控制按钮布局 ---
         control_layout = QHBoxLayout()
         control_layout.setContentsMargins(5, 5, 5, 5)
 
+        # T代表transfer转换之后，R代表raw原始文本
         self.toggle_view_button = QPushButton("T", self)
         self.toggle_view_button.setFixedSize(20, 20)
         self.toggle_view_button.setStyleSheet(
             "background-color: #4CAF50; color: white; border-radius: 10px;"
         )
         self.toggle_view_button.clicked.connect(self.toggle_view_mode)
+
+        # 重新翻译/请求按钮
+        self.retranslate_button = QPushButton("↺", self)
+        self.retranslate_button.setFixedSize(20, 20)
+        self.retranslate_button.setStyleSheet(
+            "background-color: #007BFF; color: white; border-radius: 10px;"
+        )
+
+        self.retranslate_button.clicked.connect(self._on_retranslate_button_clicked) # 连接槽函数
 
         self.resize_button = QPushButton("⤡", self)
         self.resize_button.setFixedSize(20, 20)
@@ -66,6 +99,7 @@ class HTMLWindow(QMainWindow):
         # 先添加一个 stretch，它会占据所有可用空间，将后面的按钮推到最右边
         control_layout.addStretch()
         control_layout.addWidget(self.toggle_view_button)
+        control_layout.addWidget(self.retranslate_button)
         control_layout.addWidget(self.resize_button)
         control_layout.addWidget(self.close_button)
 
@@ -74,11 +108,6 @@ class HTMLWindow(QMainWindow):
 
         self.drag_position = None
         self.is_rendered_mode = True
-
-        # 初始化 QWebChannel
-        self.channel = QWebChannel()
-        self.web_view.page().setWebChannel(self.channel)
-        self.channel.registerObject("qt_webchannel", self)
 
         self.web_view.loadFinished.connect(self._on_web_view_load_finished)
 
@@ -94,6 +123,7 @@ class HTMLWindow(QMainWindow):
             + 10
         )
         self.toggle_view_button.hide()
+        self.retranslate_button.hide()
         self.resize_button.hide()
         self.close_button.hide()
 
@@ -110,32 +140,100 @@ class HTMLWindow(QMainWindow):
         self.resize_start_height = 0
         self.resize_sensitivity = 1.0
 
-    def _inject_js_update_height_function(self):
-        """注入一个JavaScript函数到页面，供HTML调用以更新窗口高度"""
-        script = QWebEngineScript()
-        script.setSourceCode(
-            """
-            window.updateHeight = function() {
-                const body = document.body;
-                const html = document.documentElement;
-                const contentHeight = Math.max(
-                    body.scrollHeight,
-                    body.offsetHeight,
-                    html.clientHeight,
-                    html.scrollHeight,
-                    html.offsetHeight
-                );
-                if (typeof qt_webchannel !== 'undefined' && qt_webchannel.updateWindowHeight) {
-                    qt_webchannel.updateWindowHeight(contentHeight);
-                } else {
-                    console.warn("qt_webchannel.updateWindowHeight not ready yet.");
-                }
-            };
-            setTimeout(window.updateHeight, 100);
+    @pyqtSlot()
+    def _on_retranslate_button_clicked(self):
+        """处理重新翻译按钮点击事件"""
+        if self.original_base64_image_data and self.original_prompt_text and self.original_group_id:
+            # 发送信号给主应用程序，请求重新翻译
+            self.signals.retranslate_requested.emit(
+                self.original_base64_image_data,
+                self.original_prompt_text,
+                self.original_group_id,
+                self.original_screeenshot_card
+            )
+            # 显示加载提示
+            self.web_view.setHtml("<html><body><h1>正在重新翻译...</h1><p>请稍候。</p></body></html>")
+        else:
+            print("[HTMLWindow] 无法重新翻译：缺少必要的原始数据。")
+            self.web_view.setHtml("<html><body><h1>重新翻译失败</h1><p>缺少原始图片或提示信息。</p></body></html>")
+
+    @pyqtSlot()
+    def _on_js_ready(self):
+        """当JavaScript通知Python其环境已准备好时调用"""
+        print("[HTMLWindow] JavaScript 环境已就绪。")
+        # 一旦JS环境就绪，立即触发一次高度更新
+        self._try_update_height()
+
+    def _inject_qwebchannel_init_script(self):
         """
-        )
+        注入一个JavaScript脚本，用于初始化QWebChannel，
+        并检查qt_webchannel对象是否就绪，然后通知Python。
+        """
+        script = QWebEngineScript()
+        script_content = """
+            console.log("Initializing QWebChannel.");
+            
+            // 确保 QWebChannel 构造函数存在
+            if (typeof QWebChannel !== 'undefined') {
+                new QWebChannel(qt.webChannelTransport, function(channel) {
+                    window.qt_webchannel = channel.objects.qt_webchannel;
+                    console.log("QWebChannel initialized. qt_webchannel object acquired.");
+                    
+                    // 确认对象和信号存在
+                    if (typeof window.qt_webchannel !== 'undefined' && typeof window.qt_webchannel.js_ready_signal === 'function') {
+                        window.qt_webchannel.js_ready_signal(); // 通知Python
+                        console.log("js_ready_signal sent to Python.");
+                        
+                        // 在 qt_webchannel 确认就绪后，再定义和触发 updateHeight
+                        window.updateHeight = function() {
+                            console.log("updateHeight called from JS.");
+                            const body = document.body;
+                            const html = document.documentElement;
+                            const contentHeight = Math.max(
+                                body.scrollHeight,
+                                body.offsetHeight,
+                                html.clientHeight,
+                                html.scrollHeight,
+                                html.offsetHeight
+                            );
+                            if (typeof window.qt_webchannel !== 'undefined' && typeof window.qt_webchannel.updateWindowHeight === 'function') {
+                                window.qt_webchannel.updateWindowHeight(contentHeight);
+                                console.log("Height updated to: " + contentHeight);
+                            } else {
+                                console.warn("qt_webchannel or updateWindowHeight not ready during updateHeight call, this should not happen.");
+                            }
+                        };
+
+                        // 设置对MathJax的观察
+                        if (typeof MathJax !== 'undefined') {
+                            console.log("MathJax found, setting up observer for updateHeight.");
+                            MathJax.Hub.Queue(function() {
+                                MathJax.Hub.Register.MessageHook("End Typeset", function() {
+                                    console.log("MathJax finished rendering, triggering updateHeight.");
+                                    if (window.updateHeight) {
+                                        window.updateHeight();
+                                    }
+                                });
+                            });
+                        }
+                        
+                        // 初始触发一次 updateHeight
+                        if (window.updateHeight) {
+                            window.updateHeight();
+                        }
+
+                    } else {
+                        console.error("qt_webchannel object or js_ready_signal method not found after QWebChannel init.");
+                    }
+                });
+            } else {
+                console.error("QWebChannel is not defined. Make sure qwebchannel.js is loaded.");
+            }
+        """
+        script.setSourceCode(script_content)
         script.setInjectionPoint(QWebEngineScript.DocumentReady)
         script.setRunsOnSubFrames(True)
+        script.setWorldId(QWebEngineScript.MainWorld) # 确保在主世界中运行
         self.web_view.page().scripts().insert(script)
 
     @pyqtSlot(float)
@@ -161,48 +259,84 @@ class HTMLWindow(QMainWindow):
     def _on_web_view_load_finished(self, ok):
         """当QWebEngineView加载HTML内容完成时调用"""
         if ok:
-            print("WebEngineView 加载完成。")
-            self._inject_js_update_height_function()
+            print("[HTMLWindow] WebEngineView 加载完成。")
+            # 延迟注入QWebChannel初始化脚本
+            QTimer.singleShot(100, self._inject_qwebchannel_init_script)
 
+            # 显示按钮
             self.toggle_view_button.show()
+            self.retranslate_button.show()
             self.resize_button.show()
             self.close_button.show()
 
-            QTimer.singleShot(
-                200,
-                lambda: self.web_view.page().runJavaScript("showRendered();"),
-            )
-            QTimer.singleShot(
-                500,
-                lambda: self.web_view.page().runJavaScript(
-                    "if (window.updateHeight) window.updateHeight();"
-                ),
-            )
         else:
-            print("WebEngineView 加载失败。")
+            print("[HTMLWindow] WebEngineView 加载失败。")
+
+    def _check_and_call_js(self, js_code):
+        """安全地执行JavaScript代码"""
+        try:
+            self.web_view.page().runJavaScript(js_code)
+        except Exception as e:
+            print(f"[HTMLWindow] 执行JavaScript时出错: {e}")
+            
+    def _try_update_height(self):
+        """尝试调用updateHeight函数 (现在这个函数主要由JS内部调用)"""
+        js_code = """
+        try {
+            if (typeof window.updateHeight === 'function') {
+                window.updateHeight();
+                console.log("updateHeight executed successfully by _try_update_height from Python");
+            } else {
+                console.warn("updateHeight is not defined when _try_update_height called from Python. QWebChannel init might still be in progress.");
+            }
+        } catch (e) {
+            console.error("Error executing updateHeight from Python:", e);
+        }
+        """
+        self._check_and_call_js(js_code)
 
     def toggle_view_mode(self):
-        """切换显示模式（渲染结果 / 原始文本）"""
+        """切换视图模式（渲染结果 / 原始文本）"""
         if self.is_rendered_mode:
-            self.web_view.page().runJavaScript("showRaw();")
+            js_code = """
+            try {
+                if (typeof showRaw === 'function') {
+                    showRaw();
+                    console.log("showRaw executed successfully");
+                } else {
+                    console.error("showRaw is not defined");
+                }
+            } catch (e) {
+                console.error("Error executing showRaw:", e);
+            }
+            """
+            self._check_and_call_js(js_code)
             self.is_rendered_mode = False
             self.toggle_view_button.setText("R")
             self.toggle_view_button.setStyleSheet(
                 "background-color: #2196F3; color: white; border-radius: 10px;"
             )
         else:
-            self.web_view.page().runJavaScript("showRendered();")
+            js_code = """
+            try {
+                if (typeof showRendered === 'function') {
+                    showRendered();
+                    console.log("showRendered executed successfully");
+                } else {
+                    console.error("showRendered is not defined");
+                }
+            } catch (e) {
+                console.error("Error executing showRendered:", e);
+            }
+            """
+            self._check_and_call_js(js_code)
             self.is_rendered_mode = True
             self.toggle_view_button.setText("T")
             self.toggle_view_button.setStyleSheet(
                 "background-color: #4CAF50; color: white; border-radius: 10px;"
             )
-        QTimer.singleShot(
-            300,
-            lambda: self.web_view.page().runJavaScript(
-                "if (window.updateHeight) window.updateHeight();"
-            ),
-        )
+        # 切换模式后，强制更新高度，现在由JS内部的轮询机制处理
+        QTimer.singleShot(300, self._try_update_height)
 
     # --- 缩放按钮的鼠标事件处理 ---
     def _resize_button_mouse_press(self, event):
@@ -248,13 +382,14 @@ class HTMLWindow(QMainWindow):
             ),
         )
 
-    # --- 窗口拖拽和边缘调整大小的鼠标事件处理 (需要修改以排除新按钮) ---
+    # --- 窗口拖拽和边缘调整大小的鼠标事件处理---
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             if (
                 self.close_button.geometry().contains(event.pos())
                 or self.toggle_view_button.geometry().contains(event.pos())
                 or self.resize_button.geometry().contains(event.pos())
+                or self.retranslate_button.geometry().contains(event.pos())
             ):
                 return
 
@@ -404,16 +539,16 @@ class HTMLViewer:
             with open(template_path, "r", encoding="utf-8") as f:
                 return f.read()
         except FileNotFoundError:
-            print(f"错误: HTML 模板文件 '{template_path}' 未找到。")
+            print(f"[HTMLViewer] 错误: HTML 模板文件 '{template_path}' 未找到。")
             return "<html><body><h1>错误：HTML 模板文件未找到！</h1></body></html>"
         except Exception as e:
-            print(f"加载 HTML 模板文件 '{template_path}' 时出错: {e}")
+            print(f"[HTMLViewer] 加载 HTML 模板文件 '{template_path}' 时出错: {e}")
             return f"<html><body><h1>错误：加载 HTML 模板失败！</h1><p>{e}</p></body></html>"
 
-    def show_html(self, html_content, title="HTML 查看器", width=400, height=300):
+    def show_html(self, html_content, title="HTML 查看器", width=400, height=300, base64_image_data=None, prompt_text=None, group_id=None, screenshot_card=None):
         if self.app is None:
             self.create_application()
-        window = HTMLWindow(html_content, title, width, height)
+        window = HTMLWindow(html_content, title, width, height,base64_image_data, prompt_text, group_id, screenshot_card)
         self.windows.append(window)
         window.setAttribute(Qt.WA_DeleteOnClose)
         window.destroyed.connect(

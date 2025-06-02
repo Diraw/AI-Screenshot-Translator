@@ -64,4 +64,4 @@ python -m main.py
 # 其他
 
 - 软件icon来自 [iconfinder](https://www.iconfinder.com/search?q=screenshot&price=free)
-- 特别感谢 Gemini 2.5 Flash 和 DeepSeek-V3-0324 帮我找bug
+- 特别感谢 Gemini 2.5 Flash 和 DeepSeek-V3-0324 帮我 fix bug

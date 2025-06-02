@@ -29,7 +29,7 @@ import base64
 import yaml
 import keyboard
 import traceback
-import datetime # 导入 datetime 模块
+import datetime
 
 from api_client import APIClient
 from html_viewer import HTMLViewer, HTMLWindow
@@ -38,7 +38,7 @@ from screenshot import ScreenshotTool, ScreenshotPreviewCard
 
 # --- AIWorker 和 WorkerSignals 类 ---
 class WorkerSignals(QObject):
-    result = pyqtSignal(str, int, object)
+    result = pyqtSignal(str, int, object, str, str)
     error = pyqtSignal(str, int)
 
 
@@ -53,21 +53,44 @@ class AIWorker(QRunnable):
         self.group_id = group_id
         self.screenshot_card = screenshot_card
         self.debug_mode = debug_mode
+        self._is_stopped = False # 用于外部停止信号
 
         self.signals = WorkerSignals()
+
+    def stop(self):
+        """设置停止标志，尝试优雅地停止任务"""
+        self._is_stopped = True
+        if self.debug_mode:
+            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [AIWorker] 组 {self.group_id}: 收到停止信号。")
+
 
     @pyqtSlot()
     def run(self):
         try:
+            if self._is_stopped:
+                if self.debug_mode:
+                    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [AIWorker] 组 {self.group_id}: 任务在开始前被停止。")
+                return
+
             if self.debug_mode:
                 print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [AIWorker] 组 {self.group_id}: AIWorker 线程开始处理。")
             model_response_markdown = self.api_client.process_image(
                 self.base64_image_data, self.prompt_text
             )
+
+            if self._is_stopped: # 检查任务是否在处理期间被停止
+                if self.debug_mode:
+                    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [AIWorker] 组 {self.group_id}: 任务在处理后被停止，不发出结果。")
+                return
+
             if self.debug_mode:
                 print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [AIWorker] 组 {self.group_id}: AIWorker 线程完成处理。")
             self.signals.result.emit(
-                model_response_markdown, self.group_id, self.screenshot_card
+                model_response_markdown,
+                self.group_id,
+                self.screenshot_card,
+                self.base64_image_data,
+                self.prompt_text
             )
         except Exception as e:
             if self.debug_mode:
@@ -95,6 +118,10 @@ class IntegratedApp(QWidget):
         self.debug_mode = False # 默认值
         self.initial_font_size = 16 # 默认值
 
+        # 用于保存原始的 stdout/stderr
+        self._original_stdout = sys.stdout
+        self._original_stderr = sys.stderr
+
         self._load_config() # 加载配置
 
         layout = QVBoxLayout(self)
@@ -104,7 +131,7 @@ class IntegratedApp(QWidget):
         self.setLayout(layout)
 
         # 确保 api_key 和 base_url 不为 None
-        self.api_client = APIClient(api_key=self.api_key or "", base_url=self.base_url or "")
+        self.api_client = APIClient(api_key=self.api_key or "", base_url=self.base_url or "", model_name=self.model_name or "")
         self.html_viewer = HTMLViewer()
 
         self.active_window_groups = []
@@ -114,12 +141,7 @@ class IntegratedApp(QWidget):
         self.thread_pool = QThreadPool()
         if self.debug_mode:
             print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 最大线程数: {self.thread_pool.maxThreadCount()}")
-        
-        # QApplication 实例在 main 块中处理，这里不再判断和创建
-        # if QApplication.instance() is None:
-        #     self.app = QApplication(sys.argv)
-        # else:
-        #     self.app = QApplication.instance()
+
         self.app = QApplication.instance() # 获取已存在的 QApplication 实例
 
         self.screenshot_tool = None
@@ -129,6 +151,10 @@ class IntegratedApp(QWidget):
         self.tray_icon = None
         self._setup_tray_icon()
         # --- 系统托盘初始化结束 ---
+
+        # 允许最小化到托盘
+        self.setWindowFlags(self.windowFlags() | Qt.WindowMinimizeButtonHint)
+
 
     def _get_resource_path(self, relative_path):
         """
@@ -226,10 +252,6 @@ class IntegratedApp(QWidget):
             log_file_path = os.path.join(log_dir, f"debug_log_{timestamp}.txt")
 
             try:
-                # 备份原始 stdout/stderr
-                self._original_stdout = sys.stdout
-                self._original_stderr = sys.stderr
-
                 # 将 stdout 和 stderr 重定向到文件
                 sys.stdout = open(log_file_path, "a", encoding="utf-8")
                 sys.stderr = open(log_file_path, "a", encoding="utf-8")
@@ -347,6 +369,9 @@ class IntegratedApp(QWidget):
             "id": current_group_id,
             "screenshot_card": None,
             "html_result_window": None,
+            "base64_image_data": None,
+            "prompt_text": None,
+            "ai_worker": None
         }
         self.active_window_groups.append(new_group)
 
@@ -376,6 +401,9 @@ class IntegratedApp(QWidget):
         pixmap.save(buffer, "PNG")
         base64_image_data = base64.b64encode(byte_array.data()).decode("utf-8")
 
+        new_group["base64_image_data"] = base64_image_data
+        new_group["prompt_text"] = self.prompt_text
+
         if self.debug_mode:
             print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {current_group_id}: 截图已转换为 base64 数据。")
             print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {current_group_id}: 正在发送截图给AI模型进行翻译...")
@@ -391,24 +419,44 @@ class IntegratedApp(QWidget):
     ):
         if self.debug_mode:
             print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 正在将 AI 任务提交到线程池...")
+
+        # 查找对应的 group，如果存在，先停止旧的 AIWorker
+        for group in self.active_window_groups:
+            if group["id"] == group_id:
+                if group["ai_worker"] and self._is_valid_qobject(group["ai_worker"]):
+                    group["ai_worker"].stop() # 尝试停止旧的任务
+                    if self.debug_mode:
+                        print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 停止了旧的 AIWorker 实例。")
+                break
+
+
         worker = AIWorker(
             self.api_client,
             base64_image_data,
             self.prompt_text,
             group_id,
             screenshot_card,
-            self.debug_mode # 传递 debug_mode 给 AIWorker
+            self.debug_mode
         )
         worker.signals.result.connect(self._handle_ai_success)
         worker.signals.error.connect(self._handle_ai_error)
         self.thread_pool.start(worker)
 
-    @pyqtSlot(str, int, object)
+        # 将 worker 实例存储在 group 中，以便后续管理
+        for group in self.active_window_groups:
+            if group["id"] == group_id:
+                group["ai_worker"] = worker
+                break
+
+
+    @pyqtSlot(str, int, object, str, str)
     def _handle_ai_success(
         self,
         model_response_markdown: str,
         group_id: int,
         screenshot_card: ScreenshotPreviewCard,
+        original_base64_image_data: str,
+        original_prompt_text: str
     ):
         if self.debug_mode:
             print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 收到 AI 成功响应信号。")
@@ -418,62 +466,92 @@ class IntegratedApp(QWidget):
 
             html_content = self.api_client.create_html_content(model_response_markdown,initial_font_size=self.initial_font_size)
 
-            if (
-                screenshot_card
-                and self._is_valid_qobject(screenshot_card)
-                and not screenshot_card.isHidden()
-            ):
-                initial_width = screenshot_card.width()
-                initial_pos = screenshot_card.pos()
+            # 查找现有窗口
+            existing_html_window = None
+            for group in self.active_window_groups:
+                if group["id"] == group_id and group["html_result_window"] and self._is_valid_qobject(group["html_result_window"]):
+                    existing_html_window = group["html_result_window"]
+                    break
+
+            if existing_html_window:
+                # 更新现有窗口的内容
+                if self.debug_mode:
+                    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 更新现有 HTML 窗口内容。")
+                existing_html_window.web_view.setHtml(html_content)
+                # 确保原始数据也更新，以防再次重新翻译
+                existing_html_window.original_base64_image_data = original_base64_image_data
+                existing_html_window.original_prompt_text = original_prompt_text
+                existing_html_window.original_screeenshot_card = screenshot_card # 确保截图卡片引用也更新
+                # 重新显示（如果隐藏了）并激活
+                existing_html_window.showNormal()
+                existing_html_window.activateWindow()
+                existing_html_window.raise_()
             else:
+                # 创建新窗口
+                if self.debug_mode:
+                    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 创建新的 HTML 窗口。")
+
                 initial_width = 400
                 initial_pos = QCursor.pos()
 
-            html_result_window = HTMLWindow(
-                html_content,
-                title=f"翻译结果 - 组 {group_id}",
-                width=initial_width,
-                height=300,
-            )
+                if (
+                    screenshot_card
+                    and self._is_valid_qobject(screenshot_card)
+                    and not screenshot_card.isHidden()
+                ):
+                    initial_width = screenshot_card.width()
+                    initial_pos = screenshot_card.pos()
 
-            if (
-                screenshot_card
-                and self._is_valid_qobject(screenshot_card)
-                and not screenshot_card.isHidden()
-            ):
-                target_x = initial_pos.x() + initial_width + 10
-                target_y = initial_pos.y()
+                html_result_window = HTMLWindow(
+                    html_content,
+                    title=f"翻译结果 - 组 {group_id}",
+                    width=initial_width,
+                    height=300,
+                    base64_image_data=original_base64_image_data,
+                    prompt_text=original_prompt_text,
+                    group_id=group_id,
+                    screenshot_card=screenshot_card
+                )
+                html_result_window.signals.retranslate_requested.connect(self._handle_retranslate_request)
 
-                current_screen = QApplication.screenAt(initial_pos)
-                if current_screen:
-                    current_screen_rect = current_screen.geometry()
+                if (
+                    screenshot_card
+                    and self._is_valid_qobject(screenshot_card)
+                    and not screenshot_card.isHidden()
+                ):
+                    target_x = initial_pos.x() + initial_width + 10
+                    target_y = initial_pos.y()
+
+                    current_screen = QApplication.screenAt(initial_pos)
+                    if current_screen:
+                        current_screen_rect = current_screen.geometry()
+                    else:
+                        current_screen_rect = QApplication.primaryScreen().geometry()
+
+                    if target_x + html_result_window.width() > current_screen_rect.right():
+                        target_x = initial_pos.x()
+                        target_y = initial_pos.y() + screenshot_card.height() + 10
+                        if (
+                            target_y + html_result_window.height()
+                            > current_screen_rect.bottom()
+                        ):
+                            target_x = current_screen_rect.left()
+                            target_y = current_screen_rect.top()
+
+                    html_result_window.move(target_x, target_y)
                 else:
-                    current_screen_rect = QApplication.primaryScreen().geometry()
+                    html_result_window.move(QCursor.pos())
 
-                if target_x + html_result_window.width() > current_screen_rect.right():
-                    target_x = initial_pos.x()
-                    target_y = initial_pos.y() + screenshot_card.height() + 10
-                    if (
-                        target_y + html_result_window.height()
-                        > current_screen_rect.bottom()
-                    ):
-                        target_x = current_screen_rect.left()
-                        target_y = current_screen_rect.top()
+                html_result_window.show()
+                html_result_window.setAttribute(Qt.WA_DeleteOnClose)
+                html_result_window.destroyed.connect(
+                    lambda: self._clear_window_ref(group_id, "html_result_window")
+                )
 
-                html_result_window.move(target_x, target_y)
-            else:
-                html_result_window.move(QCursor.pos())
-
-            html_result_window.show()
-            html_result_window.setAttribute(Qt.WA_DeleteOnClose)
-            html_result_window.destroyed.connect(
-                lambda: self._clear_window_ref(group_id, "html_result_window")
-            )
-
-            for group in self.active_window_groups:
-                if group["id"] == group_id:
-                    group["html_result_window"] = html_result_window
-                    break
+                for group in self.active_window_groups:
+                    if group["id"] == group_id:
+                        group["html_result_window"] = html_result_window
+                        break
 
         except Exception as e:
             if self.debug_mode:
@@ -487,18 +565,65 @@ class IntegratedApp(QWidget):
     def _handle_ai_error(self, error_message: str, group_id: int):
         if self.debug_mode:
             print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 收到 AI 错误响应信号: {error_message}")
-        self.html_viewer.show_error(error_message, f"翻译错误 - 组 {group_id}")
+
+        # 尝试在原窗口显示错误信息
+        target_html_window = None
+        for group in self.active_window_groups:
+            if group["id"] == group_id and group["html_result_window"] and self._is_valid_qobject(group["html_result_window"]):
+                target_html_window = group["html_result_window"]
+                break
+
+        if target_html_window:
+            error_html = f"<html><body><h1>翻译错误</h1><p style='color: red;'>{error_message}</p></body></html>"
+            target_html_window.web_view.setHtml(error_html)
+            if self.debug_mode:
+                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: HTML窗口已更新为错误信息。")
+        else:
+            # 如果找不到原窗口，则创建新窗口显示错误
+            self.html_viewer.show_error(error_message, f"翻译错误 - 组 {group_id}")
+
+
+    @pyqtSlot(str, str, int, object)
+    def _handle_retranslate_request(self, base64_image_data: str, prompt_text: str, group_id: int, screenshot_card: ScreenshotPreviewCard):
+        """处理来自 HTMLWindow 的重新翻译请求"""
+        if self.debug_mode:
+            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 收到重新翻译请求。")
+
+        # 找到对应的 HTMLWindow 实例，并更新其内容为“正在翻译”
+        target_html_window = None
+        for group in self.active_window_groups:
+            if group["id"] == group_id and group["html_result_window"] and self._is_valid_qobject(group["html_result_window"]):
+                target_html_window = group["html_result_window"]
+                break
+
+        if target_html_window:
+            target_html_window.web_view.setHtml("<html><body><h1>正在重新翻译...</h1><p>请稍候。</p></body></html>")
+            if self.debug_mode:
+                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: HTML窗口已更新为加载状态。")
+        else:
+            if self.debug_mode:
+                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 未找到对应的 HTML 结果窗口，无法更新加载状态。")
+            # 理论上重新翻译请求应该总能找到原窗口，这里可以考虑抛出警告或错误
+
+        # 重新提交 AI 任务
+        self._process_image_with_ai(base64_image_data, group_id, screenshot_card)
 
     def _is_valid_qobject(self, obj):
         try:
-            _ = obj.objectName()
-            return True
+            # 检查 QObject 是否仍然有效（未被销毁）
+            # 注意：对于非 QObject 实例，这会抛出 AttributeError 或 TypeError
+            # 对于已销毁的 QObject，会抛出 RuntimeError
+            if isinstance(obj, QObject):
+                return not obj.isWindow() or obj.isVisible() or obj.isHidden() # 简单检查 QObject 状态
+            return False
         except RuntimeError:
             return False
         except Exception as e:
+            # 捕获其他可能的异常，例如 obj 不是 QObject 的情况
             if self.debug_mode:
                 print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] _is_valid_qobject 检查时发生意外错误: {e}")
             return False
+
 
     def _clear_screenshot_tool_ref(self):
         if self.sender() is not None and self.sender() == self.screenshot_tool:
@@ -518,13 +643,15 @@ class IntegratedApp(QWidget):
                         print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: HTML结果窗口被销毁，清除引用。")
                     group["html_result_window"] = None
 
+                # 如果两个窗口都已关闭，且 AIWorker 也已完成，则从列表中移除组
                 if (
                     group["screenshot_card"] is None
                     and group["html_result_window"] is None
+                    and (group["ai_worker"] is None or not self._is_valid_qobject(group["ai_worker"])) # 确保 worker 也已完成或销毁
                 ):
                     self.active_window_groups.remove(group)
                     if self.debug_mode:
-                        print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 所有窗口已关闭，从活动列表中移除。")
+                        print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 所有窗口和worker引用已清理，从活动列表中移除。")
                 break
 
     # --- 系统托盘相关方法 ---
@@ -588,48 +715,88 @@ class IntegratedApp(QWidget):
         if self.debug_mode:
             print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 主窗口已显示。")
 
+    def changeEvent(self, event):
+        """
+        处理窗口状态变化的事件，用于最小化到托盘。
+        """
+        if event.type() == event.WindowStateChange:
+            if self.isMinimized():
+                if self.debug_mode:
+                    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 主窗口最小化，隐藏到系统托盘。")
+                self.hide()
+                event.ignore() # 忽略事件，阻止窗口真正最小化到任务栏
+        super().changeEvent(event)
+
+
     def closeEvent(self, event):
         """
-        重写 closeEvent，当用户点击关闭按钮时，隐藏窗口到托盘，而不是退出。
-        只有当托盘图标不存在或用户明确选择“退出”时才真正退出。
+        重写 closeEvent，当用户点击关闭按钮时，直接退出。
         """
-        if self.tray_icon and self.tray_icon.isVisible():
-            # 如果托盘图标存在且可见，则隐藏窗口，不退出
-            self.hide()
-            event.ignore()  # 忽略关闭事件，阻止窗口真正关闭
-            if self.debug_mode:
-                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 主窗口已隐藏到系统托盘。")
-        else:
-            # 如果没有托盘图标（例如系统不支持），则正常退出
-            keyboard.unhook_all()
-            if self.debug_mode:
-                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 应用程序关闭，所有热键已取消注册。")
+        if self.debug_mode:
+            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 主窗口关闭事件触发，准备退出应用程序。")
 
-            for group in list(self.active_window_groups):
-                if group["screenshot_card"] and self._is_valid_qobject(
-                    group["screenshot_card"]
-                ):
-                    group["screenshot_card"].close()
-                if group["html_result_window"] and self._is_valid_qobject(
-                    group["html_result_window"]
-                ):
-                    group["html_result_window"].close()
-            self.active_window_groups.clear()
+        # 取消注册所有热键
+        keyboard.unhook_all()
+        if self.debug_mode:
+            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 所有热键已取消注册。")
 
-            self.thread_pool.waitForDone()
-            if self.debug_mode:
-                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 线程池已关闭。")
-            
-            # 在应用程序真正退出前，恢复 stdout/stderr 并关闭文件
-            if self.debug_mode:
-                if hasattr(self, '_original_stdout') and sys.stdout != self._original_stdout:
-                    sys.stdout.close()
-                    sys.stdout = self._original_stdout
-                if hasattr(self, '_original_stderr') and sys.stderr != self._original_stderr:
-                    sys.stderr.close()
-                    sys.stderr = self._original_stderr
+        # 停止并清理所有 AIWorker 任务
+        for group in list(self.active_window_groups):
+            if group["ai_worker"] and self._is_valid_qobject(group["ai_worker"]):
+                group["ai_worker"].stop() # 尝试停止正在进行的任务
+                if self.debug_mode:
+                    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group['id']}: 停止了 AIWorker 实例。")
+            # 关闭所有活动的截图预览卡片和HTML结果窗口
+            if group["screenshot_card"] and self._is_valid_qobject(
+                group["screenshot_card"]
+            ):
+                group["screenshot_card"].close()
+            if group["html_result_window"] and self._is_valid_qobject(
+                group["html_result_window"]
+            ):
+                group["html_result_window"].close()
+        self.active_window_groups.clear()
+        if self.debug_mode:
+            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 所有子窗口已关闭。")
 
-            super().closeEvent(event)  # 调用父类的 closeEvent，允许窗口真正关闭
+        # 等待线程池中的任务完成 (或在 stop() 信号发出后尽快完成)
+        # 增加一个超时，防止无限等待
+        if self.debug_mode:
+            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 等待线程池任务完成...")
+        self.thread_pool.waitForDone(5000) # 等待最多5秒
+        if self.debug_mode:
+            if self.thread_pool.activeThreadCount() > 0:
+                 print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 警告: 线程池中仍有 {self.thread_pool.activeThreadCount()} 个活动线程。")
+            else:
+                 print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 线程池已关闭。")
+
+
+        # 隐藏托盘图标
+        if self.tray_icon:
+            self.tray_icon.hide()
+            # 立即销毁托盘图标，避免其在事件循环结束后仍存在
+            self.tray_icon.deleteLater()
+            self.tray_icon = None
+            if self.debug_mode:
+                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 系统托盘图标已隐藏并销毁。")
+
+        # 恢复 stdout/stderr 并关闭日志文件
+        if self.debug_mode:
+            if sys.stdout != self._original_stdout:
+                sys.stdout.close()
+                sys.stdout = self._original_stdout
+            if sys.stderr != self._original_stderr:
+                sys.stderr.close()
+                sys.stderr = self._original_stderr
+            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 日志重定向已恢复。")
+
+
+        # 告诉 QApplication 退出事件循环
+        self.app.quit() # 显式调用 quit()
+
+        # 允许窗口真正关闭
+        event.accept()
+        super().closeEvent(event)
 
 
 if __name__ == "__main__":
@@ -638,14 +805,14 @@ if __name__ == "__main__":
         app = QApplication(sys.argv)
     else:
         app = QApplication.instance()
-    
-    # 确保应用程序在没有窗口显示时也能正常运行
-    app.setQuitOnLastWindowClosed(False)  # 禁用当最后一个窗口关闭时退出应用程序
+
+    # 禁用当最后一个窗口关闭时退出应用程序，因为我们希望通过主窗口的关闭或托盘菜单来统一管理退出
+    app.setQuitOnLastWindowClosed(False)
 
     main_app = IntegratedApp()
     main_app.show()
 
-    # 确保在应用程序退出时关闭日志文件
-    exit_code = app.exec_() # 仅调用一次 app.exec_()
-            
-    sys.exit(exit_code) # 使用 app.exec_() 的返回值作为退出码
+    # app.exec_() 会阻塞直到 QApplication.quit() 被调用
+    exit_code = app.exec_()
+
+    sys.exit(exit_code)
