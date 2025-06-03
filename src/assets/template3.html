@@ -4,25 +4,32 @@
 <head>
     <meta charset="utf-8">
     <title>模型返回结果</title>
-    <script type="text/x-mathjax-config">
-        MathJax.Hub.Config({
-            tex2jax: {
-                inlineMath: [['$', '$'], ['\\(', '\\)']], 
-                displayMath: [['$$', '$$'], ['\\[', '\\]']],
-                processEscapes: true,
-                ignoreClass: "no-mathjax"
-            },
-            "HTML-CSS": {
-                linebreaks: { automatic: true }
-            },
-            SVG: {
-                linebreaks: { automatic: true }
-            }
-        });
+    <!-- 引入 MathJax 3 的 CDN 链接 -->
+    <script type="text/javascript" id="MathJax-script" async
+        src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js">
     </script>
-    <script type="text/javascript" async
-        src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML">
-        </script>
+    <script type="text/javascript">
+        // MathJax 3 配置
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']], // 配置行内公式分隔符
+                displayMath: [['$$', '$$'], ['\\[', '\\]']], // 配置块级公式分隔符
+                processEscapes: true, // 允许在公式中使用转义字符
+            },
+            options: {
+                ignoreHtmlClass: "no-mathjax", // 忽略带有此类的元素中的公式
+                processHtmlClass: "mathjax", // 只处理带有此类的元素中的公式
+                renderActions: {
+                }
+            },
+            chtml: {
+                linebreaks: { automatic: true } // CHTML 输出的自动换行
+            },
+            svg: {
+                linebreaks: { automatic: true } // SVG 输出的自动换行
+            }
+        };
+    </script>
     <!-- 直接引入 QWebChannel 的 JS 文件 -->
     <script type="text/javascript" src="./qwebchannel.js"></script>
     <style>
@@ -38,7 +45,7 @@
             padding: 10px;
             border-radius: 5px;
             overflow-x: auto;
-            white-space: pre-wrap; 
+            white-space: pre-wrap;
             word-wrap: break-word;
         }
 
@@ -60,7 +67,7 @@
         }
 
         #raw-content pre {
-            font-size: < !-- FONT_SIZE_PLACEHOLDER -->px;
+            font-size: < !-- FONT_SIZE_PLACEER -->px;
         }
     </style>
     <script>
@@ -69,8 +76,8 @@
             document.getElementById('rendered-content').style.display = 'block';
             document.getElementById('raw-content').style.display = 'none';
             // 重新渲染 MathJax，以防内容是后来添加的
-            if (typeof MathJax !== 'undefined' && MathJax.Hub) {
-                MathJax.Hub.Queue(["Typeset", MathJax.Hub, "rendered-content"]);
+            if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
+                MathJax.typesetPromise(); // 重新排版整个文档
             }
             // 切换后获取高度
             if (window.updateHeight) { // 检查Python注入的函数是否存在

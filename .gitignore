@@ -27,9 +27,8 @@ build/
 dist/
 *.spec
 
-# Debugging and Testing
+# Debugging
 logs/
-test.py
 *.log
 my.yaml
 tempCodeRunnerFile.py
