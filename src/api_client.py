@@ -62,10 +62,10 @@ def create_unified_html(markdown_text, template_path="./assets/template.html", f
 
     # 替换占位符
     full_html = html_template.replace(
-        "< !-- RENDERED_CONTENT_PLACEHOLDER -->", markdown_text
+        "<!-- RENDERED_CONTENT_PLACEHOLDER -->", markdown_text
     )
-    full_html = full_html.replace("< !-- RAW_CONTENT_PLACEHOLDER -->", markdown_text)
-    full_html = full_html.replace("< !-- FONT_SIZE_PLACEHOLDER -->", str(font_size))
+    full_html = full_html.replace("<!-- RAW_CONTENT_PLACEHOLDER -->", markdown_text)
+    full_html = full_html.replace("<!-- FONT_SIZE_PLACEHOLDER -->", str(font_size))
 
     return full_html
 
