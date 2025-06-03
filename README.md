@@ -14,23 +14,11 @@
 
 # 演示
 
-<table style="width: 100%;">
-    <tr>
-        <td style="text-align: center;">
-            <img src="./img/0.1.gif" alt="" style="width: 100%;">
-        </td>
-    </tr>
-    <tr>
-        <td style="text-align: center;">
-            <img src="./img/v0.2.1.svg" alt="" style="width: 75%;">
-        </td>
-    </tr>
-    <tr>
-        <td style="text-align: center;">
-            <img src="./img/v0.2.1_2.svg" alt="" style="width: 75%;">
-        </td>
-    </tr>
-</table>
+<div align="center">
+    <img src="./img/0.1.gif" alt="" width="100%">
+    <br>
+    <img src="./img/v0.2.1.svg" alt="" width="100%">
+</div>
 
 # 安装
 
