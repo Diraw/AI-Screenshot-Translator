@@ -61,7 +61,14 @@ pip install -r requirements.txt
 python main.py
 ```
 
+
+# 更新计划
+
+- 新增api配置的gui窗口，优化手动配置yaml文件的逻辑为软件自动生成（预计v0.3完成）
+- 新增图片和公式储存系统，方便后期调用（预计v0.4完成）
+- （更多功能欢迎issue提出或PR贡献）
+
 # 其他
 
 - 软件icon来自 [iconfinder](https://www.iconfinder.com/search?q=screenshot&price=free)
-- 特别感谢 Gemini 2.5 Flash 和 DeepSeek-V3-0324 帮我 fix bug
+- 感谢 Gemini 2.5 Flash 和 DeepSeek-V3-0324 帮我找bug
