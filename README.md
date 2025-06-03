@@ -14,11 +14,11 @@
 
 # 演示
 
-<div align="center">
-    <img src="./img/0.1.gif" alt="" width="100%">
-    <br>
-    <img src="./img/v0.2.1.svg" alt="" width="100%">
-</div>
+<img src="./img/0.1.gif" alt="" width="100%">
+
+# 功能介绍
+
+<img src="./img/v0.2.1.svg" alt="" width="100%">
 
 # 安装
 
