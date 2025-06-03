@@ -14,15 +14,21 @@
 
 # 演示
 
-<table>
+<table style="width: 100%;">
     <tr>
-        <td><img src="./img/0.1.gif" alt=""></td>
+        <td style="text-align: center;">
+            <img src="./img/0.1.gif" alt="" style="width: 100%;">
+        </td>
     </tr>
     <tr>
-        <td><img src="./img/v0.2.1.svg" alt=""></td>
+        <td style="text-align: center;">
+            <img src="./img/v0.2.1.svg" alt="" style="width: 75%;">
+        </td>
     </tr>
     <tr>
-        <td><img src="./img/v0.2.1_2.svg" alt=""></td>
+        <td style="text-align: center;">
+            <img src="./img/v0.2.1_2.svg" alt="" style="width: 75%;">
+        </td>
     </tr>
 </table>
 
