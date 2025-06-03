@@ -1,6 +1,6 @@
 # AI 截图翻译工具 (AI Screenshot Translator)
 
-[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/) [![Nuitka](https://img.shields.io/badge/Nuitka-Compiled-purple)](https://nuitka.net/) [![Release Version](https://img.shields.io/badge/Release-v0.2-red)](https://github.com/Diraw/AI-Screenshot-Translator/releases/tag/v0.2-test)
+[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/) [![Nuitka](https://img.shields.io/badge/Nuitka-Compiled-purple)](https://nuitka.net/) [![Release Version](https://img.shields.io/badge/Release-v0.2.1-red)](https://github.com/Diraw/AI-Screenshot-Translator/releases/tag/v0.2.1-test)
 
 # 简介
 
@@ -14,7 +14,17 @@
 
 # 演示
 
-![](./img/0.1.gif)
+<table>
+    <tr>
+        <td><img src="./img/0.1.gif" alt=""></td>
+    </tr>
+    <tr>
+        <td><img src="./img/v0.2.1.svg" alt=""></td>
+    </tr>
+    <tr>
+        <td><img src="./img/v0.2.1_2.svg" alt=""></td>
+    </tr>
+</table>
 
 # 安装
 

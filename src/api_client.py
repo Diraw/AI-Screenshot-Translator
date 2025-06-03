@@ -60,19 +60,11 @@ def create_unified_html(markdown_text, template_path="./assets/template.html", f
         print(f"读取模板文件 '{template_path}' 时发生错误: {e}")
         return f"<h1>错误: 读取 HTML 模板文件失败。</h1><p>详细信息: {e}</p>"
 
-    # 渲染后的 Markdown/LaTeX 内容
-    rendered_html_content = markdown.markdown(markdown_text, extensions=["fenced_code"])
-
-    # 原始文本，需要进行 HTML 转义
-    escaped_raw_text = (
-        markdown_text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    )
-
     # 替换占位符
     full_html = html_template.replace(
-        "<!-- RENDERED_CONTENT_PLACEHOLDER -->", rendered_html_content
+        "< !-- RENDERED_CONTENT_PLACEHOLDER -->", markdown_text
     )
-    full_html = full_html.replace("< !-- RAW_CONTENT_PLACEHOLDER -->", escaped_raw_text)
+    full_html = full_html.replace("< !-- RAW_CONTENT_PLACEHOLDER -->", markdown_text)
     full_html = full_html.replace("< !-- FONT_SIZE_PLACEHOLDER -->", str(font_size))
 
     return full_html
