@@ -47,9 +47,9 @@ def create_full_html(html_content, raw_content):
         return None
 
     # 替换模板中的占位符
-    template = template.replace("< !-- RENDERED_CONTENT_PLACEHOLDER -->", html_content)
-    template = template.replace("< !-- RAW_CONTENT_PLACEHOLDER -->", raw_content)
-    template = template.replace("< !-- FONT_SIZE_PLACEHOLDER -->", "20")  # 设置字体大小
+    template = template.replace("<!-- RENDERED_CONTENT_PLACEHOLDER -->", html_content)
+    template = template.replace("<!-- RAW_CONTENT_PLACEHOLDER -->", raw_content)
+    template = template.replace("<!-- FONT_SIZE_PLACEHOLDER -->", "20")  # 设置字体大小
 
 
     return template
