@@ -3,6 +3,7 @@ import base64
 import markdown
 import os
 import re
+import httpx 
 
 def encode_image(image_path):
     """将图片编码为 base64 格式"""
@@ -10,7 +11,7 @@ def encode_image(image_path):
         return base64.b64encode(image_file.read()).decode("utf-8")
 
 
-def get_model_response(image_data_base64, prompt_text, api_key=None, base_url=None, model_name=None):
+def get_model_response(image_data_base64, prompt_text, api_key=None, base_url=None, model_name=None, proxy=None):
     """获取模型响应"""
     if api_key is None:
         raise ValueError("API key must be provided.")
@@ -21,31 +22,44 @@ def get_model_response(image_data_base64, prompt_text, api_key=None, base_url=No
     if model_name is None:
         raise ValueError("Model name must be provided.")
 
-    client = OpenAI(
-        api_key=api_key,
-        base_url=base_url,
-    )
+    # 准备OpenAI客户端参数
+    client_kwargs = {
+        "api_key": api_key,
+        "base_url": base_url,
+    }
 
-    completion = client.chat.completions.create(
-        model=model_name,
-        messages=[
-            {
-                "role": "system",
-                "content": [{"type": "text", "text": "You are a helpful assistant."}],
-            },
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": f"data:image/png;base64,{image_data_base64}",
-                    },
-                    {"type": "text", "text": prompt_text},
-                ],
-            },
-        ],
-    )
-    return completion.choices[0].message.content
+    # 如果提供了代理，添加到客户端参数
+    if proxy:
+        client_kwargs["http_client"] = httpx.Client(proxy=proxy)
+
+    try:
+        client = OpenAI(**client_kwargs)
+        
+        completion = client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {
+                    "role": "system",
+                    "content": [{"type": "text", "text": "You are a helpful assistant."}],
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": f"data:image/png;base64,{image_data_base64}",
+                        },
+                        {"type": "text", "text": prompt_text},
+                    ],
+                },
+            ],
+        )
+        return completion.choices[0].message.content
+    except Exception as e:
+        # 更详细的错误信息
+        if "proxy" in str(e).lower() or "ssl" in str(e).lower() or "connection" in str(e).lower():
+            raise Exception(f"API连接错误(可能与代理有关): {e}")
+        raise
 
 
 def preprocess_latex_formulas(markdown_text):
@@ -171,9 +185,9 @@ def create_unified_html(markdown_text, template_path="./assets/template.html", f
     """
     
     # 替换占位符
-    full_html = html_template.replace("<!-- RENDERED_CONTENT_PLACEHOLDER -->", html_content)
-    full_html = full_html.replace("<!-- RAW_CONTENT_PLACEHOLDER -->", raw_content)
-    full_html = full_html.replace("<!-- FONT_SIZE_PLACEHOLDER -->", str(font_size))
+    full_html = html_template.replace("< !-- RENDERED_CONTENT_PLACEHOLDER -->", html_content)
+    full_html = full_html.replace("< !-- RAW_CONTENT_PLACEHOLDER -->", raw_content)
+    full_html = full_html.replace("< !-- FONT_SIZE_PLACEHOLDER -->", str(font_size))
     
     # 添加语法高亮支持
     full_html = full_html.replace("</head>", f"{prism_css}</head>")
@@ -191,6 +205,15 @@ class APIClient:
         self.base_url = base_url
         self.model_name = model_name
         self.html_template_path = "./assets/template.html"
+        self.proxy = None
+
+    def set_proxy(self, proxy_url):
+        """设置代理服务器URL"""
+        self.proxy = proxy_url
+        if proxy_url:
+            print(f"已设置API代理: {proxy_url}")
+        else:
+            print("已清除API代理设置")
 
     def set_html_template_path(self, path):
         """设置 HTML 模板文件的路径"""
@@ -202,7 +225,7 @@ class APIClient:
     def process_image(self, image_data_base64, prompt_text):
         """处理图片并返回模型响应"""
         return get_model_response(
-            image_data_base64, prompt_text, self.api_key, self.base_url, self.model_name
+            image_data_base64, prompt_text, self.api_key, self.base_url, self.model_name, self.proxy
         )
 
     def create_html_content(self, markdown_text, initial_font_size: int = 16):

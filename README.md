@@ -1,6 +1,6 @@
 # AI 截图翻译工具 (AI Screenshot Translator)
 
-[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/) [![Nuitka](https://img.shields.io/badge/Nuitka-Compiled-purple)](https://nuitka.net/) [![Release Version](https://img.shields.io/badge/Release-v0.2.2-red)](https://github.com/Diraw/AI-Screenshot-Translator/releases/tag/v0.2.2-test)
+[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/) [![Nuitka](https://img.shields.io/badge/Nuitka-Compiled-purple)](https://nuitka.net/) [![Release Version](https://img.shields.io/badge/Release-v0.3.0-red)](https://github.com/Diraw/AI-Screenshot-Translator/releases/tag/v0.3.0-test)
 
 # 简介
 
@@ -16,9 +16,20 @@
 
 <img src="./img/0.1.gif" alt="" width="100%">
 
-# 功能介绍
+# 窗口展示
+
+翻译窗口：
 
 <img src="./img/v0.2.1.svg" alt="" width="100%">
+
+配置窗口：
+
+<table>
+  <tr>
+    <td><img src="./img/v3.0.0_1.png" /></td>
+    <td><img src="./img/v3.0.0_2.png" /></td>
+  </tr>
+</table>
 
 # 安装
 
@@ -31,32 +42,7 @@ git clone https://github.com/Diraw/AI-Screenshot-Translator.git
 cd AI-Screenshot-Translator/src
 ```
 
-### 2. 修改配置信息
-
-您可以通过编辑 `config.yaml` 文件自定义应用程序的行为：
-
-```yaml
-api:
-  model: "qwen-vl-ocr-latest"        # 使用的AI模型
-  prompt_text: "请将图中的英文翻译成中文后以中文回复文本，如果包含数学公式请用tex格式输出。" # 发送给模型的提示文本
-  api_key: "YOUR_API_KEY_HERE"       # API密钥
-  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1" # API服务地址
-
-app_settings:
-  max_windows: 0                     # 最大窗口数量，0表示无限制
-  zoom_sensitivity: 500              # 缩放敏感度
-  screenshot_hotkey: "ctrl+alt+s"    # 截图快捷键
-  debug_mode: true                   # 是否启用调试模式
-  initial_font_size: 24              # 结果窗口的默认字体大小
-```
-**注：**
-
-- 请将 **YOUR_API_KEY_HERE** 替换为您的实际 API 密钥。
-- 根据您选择的 AI 模型，**model** 和 **base_url** 可能需要相应调整。
-
-> 开发过程使用的api为qwen，不知道怎么获取api_key可以查看 https://bailian.console.aliyun.com/?tab=model#/api-key ，qwen新注册用户每个模型可以免费领100w tokens，推荐使用
-
-### 3. 创建虚拟环境并运行
+### 2. 创建虚拟环境并运行
 
 ```bash
 conda create -n AI-Translator python=3.8
@@ -65,10 +51,9 @@ pip install -r requirements.txt
 python main.py
 ```
 
-
 # 更新计划
 
-- 新增api配置的gui窗口，优化手动配置yaml文件的逻辑为软件自动生成（预计v0.3完成）
+- ~~新增api配置的gui窗口，优化手动配置yaml文件的逻辑为软件自动生成（v0.3.0已完成）~~
 - 新增图片和公式储存系统，方便后期调用（预计v0.4完成）
 - （更多功能欢迎issue提出或PR贡献）
 

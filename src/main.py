@@ -34,7 +34,8 @@ import datetime
 from api_client import APIClient
 from html_viewer import HTMLViewer, HTMLWindow
 from screenshot import ScreenshotTool, ScreenshotPreviewCard
-
+from config_manager import ConfigManager # 导入 ConfigManager
+from config_app import ConfigApp # 导入 ConfigApp
 
 # --- AIWorker 和 WorkerSignals 类 ---
 class WorkerSignals(QObject):
@@ -114,7 +115,7 @@ class IntegratedApp(QWidget):
         self.max_windows = 3 # 默认值
         self.zoom_sensitivity = 500.0 # 默认值
         self.screenshot_hotkey = "ctrl+alt+s" # 默认值
-        self.icon_path = None # 默认值，将在 _load_config 中设置
+        self.icon_path = self._get_resource_path("./assets/icon.ico") # 直接在这里设置默认图标路径
         self.debug_mode = False # 默认值
         self.initial_font_size = 16 # 默认值
 
@@ -122,17 +123,32 @@ class IntegratedApp(QWidget):
         self._original_stdout = sys.stdout
         self._original_stderr = sys.stderr
 
+        self.config_manager = ConfigManager() # 初始化 ConfigManager
+
         self._load_config() # 加载配置
 
-        layout = QVBoxLayout(self)
+        # --- UI 布局调整 ---
+        main_layout = QVBoxLayout(self)
+
         self.screenshot_button = QPushButton("点击截屏并翻译", self)
         self.screenshot_button.clicked.connect(self._start_screenshot_safe)
-        layout.addWidget(self.screenshot_button)
-        self.setLayout(layout)
+        main_layout.addWidget(self.screenshot_button)
+
+        # 新增的配置按钮
+        self.config_button = QPushButton("配置", self)
+        self.config_button.clicked.connect(self.show_config_window)
+        main_layout.addWidget(self.config_button)
+
+        self.setLayout(main_layout)
+        # --- UI 布局调整结束 ---
 
         # 确保 api_key 和 base_url 不为 None
         self.api_client = APIClient(api_key=self.api_key or "", base_url=self.base_url or "", model_name=self.model_name or "")
         self.html_viewer = HTMLViewer()
+
+        # 设置代理（如果配置了的话）
+        if hasattr(self, 'proxy_url') and self.proxy_url:
+            self.api_client.set_proxy(self.proxy_url)
 
         self.active_window_groups = []
         self.next_group_id = 1
@@ -168,80 +184,35 @@ class IntegratedApp(QWidget):
             return os.path.join(os.path.dirname(__file__), relative_path)
 
     def _load_config(self):
-        # 仅从应用程序的当前工作目录加载 config.yaml
-        config_path = os.path.join(os.getcwd(), "config.yaml")
-        debug_config_path=os.path.join(os.getcwd(), "my.yaml") # 用于开发阶段调试
+        # 从 ConfigManager 获取配置数据
+        config = self.config_manager.get_config()
+        config_loaded_from = self.config_manager.config_file
 
-        config = {}
-        config_loaded_from = None
-
+        # 从加载的配置中获取设置，使用 .get() 确保健壮性
+        self.api_key = config.get("api", {}).get("api_key")
+        self.base_url = config.get("api", {}).get("base_url")
+        self.model_name = config.get("api", {}).get("model")
+        self.prompt_text = config.get("api", {}).get("prompt_text")
+        self.max_windows = config.get("app_settings", {}).get("max_windows", 3) # 提供默认值
+        self.zoom_sensitivity = float(
+            config.get("app_settings", {}).get("zoom_sensitivity", 500.0) # 提供默认值
+        )
+        self.screenshot_hotkey = config.get("app_settings", {}).get(
+            "screenshot_hotkey", "ctrl+alt+s" # 提供默认值
+        )
+        
+        # 读取 debug_mode
+        self.debug_mode = config.get("app_settings", {}).get("debug_mode", False) # 提供默认值
+        self.initial_font_size = config.get("app_settings", {}).get("initial_font_size", 16) # 提供默认值
+        # 确保它是整数
         try:
-            if os.path.exists(debug_config_path):
-                with open(debug_config_path, "r", encoding="utf-8") as f:
-                    config = yaml.safe_load(f)
-                config_loaded_from = debug_config_path
-
-            elif os.path.exists(config_path):
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = yaml.safe_load(f)
-                config_loaded_from = config_path
-            else:
-                # 如果 config.yaml 文件不存在，则弹出警告并退出
-                QMessageBox.critical(
-                    self,
-                    "配置错误",
-                    f"config.yaml 文件未找到。\n请确保 '{config_path}' 存在，并已正确配置您的API Key和其他设置。",
-                )
-                sys.exit(1) # 强制退出应用程序
-
-            # 从加载的配置中获取设置，使用 .get() 确保健壮性
-            self.api_key = config.get("api", {}).get("api_key")
-            self.base_url = config.get("api", {}).get("base_url")
-            self.model_name = config.get("api", {}).get("model")
-            self.prompt_text = config.get("api", {}).get("prompt_text")
-            self.max_windows = config.get("app_settings", {}).get("max_windows", 3) # 提供默认值
-            self.zoom_sensitivity = float(
-                config.get("app_settings", {}).get("zoom_sensitivity", 500.0) # 提供默认值
-            )
-            self.screenshot_hotkey = config.get("app_settings", {}).get(
-                "screenshot_hotkey", "ctrl+alt+s" # 提供默认值
-            )
-            # 托盘图标路径配置：始终使用 _get_resource_path 获取内部资源
-            icon_filename = config.get("app_settings", {}).get("icon_path", "./assets/icon.ico")
-            self.icon_path = self._get_resource_path(icon_filename)
-            # 读取 debug_mode
-            self.debug_mode = config.get("app_settings", {}).get("debug_mode", False) # 提供默认值
-            self.initial_font_size = config.get("app_settings", {}).get("initial_font_size", 16) # 提供默认值
-            # 确保它是整数
-            try:
-                self.initial_font_size = int(self.initial_font_size)
-            except ValueError:
-                self.initial_font_size = 16 # 如果转换失败，使用默认值
-                if self.debug_mode: # 这里仍然使用 print，因为日志重定向可能还没设置
-                    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 警告: initial_font_size 配置无效，使用默认值 16。")
-
-            if not self.api_key or self.api_key == "YOUR_API_KEY_HERE":
-                QMessageBox.warning(
-                    self, "API Key 警告", "请在 config.yaml 中设置您的实际 API Key。"
-                )
-
-        except KeyError as e:
-            QMessageBox.critical(
-                self,
-                "配置错误",
-                f"config.yaml 中缺少必要的键: {e}。请检查配置文件格式。",
-            )
-            sys.exit(1)
-        except yaml.YAMLError as e:
-            QMessageBox.critical(
-                self, "配置解析错误", f"config.yaml 文件格式错误: {e}"
-            )
-            sys.exit(1)
-        except Exception as e:
-            QMessageBox.critical(
-                self, "加载配置失败", f"加载 config.yaml 时发生错误: {e}"
-            )
-            sys.exit(1)
+            self.initial_font_size = int(self.initial_font_size)
+        except ValueError:
+            self.initial_font_size = 16 # 如果转换失败，使用默认值
+            if self.debug_mode: # 这里仍然使用 print，因为日志重定向还没设置
+                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 警告: initial_font_size 配置无效，使用默认值 16。")
+        
+        self.proxy_url = config.get("api", {}).get("proxy", None)
 
         # --- 日志重定向和初始调试信息打印 ---
         if self.debug_mode:
@@ -267,8 +238,11 @@ class IntegratedApp(QWidget):
                 print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] Max Windows: {self.max_windows}")
                 print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] Zoom Sensitivity: {self.zoom_sensitivity}")
                 print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] Screenshot Hotkey: {self.screenshot_hotkey}")
-                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] Icon Path: {self.icon_path}")
                 print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] Initial Font Size: {self.initial_font_size}")
+                if self.proxy_url:
+                    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 代理设置: {self.proxy_url}")
+                else:
+                    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 未设置代理")
 
             except Exception as e:
                 # 如果重定向失败，恢复原始 stdout/stderr 并弹出警告
@@ -681,6 +655,10 @@ class IntegratedApp(QWidget):
         show_action.triggered.connect(self.show_main_window)
         tray_menu.addAction(show_action)
 
+        config_action = QAction("配置", self) # 添加配置菜单项
+        config_action.triggered.connect(self.show_config_window)
+        tray_menu.addAction(config_action)
+
         screenshot_action = QAction("截屏并翻译", self)
         screenshot_action.triggered.connect(
             self._start_screenshot_safe
@@ -714,6 +692,28 @@ class IntegratedApp(QWidget):
         self.raise_()  # 将窗口置于顶部
         if self.debug_mode:
             print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 主窗口已显示。")
+
+    def show_config_window(self):
+        """显示配置窗口"""
+        # 避免重复创建窗口实例，如果已经存在就显示，否则创建
+        if not hasattr(self, '_config_app_instance') or self._config_app_instance is None or not self._config_app_instance.isVisible():
+            self._config_app_instance = ConfigApp()
+            self._config_app_instance.setAttribute(Qt.WA_DeleteOnClose) # 窗口关闭时自动销毁
+            self._config_app_instance.destroyed.connect(self._clear_config_app_ref) # 清除引用
+        
+        self._config_app_instance.show()
+        self._config_app_instance.activateWindow() # 激活窗口
+        self._config_app_instance.raise_() # 将窗口置于顶部
+        if self.debug_mode:
+            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 配置窗口已显示。")
+
+    def _clear_config_app_ref(self):
+        """当配置窗口关闭时，清除其引用"""
+        if self.sender() is not None and self.sender() == self._config_app_instance:
+            if self.debug_mode:
+                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 配置窗口实例被销毁，清除引用。")
+            self._config_app_instance = None
+
 
     def changeEvent(self, event):
         """
@@ -759,6 +759,12 @@ class IntegratedApp(QWidget):
         if self.debug_mode:
             print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 所有子窗口已关闭。")
 
+        # 关闭配置窗口（如果存在）
+        if hasattr(self, '_config_app_instance') and self._config_app_instance and self._config_app_instance.isVisible():
+            self._config_app_instance.close()
+            if self.debug_mode:
+                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 配置窗口已关闭。")
+
         # 等待线程池中的任务完成 (或在 stop() 信号发出后尽快完成)
         # 增加一个超时，防止无限等待
         if self.debug_mode:
@@ -799,6 +805,31 @@ class IntegratedApp(QWidget):
         super().closeEvent(event)
 
 
+def check_and_show_window():
+    config_manager = ConfigManager()
+    config_data = config_manager.get_config()
+
+    # 检查 API 配置是否完整
+    api_key_set = config_data.get("api", {}).get("api_key") not in [None, "", "YOUR_API_KEY_HERE"]
+    base_url_set = config_data.get("api", {}).get("base_url") not in [None, ""]
+    model_set = config_data.get("api", {}).get("model") not in [None, ""]
+
+    if not (api_key_set and base_url_set and model_set):
+        # 配置不完整或不存在，打开配置窗口
+        QMessageBox.information(
+            None, # 父窗口为 None
+            "配置提示",
+            "检测到API配置不完整或首次运行，请配置API密钥和地址。"
+        )
+        config_app = ConfigApp()
+        config_app.show()
+        return config_app # 返回配置窗口实例
+    else:
+        # 配置完整，打开主应用程序窗口
+        main_app = IntegratedApp()
+        main_app.show()
+        return main_app # 返回主应用程序实例
+
 if __name__ == "__main__":
     # 确保 QApplication 实例只创建一次
     if QApplication.instance() is None:
@@ -809,8 +840,8 @@ if __name__ == "__main__":
     # 禁用当最后一个窗口关闭时退出应用程序，因为我们希望通过主窗口的关闭或托盘菜单来统一管理退出
     app.setQuitOnLastWindowClosed(False)
 
-    main_app = IntegratedApp()
-    main_app.show()
+    # 根据配置状态决定显示哪个窗口
+    current_window = check_and_show_window()
 
     # app.exec_() 会阻塞直到 QApplication.quit() 被调用
     exit_code = app.exec_()
