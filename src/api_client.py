@@ -40,7 +40,8 @@ def get_model_response(image_data_base64, prompt_text, api_key=None, base_url=No
             messages=[
                 {
                     "role": "system",
-                    "content": [{"type": "text", "text": "You are a helpful assistant."}],
+                    # "content": [{"type": "text", "text": "You are a helpful assistant."}],
+                    "content": "You are a helpful assistant.",
                 },
                 {
                     "role": "user",
