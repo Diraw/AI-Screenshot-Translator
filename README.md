@@ -26,7 +26,7 @@
 
 <table>
   <tr>
-    <td><img src="./img/v3.0.0_1.png" /></td>
+    <td><img src="./img/v3.0.1.png" /></td>
     <td><img src="./img/v3.0.0_2.png" /></td>
   </tr>
 </table>
