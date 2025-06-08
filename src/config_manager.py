@@ -88,6 +88,7 @@ class ConfigManager:
             "app_settings": {
                 "screenshot_hotkey": "ctrl+alt+s",
                 "initial_font_size": 24,
+                "card_border_color": "100,100,100",
                 "max_windows": 0,
                 "zoom_sensitivity": 500,
                 "debug_mode": False,

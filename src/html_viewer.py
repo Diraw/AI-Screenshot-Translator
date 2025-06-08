@@ -12,6 +12,7 @@ from PyQt5.QtWebEngineWidgets import (
     QWebEngineView,
     QWebEngineScript,
 )
+from PyQt5.QtGui import QPainter, QPen, QColor
 from PyQt5.QtCore import (
     Qt,
     QTimer,
@@ -41,9 +42,11 @@ class HTMLWindow(QMainWindow):
         prompt_text=None,
         group_id=None,
         screenshot_card=None,
+        border_color=None
     ):
         super().__init__()
         self.setWindowTitle(title)
+        # 初始设置几何尺寸，后面会根据内容调整
         self.setGeometry(100, 100, width, height)
 
         self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Tool)
@@ -56,10 +59,17 @@ class HTMLWindow(QMainWindow):
 
         self.signals = HTMLWindowSignals()
 
+        # --- 边框属性 ---
+        self.border_width = 1  # 边框宽度
+        self.border_color = border_color if border_color else QColor(100, 100, 100)
+
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)
+        # 调整主布局的边距以容纳边框
+        main_layout.setContentsMargins(
+            self.border_width, self.border_width, self.border_width, self.border_width
+        )
 
         self.web_view = QWebEngineView()
         self.channel = QWebChannel()
@@ -89,7 +99,7 @@ class HTMLWindow(QMainWindow):
             }
         </style>
         """
-        
+
         # 将 CSS 注入到 HTML 内容的 <head> 标签中
         if "<head>" in html_content:
             html_content = html_content.replace("<head>", "<head>" + injected_css)
@@ -151,6 +161,7 @@ class HTMLWindow(QMainWindow):
 
         self.web_view.loadFinished.connect(self._on_web_view_load_finished)
 
+        # 临时显示按钮以获取其高度，然后隐藏
         self.toggle_view_button.show()
         self.retranslate_button.show()
         self.resize_button.show()
@@ -160,7 +171,7 @@ class HTMLWindow(QMainWindow):
             self.toggle_view_button.height()
             + control_layout.contentsMargins().top()
             + control_layout.contentsMargins().bottom()
-            + 10
+            + 10 # 额外留一些空间
         )
         self.toggle_view_button.hide()
         self.retranslate_button.hide()
@@ -169,14 +180,21 @@ class HTMLWindow(QMainWindow):
 
         self.resizing = False
         self.resize_edge = Qt.Edges()
-        self.min_width = 200
-        self.min_height = self.control_layout_height + 50
+        self.min_width = 200 + 2 * self.border_width # 最小宽度也考虑边框
+        self.min_height = self.control_layout_height + 50 + 2 * self.border_width # 最小高度也考虑边框
 
         self.is_resizing_by_button = False
         self.resize_start_pos = QPoint()
         self.resize_start_width = 0
         self.resize_start_height = 0
         self.resize_sensitivity = 1.0
+
+        # 初始调整窗口大小以包含边框
+        self.resize(
+            width + 2 * self.border_width,
+            height + 2 * self.border_width,
+        )
+
 
     @pyqtSlot()
     def _on_retranslate_button_clicked(self):
@@ -209,21 +227,21 @@ class HTMLWindow(QMainWindow):
         script = QWebEngineScript()
         script_content = """
             console.log("Initializing QWebChannel.");
-            
+
             if (typeof QWebChannel !== 'undefined') {
                 new QWebChannel(qt.webChannelTransport, function(channel) {
                     window.qt_webchannel = channel.objects.qt_webchannel;
                     console.log("QWebChannel initialized. qt_webchannel object acquired.");
-                    
+
                     if (typeof window.qt_webchannel !== 'undefined' && typeof window.qt_webchannel.js_ready_signal === 'function') {
                         window.qt_webchannel.js_ready_signal();
                         console.log("js_ready_signal sent to Python.");
-                        
+
                         window.updateHeight = function() {
                             console.log("updateHeight called from JS.");
                             const body = document.body;
                             const html = document.documentElement;
-                            
+
                             // 获取内容的实际高度，包括溢出部分
                             const contentHeight = Math.max(
                                 body.scrollHeight,
@@ -262,7 +280,7 @@ class HTMLWindow(QMainWindow):
                                 });
                             });
                         }
-                        
+
                         setTimeout(function() {
                             if (window.updateHeight) {
                                 window.updateHeight();
@@ -271,7 +289,7 @@ class HTMLWindow(QMainWindow):
 
                         const observer = new MutationObserver(function(mutationsList, observer) {
                             for(let mutation of mutationsList) {
-                                if (mutation.type === 'childList' || mutation.type === 'characterData' || 
+                                if (mutation.type === 'childList' || mutation.type === 'characterData' ||
                                     (mutation.type === 'attributes' && (mutation.attributeName === 'style' || mutation.attributeName === 'class'))) {
                                     console.log("DOM changed, triggering updateHeight.");
                                     if (window.updateHeight) {
@@ -307,7 +325,8 @@ class HTMLWindow(QMainWindow):
             return
 
         current_width = self.width()
-        new_total_height = content_height_from_js + self.control_layout_height + 40
+        # 计算新的总高度，包括内容高度、控制按钮高度和边框高度
+        new_total_height = content_height_from_js + self.control_layout_height + 2 * self.border_width + 40
 
         new_total_height = max(new_total_height, self.min_height)
 
@@ -446,6 +465,7 @@ class HTMLWindow(QMainWindow):
     # --- 窗口拖拽和边缘调整大小的鼠标事件处理---
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
+            # 检查点击是否在按钮区域内
             if (
                 self.close_button.geometry().contains(event.pos())
                 or self.toggle_view_button.geometry().contains(event.pos())
@@ -525,17 +545,18 @@ class HTMLWindow(QMainWindow):
 
     def get_resize_edge(self, pos):
         """根据鼠标位置判断是否在窗口边缘，并返回边缘类型"""
-        margin = 5
+        margin = self.border_width + 5 # 考虑边框宽度
         rect = self.rect()
         edge = Qt.Edges()
 
+        # 调整边缘检测区域，使其在边框外部
         if pos.x() < rect.left() + margin:
             edge |= Qt.LeftEdge
         if pos.x() > rect.right() - margin:
             edge |= Qt.RightEdge
         if pos.y() < rect.top() + margin:
             edge |= Qt.TopEdge
-        # 底部边缘需要避开控制按钮区域
+        # 底部边缘需要避开控制按钮区域，并且在边框外部
         if (
             pos.y() > rect.bottom() - margin
             and pos.y() < self.height() - self.control_layout_height
@@ -573,6 +594,28 @@ class HTMLWindow(QMainWindow):
         else:
             self.setWindowFlags(current_flags & ~Qt.WindowStaysOnTopHint)
         self.show()
+
+    # --- 绘制事件，用于绘制边框 ---
+    def paintEvent(self, event):
+        super().paintEvent(event)  # 调用父类的paintEvent，确保子控件正常绘制
+
+        painter = QPainter(self)
+        try:
+            painter.setRenderHint(QPainter.Antialiasing)  # 启用抗锯齿，使边框更平滑
+
+            pen = QPen(self.border_color)
+            pen.setWidth(self.border_width)
+            painter.setPen(pen)
+
+            rect = self.rect().adjusted(
+                self.border_width // 2,
+                self.border_width // 2,
+                -self.border_width // 2,
+                -self.border_width // 2,
+            )
+            painter.drawRect(rect)
+        finally:
+            painter.end()
 
 
 class HTMLViewer:

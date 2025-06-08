@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
     QAction,
     QStyle,
 )
-from PyQt5.QtGui import QPixmap, QCursor, QIcon
+from PyQt5.QtGui import QPixmap, QCursor, QIcon, QColor
 from PyQt5.QtCore import (
     Qt,
     QByteArray,
@@ -118,6 +118,7 @@ class IntegratedApp(QWidget):
         self.icon_path = self._get_resource_path("./assets/icon.ico") # 直接在这里设置默认图标路径
         self.debug_mode = False # 默认值
         self.initial_font_size = 16 # 默认值
+        self.card_border_color = "100,100,100" # 默认值
 
         # 用于保存原始的 stdout/stderr
         self._original_stdout = sys.stdout
@@ -200,6 +201,8 @@ class IntegratedApp(QWidget):
         self.screenshot_hotkey = config.get("app_settings", {}).get(
             "screenshot_hotkey", "ctrl+alt+s" # 提供默认值
         )
+        border_color_str = config.get("app_settings", {}).get("card_border_color", "100,100,100")
+        self.card_border_color = self._parse_border_color(border_color_str)
         
         # 读取 debug_mode
         self.debug_mode = config.get("app_settings", {}).get("debug_mode", False) # 提供默认值
@@ -239,6 +242,7 @@ class IntegratedApp(QWidget):
                 print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] Zoom Sensitivity: {self.zoom_sensitivity}")
                 print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] Screenshot Hotkey: {self.screenshot_hotkey}")
                 print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] Initial Font Size: {self.initial_font_size}")
+                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] Card Border Color: {self.card_border_color}")
                 if self.proxy_url:
                     print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 代理设置: {self.proxy_url}")
                 else:
@@ -273,6 +277,25 @@ class IntegratedApp(QWidget):
         )
         if self.debug_mode:
             print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 调度 start_screenshot_and_process 到主线程。")
+
+    def _parse_border_color(self, color_str):
+        """解析颜色字符串为 QColor 对象"""
+        try:
+            # 尝试解析 RGB 字符串
+            rgb_values = [int(x.strip()) for x in color_str.split(',')]
+            if len(rgb_values) == 3:
+                return QColor(rgb_values[0], rgb_values[1], rgb_values[2])
+            else:
+                # 如果不是 RGB 格式，尝试作为颜色名称
+                color = QColor(color_str)
+                if color.isValid():
+                    return color
+                else:
+                    print(f"警告: 无法解析颜色名称 '{color_str}'，使用默认灰色。")
+                    return QColor(100, 100, 100)  # 默认灰色
+        except Exception as e:
+            print(f"警告: 解析边框颜色出错: {e}，使用默认灰色。")
+            return QColor(100, 100, 100)  # 默认灰色
 
     @pyqtSlot()
     def start_screenshot_and_process(self):
@@ -350,7 +373,7 @@ class IntegratedApp(QWidget):
         self.active_window_groups.append(new_group)
 
         screenshot_card = ScreenshotPreviewCard(
-            pixmap, zoom_sensitivity=self.zoom_sensitivity
+            pixmap, zoom_sensitivity=self.zoom_sensitivity, border_color=self.card_border_color
         )
         screenshot_card.setWindowTitle(f"截图预览 - 组 {current_group_id}")
 
@@ -484,7 +507,8 @@ class IntegratedApp(QWidget):
                     base64_image_data=original_base64_image_data,
                     prompt_text=original_prompt_text,
                     group_id=group_id,
-                    screenshot_card=screenshot_card
+                    screenshot_card=screenshot_card,
+                    border_color=self.card_border_color,
                 )
                 html_result_window.signals.retranslate_requested.connect(self._handle_retranslate_request)
 
@@ -696,7 +720,25 @@ class IntegratedApp(QWidget):
     def show_config_window(self):
         """显示配置窗口"""
         # 避免重复创建窗口实例，如果已经存在就显示，否则创建
-        if not hasattr(self, '_config_app_instance') or self._config_app_instance is None or not self._config_app_instance.isVisible():
+        # 改进的检查：如果 _config_app_instance 存在，但其底层 C/C++ 对象已销毁，则视为 None
+        is_instance_valid = False
+        if hasattr(self, '_config_app_instance') and self._config_app_instance is not None:
+            try:
+                # 尝试访问一个属性来检查其有效性，例如 objectName()
+                _ = self._config_app_instance.objectName()
+                is_instance_valid = True
+            except RuntimeError:
+                # C/C++ 对象已删除
+                self._config_app_instance = None # 清除无效引用
+                is_instance_valid = False
+            except Exception as e:
+                # 其他异常，也视为无效
+                if self.debug_mode:
+                    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 检查 _config_app_instance 有效性时发生错误: {e}")
+                self._config_app_instance = None
+                is_instance_valid = False
+
+        if not is_instance_valid or not self._config_app_instance.isVisible():
             self._config_app_instance = ConfigApp()
             self._config_app_instance.setAttribute(Qt.WA_DeleteOnClose) # 窗口关闭时自动销毁
             self._config_app_instance.destroyed.connect(self._clear_config_app_ref) # 清除引用
@@ -759,11 +801,21 @@ class IntegratedApp(QWidget):
         if self.debug_mode:
             print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 所有子窗口已关闭。")
 
-        # 关闭配置窗口（如果存在）
-        if hasattr(self, '_config_app_instance') and self._config_app_instance and self._config_app_instance.isVisible():
-            self._config_app_instance.close()
-            if self.debug_mode:
-                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 配置窗口已关闭。")
+        # 关闭配置窗口（如果存在且未被销毁）
+        if hasattr(self, '_config_app_instance') and self._config_app_instance is not None:
+            try:
+                if self._config_app_instance.isVisible():
+                    self._config_app_instance.close()
+                    if self.debug_mode:
+                        print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 配置窗口已关闭。")
+            except RuntimeError:
+                if self.debug_mode:
+                    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 配置窗口实例已在关闭前被销毁。")
+                self._config_app_instance = None # 确保引用被清除
+            except Exception as e:
+                if self.debug_mode:
+                    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 关闭配置窗口时发生未知错误: {e}")
+                self._config_app_instance = None # 确保引用被清除
 
         # 等待线程池中的任务完成 (或在 stop() 信号发出后尽快完成)
         # 增加一个超时，防止无限等待

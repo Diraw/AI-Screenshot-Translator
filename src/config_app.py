@@ -24,7 +24,8 @@ class ConfigApp(QWidget):
         "zoom_sensitivity": "缩放敏感度",
         "screenshot_hotkey": "截图快捷键",
         "debug_mode": "调试模式",
-        "initial_font_size": "初始字体大小"
+        "initial_font_size": "初始字体大小",
+        "card_border_color": "边框颜色"
     }
 
     def __init__(self):

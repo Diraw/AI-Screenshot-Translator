@@ -4,10 +4,11 @@ import os
 import re
 import markdown
 
-# 添加父目录到系统路径，以便导入src中的模块
+from pathlib import Path
 current_path = Path(__file__).parent
 parent_path = current_path.parent
-sys.path.append(str(parent_path))
+project_root = parent_path.parent
+sys.path.insert(0, str(project_root))
 
 try:
     from src.html_viewer import HTMLViewer
@@ -100,7 +101,7 @@ def convert_markdown_to_html(markdown_text):
 
 def create_full_html(html_content, raw_content):
     """创建完整的HTML，使用模板"""
-    template_path = Path(parent_path) / "src" / "assets" / "template.html"
+    template_path = project_root / "src" / "assets" / "template.html"
     
     try:
         with open(template_path, "r", encoding="utf-8") as f:
@@ -110,8 +111,8 @@ def create_full_html(html_content, raw_content):
         return None
     
     # 替换模板中的占位符
-    template = template.replace("<!-- RENDERED_CONTENT_PLACEHOLDER -->", html_content)
-    template = template.replace("<!-- RAW_CONTENT_PLACEHOLDER -->", raw_content)
+    template = template.replace("< !-- RENDERED_CONTENT_PLACEHOLDER -->", html_content)
+    template = template.replace("< !-- RAW_CONTENT_PLACEHOLDER -->", raw_content)
     
     # 添加语法高亮支持
     prism_css = """
@@ -127,7 +128,7 @@ def create_full_html(html_content, raw_content):
     template = template.replace("</body>", f"{prism_js}</body>")
     
     # 设置字体大小
-    template = template.replace("<!-- FONT_SIZE_PLACEHOLDER -->", "16")
+    template = template.replace("< !-- FONT_SIZE_PLACEHOLDER -->", "16")
     
     return template
 
