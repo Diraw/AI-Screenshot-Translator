@@ -488,22 +488,15 @@ class IntegratedApp(QWidget):
                 if self.debug_mode:
                     print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 创建新的 HTML 窗口。")
 
-                initial_width = 400
-                initial_pos = QCursor.pos()
-
-                if (
-                    screenshot_card
-                    and self._is_valid_qobject(screenshot_card)
-                    and not screenshot_card.isHidden()
-                ):
-                    initial_width = screenshot_card.width()
-                    initial_pos = screenshot_card.pos()
+                # 初始宽度和高度，用于计算位置
+                initial_html_window_width = 400
+                initial_html_window_height = 300 # HTMLWindow 构造函数中的默认高度
 
                 html_result_window = HTMLWindow(
                     html_content,
                     title=f"翻译结果 - 组 {group_id}",
-                    width=initial_width,
-                    height=300,
+                    width=initial_html_window_width,
+                    height=initial_html_window_height,
                     base64_image_data=original_base64_image_data,
                     prompt_text=original_prompt_text,
                     group_id=group_id,
@@ -512,33 +505,75 @@ class IntegratedApp(QWidget):
                 )
                 html_result_window.signals.retranslate_requested.connect(self._handle_retranslate_request)
 
+                # 获取当前屏幕信息（工作区域，不包含任务栏）
+                current_screen = QApplication.screenAt(QCursor.pos())
+                if current_screen:
+                    # 使用 availableGeometry() 获取屏幕的工作区域，排除任务栏
+                    screen_rect = current_screen.availableGeometry()
+                else:
+                    screen_rect = QApplication.primaryScreen().availableGeometry()
+
+                target_x = QCursor.pos().x() # 默认位置为鼠标位置
+                target_y = QCursor.pos().y()
+
+                # 预估 HTML 窗口的完整高度，包括内容、控制按钮和边框
+                estimated_full_height = initial_html_window_height + html_result_window.control_layout_height + 2 * html_result_window.border_width + 40
+
                 if (
                     screenshot_card
                     and self._is_valid_qobject(screenshot_card)
                     and not screenshot_card.isHidden()
                 ):
-                    target_x = initial_pos.x() + initial_width + 10
-                    target_y = initial_pos.y()
+                    # 尝试放在截图卡片右侧
+                    proposed_x_right = screenshot_card.pos().x() + screenshot_card.width() + 10
+                    proposed_y_right = screenshot_card.pos().y()
 
-                    current_screen = QApplication.screenAt(initial_pos)
-                    if current_screen:
-                        current_screen_rect = current_screen.geometry()
+                    # 检查右侧是否有足够空间
+                    if proposed_x_right + html_result_window.width() <= screen_rect.right():
+                        target_x = proposed_x_right
+                        target_y = proposed_y_right
+
+                        # 如果放在右侧，是否会超出屏幕底部
+                        if target_y + estimated_full_height > screen_rect.bottom():
+                            # 如果超出底部，尝试将窗口上移，直到其底部与屏幕底部对齐
+                            target_y = screen_rect.bottom() - estimated_full_height
+                            # 确保上移后不会超出屏幕顶部
+                            if target_y < screen_rect.top():
+                                target_y = screen_rect.top() # 如果上移后超出顶部，则直接放在顶部
+
+                        if self.debug_mode:
+                            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 放置在截图卡片右侧，并调整Y轴以适应屏幕。")
                     else:
-                        current_screen_rect = QApplication.primaryScreen().geometry()
+                        # 右侧空间不足，尝试放在截图卡片下方
+                        proposed_x_bottom = screenshot_card.pos().x()
+                        proposed_y_bottom = screenshot_card.pos().y() + screenshot_card.height() + 10
 
-                    if target_x + html_result_window.width() > current_screen_rect.right():
-                        target_x = initial_pos.x()
-                        target_y = initial_pos.y() + screenshot_card.height() + 10
-                        if (
-                            target_y + html_result_window.height()
-                            > current_screen_rect.bottom()
-                        ):
-                            target_x = current_screen_rect.left()
-                            target_y = current_screen_rect.top()
-
-                    html_result_window.move(target_x, target_y)
+                        # 检查下方是否有足够空间（考虑HTML窗口的预估完整高度）
+                        if proposed_y_bottom + estimated_full_height <= screen_rect.bottom():
+                            target_x = proposed_x_bottom
+                            target_y = proposed_y_bottom
+                            if self.debug_mode:
+                                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 放置在截图卡片下方。")
+                        else:
+                            # 右侧和下方都放不下，回退到屏幕左上角
+                            target_x = screen_rect.left()
+                            target_y = screen_rect.top()
+                            if self.debug_mode:
+                                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 放置在屏幕左上角（右侧和下方空间不足）。")
                 else:
-                    html_result_window.move(QCursor.pos())
+                    # 没有截图卡片，直接放在鼠标位置
+                    target_x = QCursor.pos().x()
+                    target_y = QCursor.pos().y()
+                    # 同样，检查是否超出屏幕底部
+                    if target_y + estimated_full_height > screen_rect.bottom():
+                        target_y = screen_rect.bottom() - estimated_full_height
+                        if target_y < screen_rect.top():
+                            target_y = screen_rect.top()
+
+                    if self.debug_mode:
+                        print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 没有截图卡片，放置在鼠标位置并调整Y轴。")
+
+                html_result_window.move(target_x, target_y)
 
                 html_result_window.show()
                 html_result_window.setAttribute(Qt.WA_DeleteOnClose)
