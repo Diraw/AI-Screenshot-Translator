@@ -31,6 +31,8 @@
   </tr>
 </table>
 
+对于配置选项更加详细的介绍可在软件内部或者网页查看[提示](./src/assets/hint.md)
+
 # 安装
 
 您可以选择下载源码运行，或者前往 [Releases](https://github.com/Diraw/AI-Screenshot-Translator/releases) 界面下载可执行文件
