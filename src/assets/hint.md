@@ -2,13 +2,24 @@
 
 以qwen为例：
 
-<img src="./assets/v0.3.png" width="700">
+<img src="./assets/hint/v0.3.png" width="700">
 
 ## 二、代理地址
 
-如果电脑装了网络代理软件，请在这里填入软件使用的HTTP代理服务器，http://主机名:端口号，不然软件会连不上网
+如果电脑装了网络代理软件，请在这里填入软件使用的本地HTTP代理端口（SOCKS也支持），http://主机名:端口号，不然软件会连不上网
 
-- Clash默认本地地址和端口是：http://127.0.0.1:7890
+- Clash默认是：http://127.0.0.1:7890
+- v2rayN默认是：http://127.0.0.1:10808
+
+clash：
+
+<img src="./assets/hint/clash.png" width="700">
+
+v2rayN（注意不是主界面显示的远程端口）：
+
+<img src="./assets/hint/v2rayN_1.png" width="700">
+
+<img src="./assets/hint/v2rayN_2.png" width="700">
 
 ## 三、截图快捷键
 
