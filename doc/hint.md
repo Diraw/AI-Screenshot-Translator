@@ -2,7 +2,7 @@
 
 以qwen为例：
 
-<img src="./src/assets/hint/v0.3.png" width="700">
+<img src="../src/assets/hint/v0.3.png" width="700">
 
 ## 二、代理地址
 
@@ -13,13 +13,13 @@
 
 clash：
 
-<img src="./src/assets/hint/clash.png" width="700">
+<img src="../src/assets/hint/clash.png" width="700">
 
 v2rayN（注意不是主界面显示的远程端口）：
 
-<img src="./src/assets/hint/v2rayN_1.png" width="700">
+<img src="../src/assets/hint/v2rayN_1.png" width="700">
 
-<img src="./src/assets/hint/v2rayN_2.png" width="700">
+<img src="../src/assets/hint/v2rayN_2.png" width="700">
 
 ## 三、截图快捷键
 
