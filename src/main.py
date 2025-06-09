@@ -1,5 +1,10 @@
 import sys
 import os
+import datetime
+import base64
+import keyboard
+import traceback
+
 from PyQt5.QtWidgets import (
     QApplication,
     QWidget,
@@ -25,17 +30,13 @@ from PyQt5.QtCore import (
     pyqtSlot,
     QMetaObject,
 )
-import base64
-import yaml
-import keyboard
-import traceback
-import datetime
 
 from api_client import APIClient
 from html_viewer import HTMLViewer, HTMLWindow
 from screenshot import ScreenshotTool, ScreenshotPreviewCard
-from config_manager import ConfigManager # 导入 ConfigManager
-from config_app import ConfigApp # 导入 ConfigApp
+from config_manager import ConfigManager
+from config_app import ConfigApp
+from file_lock import SingleInstanceLock
 
 # --- AIWorker 和 WorkerSignals 类 ---
 class WorkerSignals(QObject):
@@ -926,6 +927,25 @@ if __name__ == "__main__":
 
     # 禁用当最后一个窗口关闭时退出应用程序，因为我们希望通过主窗口的关闭或托盘菜单来统一管理退出
     app.setQuitOnLastWindowClosed(False)
+
+    # --- 添加单实例检查 ---
+    # 使用应用程序的唯一标识符作为锁文件名称
+    app_lock = SingleInstanceLock("AI_Screenshot_Translator_Lock") 
+    
+    config_manager = ConfigManager()
+    config_data = config_manager.get_config()
+    if config_data.get("app_settings", {}).get("debug_mode", False):
+        app_lock.debug_mode = True
+
+    if not app_lock.acquire_lock():
+        # 如果无法获取锁，说明已有实例在运行
+        QMessageBox.warning(None, "应用程序已在运行", "AI截图翻译工具已在运行中，请勿重复启动。")
+        sys.exit(0) # 直接退出新实例
+    
+    # 如果成功获取锁，则将锁对象存储在 QApplication 实例中，以便在应用程序退出时释放
+    app.aboutToQuit.connect(app_lock.release_lock)
+    # --- 单实例检查结束 ---
+
 
     # 根据配置状态决定显示哪个窗口
     current_window = check_and_show_window()
