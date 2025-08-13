@@ -4,6 +4,7 @@ import datetime
 import base64
 import keyboard
 import traceback
+import re
 
 from PyQt5.QtWidgets import (
     QApplication,
@@ -29,6 +30,8 @@ from PyQt5.QtCore import (
     QObject,
     pyqtSlot,
     QMetaObject,
+    QTimer,
+    QFileSystemWatcher,
 )
 
 from api_client import APIClient
@@ -173,6 +176,122 @@ class IntegratedApp(QWidget):
         # 允许最小化到托盘
         self.setWindowFlags(self.windowFlags() | Qt.WindowMinimizeButtonHint)
 
+        # 配置热重载：文件监控
+        self._config_watcher = QFileSystemWatcher(self)
+        self._config_change_debounce = QTimer(self)
+        self._config_change_debounce.setSingleShot(True)
+        self._config_change_debounce.setInterval(400)  # 防抖
+        self._config_change_debounce.timeout.connect(self._reload_config_from_disk)
+
+        if os.path.exists(self.config_manager.config_file):
+            self._config_watcher.addPath(self.config_manager.config_file)
+        self._config_watcher.fileChanged.connect(self._on_config_file_changed)
+
+    # 用于把配置字典应用到正在运行的实例
+    def _apply_config(self, config: dict):
+        if not isinstance(config, dict):
+            return
+
+        # 1) 先快照旧值
+        old_api_key = getattr(self, "api_key", None)
+        old_base_url = getattr(self, "base_url", None)
+        old_model_name = getattr(self, "model_name", None)
+        old_hotkey = getattr(self, "screenshot_hotkey", None)
+        old_proxy = getattr(self, "proxy_url", None)
+        old_zoom = getattr(self, "zoom_sensitivity", None)
+        old_border = getattr(self, "card_border_color", None)
+
+        # 2) 读新配置（用局部变量接住）
+        new_api_key = config.get("api", {}).get("api_key")
+        new_base_url = config.get("api", {}).get("base_url")
+        new_model_name = config.get("api", {}).get("model")
+        new_prompt_text = config.get("api", {}).get("prompt_text")
+
+        new_max_windows = config.get("app_settings", {}).get("max_windows", 3)
+        new_zoom = float(config.get("app_settings", {}).get("zoom_sensitivity", 500.0))
+        new_hotkey = config.get("app_settings", {}).get("screenshot_hotkey", "ctrl+alt+s")
+        new_initial_font_size = config.get("app_settings", {}).get("initial_font_size", 16)
+        new_debug_mode = bool(config.get("app_settings", {}).get("debug_mode", False))
+        border_color_str = config.get("app_settings", {}).get("card_border_color", "100,100,100")
+        new_border = self._parse_border_color(border_color_str)
+
+        new_proxy = self._sanitize_proxy(config.get("api", {}).get("proxy", None))
+
+        # 3) 判断是否需要重建 APIClient（基于新旧对比）
+        api_changed = (
+            new_api_key != old_api_key or
+            new_base_url != old_base_url or
+            new_model_name != old_model_name
+        )
+
+        # 4) 将新值正式写回 self
+        self.api_key = new_api_key
+        self.base_url = new_base_url
+        self.model_name = new_model_name
+        self.prompt_text = new_prompt_text
+
+        self.max_windows = new_max_windows
+        self.zoom_sensitivity = new_zoom
+        self.screenshot_hotkey = new_hotkey
+        try:
+            self.initial_font_size = int(new_initial_font_size)
+        except Exception:
+            self.initial_font_size = 16
+        self.debug_mode = new_debug_mode
+        self.card_border_color = new_border
+        self.proxy_url = new_proxy
+
+        # 5) 应用到 APIClient
+        if not hasattr(self, "api_client") or self.api_client is None or api_changed:
+            self.api_client = APIClient(
+                api_key=self.api_key or "",
+                base_url=self.base_url or "",
+                model_name=self.model_name or ""
+            )
+        # 代理变化时更新
+        if self.proxy_url != old_proxy and self.api_client:
+            self.api_client.set_proxy(self.proxy_url)
+
+        # 6) 热键变更：先清空再注册
+        if old_hotkey != self.screenshot_hotkey:
+            try:
+                keyboard.unhook_all()
+            except Exception:
+                pass
+            self._register_hotkey()
+
+        # 7) 运行中窗口热更新：边框颜色/缩放灵敏度
+        if old_border != self.card_border_color or old_zoom != self.zoom_sensitivity:
+            for group in list(self.active_window_groups):
+                card = group.get("screenshot_card")
+                if card and self._is_valid_qobject(card):
+                    card.border_color = self.card_border_color
+                    card.zoom_sensitivity = self.zoom_sensitivity
+                    card.update()
+                win = group.get("html_result_window")
+                if win and self._is_valid_qobject(win):
+                    win.border_color = self.card_border_color
+                    win.update()
+
+        if self.debug_mode:
+            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 配置已热更新。")
+
+    def _on_config_file_changed(self, path: str):
+        # 某些编辑器会“替换文件”，需要重新添加监听
+        if os.path.exists(path) and path not in self._config_watcher.files():
+            self._config_watcher.addPath(path)
+        # 防抖后真正重载
+        self._config_change_debounce.start()
+
+    def _reload_config_from_disk(self):
+        new_cfg = self.config_manager.reload_config()
+        if new_cfg is None:
+            # 文件可能暂时不合法（编辑中），稍后再试
+            QTimer.singleShot(800, self._reload_config_from_disk)
+            if self.debug_mode:
+                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 配置解析失败，稍后重试。")
+            return
+        self._apply_config(new_cfg)
 
     def _get_resource_path(self, relative_path):
         """
@@ -216,7 +335,7 @@ class IntegratedApp(QWidget):
             if self.debug_mode: # 这里仍然使用 print，因为日志重定向还没设置
                 print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 警告: initial_font_size 配置无效，使用默认值 16。")
         
-        self.proxy_url = config.get("api", {}).get("proxy", None)
+        self.proxy_url = self._sanitize_proxy(config.get("api", {}).get("proxy", None))
 
         # --- 日志重定向和初始调试信息打印 ---
         if self.debug_mode:
@@ -369,13 +488,22 @@ class IntegratedApp(QWidget):
             "html_result_window": None,
             "base64_image_data": None,
             "prompt_text": None,
-            "ai_worker": None
+            "ai_worker": None,
+            "model_response_markdown": None,   # 缓存
+            "html_content": None,              # 缓存
+            "shot_hidden": False,              # 状态
+            "html_hidden": False,              # 状态
         }
         self.active_window_groups.append(new_group)
 
         screenshot_card = ScreenshotPreviewCard(
             pixmap, zoom_sensitivity=self.zoom_sensitivity, border_color=self.card_border_color
         )
+
+        # 从截图卡片恢复翻译窗口 + 软关闭
+        screenshot_card.restore_html_requested.connect(lambda gid=current_group_id: self._restore_html_window(gid))
+        screenshot_card.soft_closed.connect(lambda gid=current_group_id: self._on_screenshot_soft_closed(gid))
+
         screenshot_card.setWindowTitle(f"截图预览 - 组 {current_group_id}")
 
         initial_pos = (
@@ -387,10 +515,7 @@ class IntegratedApp(QWidget):
         screenshot_card.move(initial_pos)
 
         screenshot_card.show()
-        screenshot_card.setAttribute(Qt.WA_DeleteOnClose)
-        screenshot_card.destroyed.connect(
-            lambda: self._clear_window_ref(current_group_id, "screenshot_card")
-        )
+
         new_group["screenshot_card"] = screenshot_card
 
         byte_array = QByteArray()
@@ -461,160 +586,134 @@ class IntegratedApp(QWidget):
         try:
             html_template_path = self._get_resource_path("./assets/template.html")
             self.api_client.set_html_template_path(html_template_path)
+            html_content = self.api_client.create_html_content(
+                model_response_markdown, initial_font_size=self.initial_font_size
+            )
 
-            html_content = self.api_client.create_html_content(model_response_markdown,initial_font_size=self.initial_font_size)
-
-            # 查找现有窗口
+            # 先找到该组引用与已存在窗口（关键：不要在这里新建，也不要先写回组）
+            group_ref = None
             existing_html_window = None
-            for group in self.active_window_groups:
-                if group["id"] == group_id and group["html_result_window"] and self._is_valid_qobject(group["html_result_window"]):
-                    existing_html_window = group["html_result_window"]
+            for g in self.active_window_groups:
+                if g["id"] == group_id:
+                    group_ref = g
+                    if g.get("html_result_window") and self._is_valid_qobject(g["html_result_window"]):
+                        existing_html_window = g["html_result_window"]
                     break
 
+            # 更新组内缓存（不涉及窗口实例）
+            if group_ref is not None:
+                group_ref["model_response_markdown"] = model_response_markdown
+                group_ref["html_content"] = html_content
+
             if existing_html_window:
-                # 更新现有窗口的内容
+                # 更新原窗口
                 if self.debug_mode:
                     print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 更新现有 HTML 窗口内容。")
                 existing_html_window.web_view.setHtml(html_content)
-                # 确保原始数据也更新，以防再次重新翻译
                 existing_html_window.original_base64_image_data = original_base64_image_data
                 existing_html_window.original_prompt_text = original_prompt_text
-                existing_html_window.original_screeenshot_card = screenshot_card # 确保截图卡片引用也更新
-                # 重新显示（如果隐藏了）并激活
+                existing_html_window.original_screenshot_card = screenshot_card  # 修正拼写
+
+                try:
+                    existing_html_window.signals.retranslate_requested.disconnect(self._handle_retranslate_request)
+                except Exception:
+                    pass
+                existing_html_window.signals.retranslate_requested.connect(self._handle_retranslate_request)
+
                 existing_html_window.showNormal()
                 existing_html_window.activateWindow()
                 existing_html_window.raise_()
-            else:
-                # 创建新窗口
-                if self.debug_mode:
-                    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 创建新的 HTML 窗口。")
+                return
 
-                # 初始宽度和高度，用于计算位置
-                initial_html_window_width = 400
-                initial_html_window_height = 300 # HTMLWindow 构造函数中的默认高度
+            # 没有现有窗口时，才创建新窗口
+            if self.debug_mode:
+                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 创建新的 HTML 窗口。")
 
-                html_result_window = HTMLWindow(
-                    html_content,
-                    title=f"翻译结果 - 组 {group_id}",
-                    width=initial_html_window_width,
-                    height=initial_html_window_height,
-                    base64_image_data=original_base64_image_data,
-                    prompt_text=original_prompt_text,
-                    group_id=group_id,
-                    screenshot_card=screenshot_card,
-                    border_color=self.card_border_color,
-                )
-                html_result_window.signals.retranslate_requested.connect(self._handle_retranslate_request)
+            initial_html_window_width = 400
+            initial_html_window_height = 300
+            html_result_window = HTMLWindow(
+                html_content,
+                title=f"翻译结果 - 组 {group_id}",
+                width=initial_html_window_width,
+                height=initial_html_window_height,
+                base64_image_data=original_base64_image_data,
+                prompt_text=original_prompt_text,
+                group_id=group_id,
+                screenshot_card=screenshot_card,
+                border_color=self.card_border_color,
+            )
+            html_result_window.signals.restore_screenshot_requested.connect(self._restore_screenshot_card)
+            html_result_window.signals.soft_closed.connect(self._on_html_soft_closed)
+            try:
+                html_result_window.signals.retranslate_requested.disconnect(self._handle_retranslate_request)
+            except Exception:
+                pass
+            html_result_window.signals.retranslate_requested.connect(self._handle_retranslate_request)
 
-                # 获取当前屏幕信息（工作区域，不包含任务栏）
-                current_screen = QApplication.screenAt(QCursor.pos())
-                if current_screen:
-                    # 使用 availableGeometry() 获取屏幕的工作区域，排除任务栏
-                    screen_rect = current_screen.availableGeometry()
-                else:
-                    screen_rect = QApplication.primaryScreen().availableGeometry()
+            current_screen = QApplication.screenAt(QCursor.pos())
+            screen_rect = current_screen.availableGeometry() if current_screen else QApplication.primaryScreen().availableGeometry()
+            target_x = QCursor.pos().x()
+            target_y = QCursor.pos().y()
+            estimated_full_height = initial_html_window_height + html_result_window.control_layout_height + 2 * html_result_window.border_width + 40
 
-                target_x = QCursor.pos().x() # 默认位置为鼠标位置
-                target_y = QCursor.pos().y()
-
-                # 预估 HTML 窗口的完整高度，包括内容、控制按钮和边框
-                estimated_full_height = initial_html_window_height + html_result_window.control_layout_height + 2 * html_result_window.border_width + 40
-
-                if (
-                    screenshot_card
-                    and self._is_valid_qobject(screenshot_card)
-                    and not screenshot_card.isHidden()
-                ):
-                    # 尝试放在截图卡片右侧
-                    proposed_x_right = screenshot_card.pos().x() + screenshot_card.width() + 10
-                    proposed_y_right = screenshot_card.pos().y()
-
-                    # 检查右侧是否有足够空间
-                    if proposed_x_right + html_result_window.width() <= screen_rect.right():
-                        target_x = proposed_x_right
-                        target_y = proposed_y_right
-
-                        # 如果放在右侧，是否会超出屏幕底部
-                        if target_y + estimated_full_height > screen_rect.bottom():
-                            # 如果超出底部，尝试将窗口上移，直到其底部与屏幕底部对齐
-                            target_y = screen_rect.bottom() - estimated_full_height
-                            # 确保上移后不会超出屏幕顶部
-                            if target_y < screen_rect.top():
-                                target_y = screen_rect.top() # 如果上移后超出顶部，则直接放在顶部
-
-                        if self.debug_mode:
-                            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 放置在截图卡片右侧，并调整Y轴以适应屏幕。")
-                    else:
-                        # 右侧空间不足，尝试放在截图卡片下方
-                        proposed_x_bottom = screenshot_card.pos().x()
-                        proposed_y_bottom = screenshot_card.pos().y() + screenshot_card.height() + 10
-
-                        # 检查下方是否有足够空间（考虑HTML窗口的预估完整高度）
-                        if proposed_y_bottom + estimated_full_height <= screen_rect.bottom():
-                            target_x = proposed_x_bottom
-                            target_y = proposed_y_bottom
-                            if self.debug_mode:
-                                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 放置在截图卡片下方。")
-                        else:
-                            # 右侧和下方都放不下，回退到屏幕左上角
-                            target_x = screen_rect.left()
-                            target_y = screen_rect.top()
-                            if self.debug_mode:
-                                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 放置在屏幕左上角（右侧和下方空间不足）。")
-                else:
-                    # 没有截图卡片，直接放在鼠标位置
-                    target_x = QCursor.pos().x()
-                    target_y = QCursor.pos().y()
-                    # 同样，检查是否超出屏幕底部
+            if screenshot_card and self._is_valid_qobject(screenshot_card) and not screenshot_card.isHidden():
+                proposed_x_right = screenshot_card.pos().x() + screenshot_card.width() + 10
+                proposed_y_right = screenshot_card.pos().y()
+                if proposed_x_right + html_result_window.width() <= screen_rect.right():
+                    target_x = proposed_x_right
+                    target_y = proposed_y_right
                     if target_y + estimated_full_height > screen_rect.bottom():
-                        target_y = screen_rect.bottom() - estimated_full_height
-                        if target_y < screen_rect.top():
-                            target_y = screen_rect.top()
-
+                        target_y = max(screen_rect.top(), screen_rect.bottom() - estimated_full_height)
                     if self.debug_mode:
-                        print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 没有截图卡片，放置在鼠标位置并调整Y轴。")
+                        print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 放置在截图卡片右侧。")
+                else:
+                    proposed_x_bottom = screenshot_card.pos().x()
+                    proposed_y_bottom = screenshot_card.pos().y() + screenshot_card.height() + 10
+                    if proposed_y_bottom + estimated_full_height <= screen_rect.bottom():
+                        target_x = proposed_x_bottom
+                        target_y = proposed_y_bottom
+                        if self.debug_mode:
+                            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 放置在截图卡片下方。")
+                    else:
+                        target_x = screen_rect.left()
+                        target_y = screen_rect.top()
+                        if self.debug_mode:
+                            print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 放置在屏幕左上角。")
+            else:
+                if target_y + estimated_full_height > screen_rect.bottom():
+                    target_y = max(screen_rect.top(), screen_rect.bottom() - estimated_full_height)
+                if self.debug_mode:
+                    print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 无截图卡片，放在鼠标位置。")
 
-                html_result_window.move(target_x, target_y)
+            html_result_window.move(target_x, target_y)
+            html_result_window.show()
+            html_result_window.setAttribute(Qt.WA_DeleteOnClose)
+            html_result_window.destroyed.connect(lambda: self._clear_window_ref(group_id, "html_result_window"))
 
-                html_result_window.show()
-                html_result_window.setAttribute(Qt.WA_DeleteOnClose)
-                html_result_window.destroyed.connect(
-                    lambda: self._clear_window_ref(group_id, "html_result_window")
-                )
-
-                for group in self.active_window_groups:
-                    if group["id"] == group_id:
-                        group["html_result_window"] = html_result_window
-                        break
+            if group_ref is not None:
+                group_ref["html_result_window"] = html_result_window
 
         except Exception as e:
             if self.debug_mode:
                 print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 在主线程处理 AI 结果并显示 HTML 时失败: {e}")
                 traceback.print_exc()
-            self.html_viewer.show_error(
-                f"[IntegratedApp] 显示翻译结果失败: {e}", f"显示错误 - 组 {group_id}"
-            )
+            self.html_viewer.show_error(f"[IntegratedApp] 显示翻译结果失败: {e}", f"显示错误 - 组 {group_id}")
 
     @pyqtSlot(str, int)
     def _handle_ai_error(self, error_message: str, group_id: int):
         if self.debug_mode:
             print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: 收到 AI 错误响应信号: {error_message}")
-
-        # 尝试在原窗口显示错误信息
-        target_html_window = None
-        for group in self.active_window_groups:
-            if group["id"] == group_id and group["html_result_window"] and self._is_valid_qobject(group["html_result_window"]):
-                target_html_window = group["html_result_window"]
+        # 若已有窗口（比如点击了重新翻译），就在原窗口显示错误，不新建
+        target = None
+        for g in self.active_window_groups:
+            if g["id"] == group_id and g.get("html_result_window") and self._is_valid_qobject(g["html_result_window"]):
+                target = g["html_result_window"]
                 break
-
-        if target_html_window:
-            error_html = f"<html><body><h1>翻译错误</h1><p style='color: red;'>{error_message}</p></body></html>"
-            target_html_window.web_view.setHtml(error_html)
-            if self.debug_mode:
-                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 组 {group_id}: HTML窗口已更新为错误信息。")
+        html = f"<html><body><h1>翻译失败</h1><p style='color:red;'>{str(error_message)}</p></body></html>"
+        if target:
+            target.web_view.setHtml(html)
         else:
-            # 如果找不到原窗口，则创建新窗口显示错误
-            self.html_viewer.show_error(error_message, f"翻译错误 - 组 {group_id}")
+            self.html_viewer.show_error(str(error_message), f"翻译失败 - 组 {group_id}")
 
 
     @pyqtSlot(str, str, int, object)
@@ -891,6 +990,105 @@ class IntegratedApp(QWidget):
         # 允许窗口真正关闭
         event.accept()
         super().closeEvent(event)
+
+    # 清洗代理地址，去不可见字符/引号/换行，补协议并做简单校验
+    def _sanitize_proxy(self, value: str):
+        if not value:
+            return None
+        s = str(value)
+        # 去除换行/首尾空白
+        s = s.replace("\r", "").replace("\n", "").strip()
+        # 去除常见不可见空白：零宽空格/ZWJ/ZWNJ/BOM、NBSP、全角空格
+        s = re.sub(r"[\u200B-\u200D\uFEFF\u00A0\u3000]", "", s)
+        # 去掉包裹引号
+        s = s.strip('\'"')
+        # 如果缺少协议，默认补 http://
+        if not re.match(r"^[a-zA-Z][a-zA-Z0-9+\-.]*://", s):
+            s = "http://" + s
+        # 简单合法性检查
+        if not re.match(r"^(http|https|socks5)://[\w\.\-:\[\]]+/?", s):
+            if self.debug_mode:
+                print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [IntegratedApp] 代理地址格式看起来不合法: {s}")
+        return s
+    
+    # ---- 恢复/软关闭与最终清理 ----
+    def _restore_html_window(self, group_id: int):
+        g = next((x for x in self.active_window_groups if x["id"] == group_id), None)
+        if not g:
+            return
+        win = g.get("html_result_window")
+        if win and self._is_valid_qobject(win):
+            win.show()
+            win.activateWindow(); win.raise_()
+            g["html_hidden"] = False
+        else:
+            # 被销毁或未创建，就用缓存重建
+            html_content = g.get("html_content")
+            if not html_content and g.get("model_response_markdown"):
+                html_content = self.api_client.create_html_content(
+                    g["model_response_markdown"], initial_font_size=self.initial_font_size
+                )
+                g["html_content"] = html_content
+            if html_content:
+                new_win = HTMLWindow(
+                    html_content, title=f"翻译结果 - 组 {group_id}",
+                    width=420, height=300,
+                    base64_image_data=g.get("base64_image_data"),
+                    prompt_text=g.get("prompt_text"),
+                    group_id=group_id,
+                    screenshot_card=g.get("screenshot_card"),
+                    border_color=self.card_border_color,
+                )
+                new_win.signals.restore_screenshot_requested.connect(self._restore_screenshot_card)
+                new_win.signals.soft_closed.connect(self._on_html_soft_closed)
+                # 关键：补上“重新翻译”信号连接
+                try:
+                    new_win.signals.retranslate_requested.disconnect(self._handle_retranslate_request)
+                except Exception:
+                    pass
+                new_win.signals.retranslate_requested.connect(self._handle_retranslate_request)
+                g["html_result_window"] = new_win
+                g["html_hidden"] = False
+
+    @pyqtSlot(int)
+    def _restore_screenshot_card(self, group_id: int):
+        g = next((x for x in self.active_window_groups if x["id"] == group_id), None)
+        if not g:
+            return
+        card = g.get("screenshot_card")
+        if card and self._is_valid_qobject(card):
+            card.show()
+            card.activateWindow(); card.raise_()
+            g["shot_hidden"] = False
+
+    @pyqtSlot(int)
+    def _on_html_soft_closed(self, group_id: int):
+        g = next((x for x in self.active_window_groups if x["id"] == group_id), None)
+        if not g: return
+        g["html_hidden"] = True
+        self._try_finalize_group(group_id)
+
+    @pyqtSlot(int)
+    def _on_screenshot_soft_closed(self, group_id: int):
+        g = next((x for x in self.active_window_groups if x["id"] == group_id), None)
+        if not g: return
+        g["shot_hidden"] = True
+        self._try_finalize_group(group_id)
+
+    def _try_finalize_group(self, group_id: int):
+        g = next((x for x in self.active_window_groups if x["id"] == group_id), None)
+        if not g: return
+        if g.get("shot_hidden") and g.get("html_hidden"):
+            # 两者都关闭 -> 真正删除
+            for key in ("screenshot_card","html_result_window"):
+                obj = g.get(key)
+                try:
+                    if obj and self._is_valid_qobject(obj):
+                        obj.hide()
+                        obj.deleteLater()
+                except Exception:
+                    pass
+            self.active_window_groups = [x for x in self.active_window_groups if x["id"] != group_id]
 
 
 def check_and_show_window():

@@ -26,6 +26,8 @@ from PyQt5.QtWebChannel import QWebChannel
 class HTMLWindowSignals(QObject):
     """HTMLWindow 的信号类"""
     retranslate_requested = pyqtSignal(str, str, int, object)
+    restore_screenshot_requested = pyqtSignal(int) # 请求恢复截图窗口
+    soft_closed = pyqtSignal(int) # 软关闭
 
 class HTMLWindow(QMainWindow):
     """HTML 显示窗口类"""
@@ -55,7 +57,8 @@ class HTMLWindow(QMainWindow):
         self.original_base64_image_data = base64_image_data
         self.original_prompt_text = prompt_text
         self.original_group_id = group_id
-        self.original_screeenshot_card = screenshot_card
+        self.original_screenshot_card = screenshot_card
+        self._group_id = group_id
 
         self.signals = HTMLWindowSignals()
 
@@ -117,6 +120,12 @@ class HTMLWindow(QMainWindow):
         control_layout = QHBoxLayout()
         control_layout.setContentsMargins(5, 5, 5, 5)
 
+        # 新增：恢复截图窗口按钮
+        self.restore_shot_btn = QPushButton("R", self)
+        self.restore_shot_btn.setFixedSize(20, 20)
+        self.restore_shot_btn.setStyleSheet("background-color:#17a2b8;color:white;border-radius:10px;")
+        self.restore_shot_btn.clicked.connect(lambda: self.signals.restore_screenshot_requested.emit(self._group_id))
+
         self.toggle_view_button = QPushButton("T", self)
         self.toggle_view_button.setFixedSize(20, 20)
         self.toggle_view_button.setStyleSheet(
@@ -147,11 +156,16 @@ class HTMLWindow(QMainWindow):
         )
         self.close_button.clicked.connect(self.close)
 
+        control_layout.addWidget(self.restore_shot_btn)
         control_layout.addStretch()
         control_layout.addWidget(self.toggle_view_button)
         control_layout.addWidget(self.retranslate_button)
         control_layout.addWidget(self.resize_button)
         control_layout.addWidget(self.close_button)
+
+        # 改写关闭按钮为软关闭
+        self.close_button.clicked.disconnect()
+        self.close_button.clicked.connect(self._soft_close)
 
         main_layout.addLayout(control_layout)
         # --- 控制按钮布局结束 ---
@@ -198,25 +212,27 @@ class HTMLWindow(QMainWindow):
 
     @pyqtSlot()
     def _on_retranslate_button_clicked(self):
-        if (
-            self.original_base64_image_data
-            and self.original_prompt_text
-            and self.original_group_id
-        ):
-            self.signals.retranslate_requested.emit(
-                self.original_base64_image_data,
-                self.original_prompt_text,
-                self.original_group_id,
-                self.original_screeenshot_card,
-            )
-            self.web_view.setHtml(
-                "<html><body><h1>正在重新翻译...</h1><p>请稍候。</p></body></html>"
-            )
-        else:
-            print("[HTMLWindow] 无法重新翻译：缺少必要的原始数据。")
-            self.web_view.setHtml(
-                "<html><body><h1>重新翻译失败</h1><p>缺少原始图片或提示信息。</p></body></html>"
-            )
+        # 点击“重新翻译”
+        try:
+            print(f"[HTMLWindow] 重新翻译按钮点击，group_id={self._group_id}")
+            # 先给用户一个加载反馈
+            self.web_view.setHtml("<html><body><h1>正在重新翻译...</h1><p>请稍候。</p></body></html>")
+            # 校验必要数据并发出信号给主应用
+            if (
+                self.original_base64_image_data
+                and self.original_prompt_text
+                and self.original_group_id is not None
+            ):
+                self.signals.retranslate_requested.emit(
+                    self.original_base64_image_data,
+                    self.original_prompt_text,
+                    self.original_group_id,
+                    self.original_screenshot_card,
+                )
+            else:
+                print("[HTMLWindow] 无法重新翻译：原始数据缺失（base64/prompt/group_id）。")
+        except Exception as e:
+            print(f"[HTMLWindow] 重新翻译点击处理异常: {e}")
 
     @pyqtSlot()
     def _on_js_ready(self):
@@ -616,6 +632,15 @@ class HTMLWindow(QMainWindow):
             painter.drawRect(rect)
         finally:
             painter.end()
+
+    def _soft_close(self):
+        self.hide()
+        self.signals.soft_closed.emit(self._group_id)
+
+    def closeEvent(self, event):
+        # 防止真实销毁
+        self._soft_close()
+        event.ignore()
 
 
 class HTMLViewer:

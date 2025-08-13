@@ -1,6 +1,6 @@
 # AI 截图翻译工具 (AI Screenshot Translator)
 
-[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/) [![Nuitka](https://img.shields.io/badge/Nuitka-Compiled-purple)](https://nuitka.net/) [![Release Version](https://img.shields.io/badge/Release-v0.3.4-red)](https://github.com/Diraw/AI-Screenshot-Translator/releases/tag/v0.3.4-test)
+[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/) [![Nuitka](https://img.shields.io/badge/Nuitka-Compiled-purple)](https://nuitka.net/) [![Release Version](https://img.shields.io/badge/Release-v0.3.5-red)](https://github.com/Diraw/AI-Screenshot-Translator/releases/tag/v0.3.5)
 
 # 简介
 
@@ -11,6 +11,12 @@
 **工具特点**：1、截图翻译，快捷键启动；2、贴片截图和翻译，可随意拖动、缩放，可创建多组翻译贴片；3、公式可以切换原始文本方便复制；4、自定义api接口
 
 **想要解决的痛点**：1、目前市面上主流的整篇文档翻译的臃肿；2、若选择pdf复制文本粘贴翻译，有时候公式块是乱的或者无法复制到；3、对于图像扫描的pdf，无法复制文本
+
+# v0.3.5强力更新🚀
+
+- 新增**配置热加载**功能。现在对配置文件点击“保存配置”，修改会立刻更新应用，不需要再重启了！
+- 新增**窗口软关闭**功能。现在不小心关闭截图窗口或者翻译窗口，可以点击另外一个窗口左下角蓝色的“R”键还原！
+- 修复了若干bug
 
 # 演示
 
@@ -62,4 +68,6 @@ python main.py
 # 其他
 
 - 软件icon来自 [iconfinder](https://www.iconfinder.com/search?q=screenshot&price=free)
-- 感谢 Gemini 2.5 Flash 和 DeepSeek-V3-0324 帮我找bug
+- 喜欢本项目不妨点个star支持一下
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Diraw/AI-Screenshot-Translator&type=Date)](https://www.star-history.com/#Diraw/AI-Screenshot-Translator&Date)
