@@ -1,6 +1,6 @@
 # AI 截图翻译工具 (AI Screenshot Translator)
 
-[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/) [![Nuitka](https://img.shields.io/badge/Nuitka-Compiled-purple)](https://nuitka.net/) [![Release Version](https://img.shields.io/badge/Release-v0.3.5-red)](https://github.com/Diraw/AI-Screenshot-Translator/releases/tag/v0.3.5)
+[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/) [![Nuitka](https://img.shields.io/badge/Nuitka-Compiled-purple)](https://nuitka.net/) <img alt="GitHub release (latest by date)" src="https://img.shields.io/github/v/release/Diraw/AI-Screenshot-Translator"> <img alt="GitHub issues" src="https://img.shields.io/github/issues/Diraw/AI-Screenshot-Translator?color=green">
 
 # 简介
 
@@ -58,12 +58,6 @@ conda activate AI-Translator
 pip install -r requirements.txt
 python main.py
 ```
-
-# 更新计划
-
-- ~~新增api配置的gui窗口，优化手动配置yaml文件的逻辑为软件自动生成（v0.3.0已完成）~~
-- 新增图片和公式储存系统，方便后期调用（预计v0.4完成）
-- （更多功能欢迎issue提出或PR贡献）
 
 # 其他
 
