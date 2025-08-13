@@ -94,3 +94,13 @@ class ConfigManager:
                 "debug_mode": False,
             }
         }
+    
+    def reload_config(self):
+        """从磁盘重新加载配置到内存，返回最新配置（失败返回None，不覆盖旧内存值）"""
+        try:
+            cfg = self._load_config()
+            if cfg is not None:
+                self.config_data = cfg
+            return cfg
+        except Exception:
+            return None

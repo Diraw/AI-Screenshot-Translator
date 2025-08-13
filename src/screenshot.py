@@ -220,7 +220,10 @@ class ScreenshotTool(QWidget):
 
 
 class ScreenshotPreviewCard(QWidget):
-    # 构造函数添加 border_color 参数
+
+    restore_html_requested = pyqtSignal()   # 请求恢复翻译窗口
+    soft_closed = pyqtSignal()              # 软关闭信号
+
     def __init__(self, pixmap, parent=None, zoom_sensitivity=500.0, border_color=None):
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Tool)
@@ -282,6 +285,13 @@ class ScreenshotPreviewCard(QWidget):
         control_layout.setContentsMargins(5, 5, 5, 5) # 底部按钮的内边距
         control_layout.setSpacing(5) # 按钮之间的间距
 
+        # 新增：恢复翻译窗口按钮
+        self.restore_html_btn = QPushButton("R", self)
+        self.restore_html_btn.setFixedSize(20, 20)
+        self.restore_html_btn.setStyleSheet("background-color:#17a2b8;color:white;border-radius:10px;")
+        self.restore_html_btn.clicked.connect(self._emit_restore_html)
+        control_layout.addWidget(self.restore_html_btn)
+
         self.zoom_button = QPushButton("⤡", self)
         self.zoom_button.setFixedSize(20, 20)
         self.zoom_button.setStyleSheet(
@@ -299,7 +309,8 @@ class ScreenshotPreviewCard(QWidget):
         self.close_button.setStyleSheet(
             "background-color: red; color: white; border-radius: 10px;"
         )
-        self.close_button.clicked.connect(self.close)
+        # self.close_button.clicked.connect(self.close)
+        self.close_button.clicked.connect(self._soft_close)
 
         control_layout.addWidget(self.close_button)
         main_layout.addLayout(control_layout)
@@ -312,8 +323,20 @@ class ScreenshotPreviewCard(QWidget):
 
         self.min_zoom_width = 100
         self.max_zoom_width = 2000
+        
 
-        self.setAttribute(Qt.WA_DeleteOnClose)
+    def _emit_restore_html(self):
+        self.restore_html_requested.emit()
+
+    def _soft_close(self):
+        # 软关闭：仅隐藏
+        self.hide()
+        self.soft_closed.emit()
+    
+    def closeEvent(self, event):
+        # 拦截系统/Alt+F4：执行软关闭
+        self._soft_close()
+        event.ignore()
 
     def _zoom_button_mouse_press(self, event):
         if event.button() == Qt.LeftButton:

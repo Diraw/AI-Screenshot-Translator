@@ -4,6 +4,7 @@ import markdown
 import os
 import re
 import httpx 
+from typing import Optional
 
 def encode_image(image_path):
     """将图片编码为 base64 格式"""
@@ -11,56 +12,72 @@ def encode_image(image_path):
         return base64.b64encode(image_file.read()).decode("utf-8")
 
 
-def get_model_response(image_data_base64, prompt_text, api_key=None, base_url=None, model_name=None, proxy=None):
-    """获取模型响应"""
+def get_model_response(image_data_base64, prompt_text, api_key=None, base_url=None, model_name=None, proxy=None,
+                       max_retries: int = 3):
+    """获取模型响应（增加代理支持、超时与重试）"""
     if api_key is None:
         raise ValueError("API key must be provided.")
-
     if base_url is None:
         raise ValueError("Base URL must be provided.")
-    
     if model_name is None:
         raise ValueError("Model name must be provided.")
 
-    # 准备OpenAI客户端参数
-    client_kwargs = {
-        "api_key": api_key,
-        "base_url": base_url,
-    }
+    # 归一化 base_url（避免末尾多 / 引起 404 或握手重定向）
+    base_url = base_url.rstrip("/")
 
-    # 如果提供了代理，添加到客户端参数
+    timeout = httpx.Timeout(connect=10.0, read=30.0, write=20.0, pool=10.0)
     if proxy:
-        client_kwargs["http_client"] = httpx.Client(proxy=proxy)
+        httpx_client = httpx.Client(proxy=proxy, timeout=timeout, verify=True)
+    else:
+        httpx_client = httpx.Client(timeout=timeout, verify=True)
 
-    try:
-        client = OpenAI(**client_kwargs)
-        
-        completion = client.chat.completions.create(
-            model=model_name,
-            messages=[
-                {
-                    "role": "system",
-                    # "content": [{"type": "text", "text": "You are a helpful assistant."}],
-                    "content": "You are a helpful assistant.",
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": f"data:image/png;base64,{image_data_base64}",
-                        },
-                        {"type": "text", "text": prompt_text},
-                    ],
-                },
-            ],
-        )
-        return completion.choices[0].message.content
-    except Exception as e:
-        # 更详细的错误信息
-        if "proxy" in str(e).lower() or "ssl" in str(e).lower() or "connection" in str(e).lower():
-            raise Exception(f"API连接错误(可能与代理有关): {e}")
-        raise
+    # OpenAI 1.x 支持 http_client 参数
+    client = OpenAI(api_key=api_key, base_url=base_url, http_client=httpx_client)
+
+    last_err: Optional[Exception] = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            completion = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant.",
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": f"data:image/png;base64,{image_data_base64}",
+                            },
+                            {"type": "text", "text": prompt_text},
+                        ],
+                    },
+                ],
+            )
+            return completion.choices[0].message.content
+        except Exception as e:
+            last_err = e
+            msg = str(e).lower()
+            # 立即判定不可重试错误
+            if "authentication" in msg or "invalid api key" in msg:
+                raise Exception(f"认证失败: {e}")
+            if attempt < max_retries and (
+                "timeout" in msg or "connection" in msg or "ssl" in msg or "proxy" in msg or "eof" in msg
+            ):
+                # 指数退避
+                import time
+                time.sleep(0.8 * attempt)
+                continue
+            # 分类错误
+            if "timeout" in msg:
+                raise Exception(f"API请求超时，请检查网络/代理。详细: {e}")
+            if any(k in msg for k in ["proxy", "ssl", "connection", "eof", "connecterror"]):
+                raise Exception(f"API连接错误(可能与代理 / 目标URL / 证书有关): {e}")
+            raise
+    # 循环结束仍失败
+    raise Exception(f"请求多次重试仍失败: {last_err}")
 
 
 def preprocess_latex_formulas(markdown_text):
@@ -210,11 +227,7 @@ class APIClient:
 
     def set_proxy(self, proxy_url):
         """设置代理服务器URL"""
-        self.proxy = proxy_url
-        if proxy_url:
-            print(f"已设置API代理: {proxy_url}")
-        else:
-            print("已清除API代理设置")
+        self.proxy = proxy_url.strip() if proxy_url else None
 
     def set_html_template_path(self, path):
         """设置 HTML 模板文件的路径"""
