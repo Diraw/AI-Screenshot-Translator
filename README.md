@@ -1,6 +1,6 @@
 # AI 截图翻译工具 (AI Screenshot Translator)
 
-[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/) [![Nuitka](https://img.shields.io/badge/Nuitka-Compiled-purple)](https://nuitka.net/) <img alt="GitHub release (latest by date)" src="https://img.shields.io/github/v/release/Diraw/AI-Screenshot-Translator"> <img alt="GitHub issues" src="https://img.shields.io/github/issues/Diraw/AI-Screenshot-Translator?color=green">
+[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/) [![Nuitka](https://img.shields.io/badge/Nuitka-Compiled-purple)](https://nuitka.net/) <img alt="GitHub release (latest by date)" src="https://img.shields.io/github/v/release/Diraw/AI-Screenshot-Translator"> <img alt="GitHub issues" src="https://img.shields.io/github/issues/Diraw/AI-Screenshot-Translator?color=green"> [![Downloads](https://img.shields.io/github/downloads/Diraw/AI-Screenshot-Translator/total?color=yellow)](https://github.com/Diraw/AI-Screenshot-Translator/releases/)
 
 # 简介
 
