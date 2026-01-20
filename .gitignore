@@ -19,7 +19,6 @@ main.build/
 main.dist/
 main.onefile-build/
 main.exe
-nuitka/
 nuitka-crash-report.xml
 
 # Pyinstaller
