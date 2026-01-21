@@ -1,0 +1,97 @@
+cmake_minimum_required(VERSION 3.16)
+
+project(AI-Screenshot-Translator-Cpp VERSION 0.1 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Trigger re-config for AUTOMOC
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+
+find_package(Qt6 REQUIRED COMPONENTS Widgets Network Gui Core Concurrent)
+
+# Ensure assets are copied to the build directory
+
+
+# Source files
+set(PROJECT_SOURCES
+    src/main.cpp
+    src/App.cpp
+    src/App.h
+    src/ConfigManager.cpp
+    src/ConfigManager.h
+    src/GlobalHotkey.cpp
+    src/GlobalHotkey.h
+    src/ScreenshotTool.cpp
+    src/ScreenshotTool.h
+    src/PreviewCard.cpp
+    src/PreviewCard.h
+    src/ResultWindow.cpp
+    src/ResultWindow.h
+    src/ConfigDialog.cpp
+    src/ConfigDialog.h
+    src/ApiClient.cpp
+    src/ApiClient.h
+    src/SummaryWindow.cpp
+    src/SummaryWindow.h
+    src/TagDialog.h
+    src/TagDialog.cpp
+    src/HistoryManager.cpp
+    src/HistoryManager.h
+    src/EmbedWebView.cpp
+    assets.qrc
+)
+
+if(WIN32)
+    enable_language(RC)
+    list(APPEND PROJECT_SOURCES resources.rc)
+    add_definitions(-DNOMINMAX)
+endif()
+
+if(WIN32)
+    enable_language(RC)
+    # Add icon or other windows specific resources here if needed
+endif()
+
+add_executable(AI-Screenshot-Translator-Cpp ${PROJECT_SOURCES})
+
+target_link_libraries(AI-Screenshot-Translator-Cpp PRIVATE
+    Qt6::Widgets
+    Qt6::Network
+    Qt6::Gui
+    Qt6::Core
+    Qt6::Concurrent
+)
+
+if(WIN32)
+    target_link_libraries(AI-Screenshot-Translator-Cpp PRIVATE
+        shlwapi
+        ole32
+        user32
+        version
+        advapi32
+        shell32
+        dwmapi
+    )
+endif()
+
+# Handle Windows subsystem (GUI vs Console)
+if(WIN32)
+    set_target_properties(AI-Screenshot-Translator-Cpp PROPERTIES WIN32_EXECUTABLE ON)
+    
+    # Copy WebView2Loader.dll to output directory
+    add_custom_command(TARGET AI-Screenshot-Translator-Cpp POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/webview2_pkg/build/native/x64/WebView2Loader.dll"
+        $<TARGET_FILE_DIR:AI-Screenshot-Translator-Cpp>
+    )
+endif()
+
+# Ensure assets are copied to the build directory (Post-build to handle Multi-Config generators like VS)
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets"
+    "$<TARGET_FILE_DIR:${PROJECT_NAME}>/assets"
+    COMMENT "Copying assets to output directory"
+)

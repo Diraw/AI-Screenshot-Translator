@@ -1,0 +1,57 @@
+# Build artifacts
+/build/
+/build*/
+/bin/
+/lib/
+webview2_pkg/
+*.obj
+*.o
+*.lo
+*.la
+*.a
+*.dll
+*.exe
+*.lib
+*.pdb
+*.ilk
+*.exp
+*.idb
+*.tmp
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+
+# Qt / Creator / VS user files
+*.user
+*.user.*
+*.pro.user
+*.qbs.user
+*.qmlproject.user
+*.idea/
+*.vs/
+.vs/
+*.vcxproj.user
+*.VC.db
+*.VC.opendb
+
+# Logs and runtime outputs
+debug.log
+*.log
+
+# Local storage/runtime data
+/storage/
+/Release/storage/
+/build/Release/storage/
+
+# Generated resources
+*.qrc.depends
+*.qm
+
+# OS noise
+.DS_Store
+Thumbs.db
+ehthumbs.db
