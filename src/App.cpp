@@ -61,6 +61,10 @@ App::App(QObject *parent)
     QList<TranslationEntry> history = m_historyManager.loadEntries();
     m_summaryWindow->setInitialHistory(history);
 
+    // Initialize summary hotkeys (view/edit/screenshot/bold/underline/highlight)
+    m_summaryWindow->configureHotkeys(cfg.editHotkey, cfg.viewToggleHotkey, cfg.screenshotToggleHotkey,
+                                      cfg.boldHotkey, cfg.underlineHotkey, cfg.highlightHotkey);
+
     reloadHotkeys(); 
     
     connect(&m_screenshotHotkey, &GlobalHotkey::activated, this, &App::onScreenshotRequested);

@@ -29,6 +29,7 @@ public:
     void bind(const std::string& name, BindCallback fn);
     
     void setVisible(bool visible);
+    void openDevTools();
 
 signals:
     void ready();

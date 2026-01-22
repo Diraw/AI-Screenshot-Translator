@@ -12,6 +12,12 @@
 
 #include <QTimer>
 
+#ifdef _WIN32
+#include "WebView2.h"
+#include <wrl.h>
+using Microsoft::WRL::Callback;
+#endif
+
 class EmbedWebView::Impl : public webview::webview {
 public:
     Impl(void* hwnd) : webview::webview(false, hwnd) {}
@@ -151,6 +157,41 @@ void EmbedWebView::checkReady() {
             m_impl->setVisible(true);
         }
 
+#ifdef _WIN32
+        // Ensure DevTools are enabled and capture F12/Ctrl+Shift+I even when focus is inside WebView
+        if (m_impl->m_webview) {
+            ICoreWebView2Settings* settings = nullptr;
+            if (SUCCEEDED(m_impl->m_webview->get_Settings(&settings)) && settings) {
+                settings->put_AreDevToolsEnabled(TRUE);
+                settings->Release();
+            }
+        }
+        if (m_impl->m_controller) {
+            EventRegistrationToken token{};
+            m_impl->m_controller->add_AcceleratorKeyPressed(
+                Callback<ICoreWebView2AcceleratorKeyPressedEventHandler>(
+                    [this](ICoreWebView2Controller*, ICoreWebView2AcceleratorKeyPressedEventArgs* args) -> HRESULT {
+                        COREWEBVIEW2_KEY_EVENT_KIND kind;
+                        if (FAILED(args->get_KeyEventKind(&kind))) return S_OK;
+                        if (kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN &&
+                            kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN) {
+                            return S_OK;
+                        }
+                        UINT key = 0;
+                        if (FAILED(args->get_VirtualKey(&key))) return S_OK;
+                        bool isCtrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+                        bool isShift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+                        if (key == VK_F12 || (isCtrl && isShift && key == 'I')) {
+                            qDebug() << "[DevTools] AcceleratorKeyPressed -> open";
+                            openDevTools();
+                            args->put_Handled(TRUE);
+                        }
+                        return S_OK;
+                    }).Get(),
+                &token);
+        }
+#endif
+
         for (const auto& action : m_pendingActions) {
             action();
         }
@@ -244,4 +285,39 @@ void EmbedWebView::setVisible(bool visible) {
              });
         }
     }
+}
+
+void EmbedWebView::openDevTools() {
+#ifdef _WIN32
+    if (!m_impl) return;
+
+    auto action = [this]() {
+        if (!m_impl) return;
+
+        ICoreWebView2* webview = nullptr;
+        // Prefer cached webview
+        if (m_impl->m_webview) {
+            webview = m_impl->m_webview;
+            webview->AddRef();
+        } else if (m_impl->m_controller) {
+            m_impl->m_controller->get_CoreWebView2(&webview);
+        }
+
+        if (!webview) return;
+
+        ICoreWebView2Settings* settings = nullptr;
+        if (SUCCEEDED(webview->get_Settings(&settings)) && settings) {
+            settings->put_AreDevToolsEnabled(TRUE);
+            settings->Release();
+        }
+        webview->OpenDevToolsWindow();
+        webview->Release();
+    };
+
+    if (!m_isReady) {
+        m_pendingActions.push_back(action);
+        return;
+    }
+    action();
+#endif
 }
