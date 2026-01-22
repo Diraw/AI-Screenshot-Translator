@@ -538,6 +538,9 @@ void App::showConfig() {
     });
     
     dlg->show();
+    dlg->setWindowState((dlg->windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
+    dlg->raise();
+    dlg->activateWindow();
 }
 
 void App::onScreenshotCancelled() {

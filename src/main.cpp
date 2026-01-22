@@ -16,6 +16,7 @@
 #endif
 
 bool g_enableLogging = false;
+static bool g_logClearedOnStart = false;
 
 void customMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg) {
     QString text;
@@ -32,11 +33,19 @@ void customMessageHandler(QtMsgType type, const QMessageLogContext &context, con
     OutputDebugStringW(L"\n");
 #endif
 
-    // Always log INFO/WARN/CRIT; gate DEBUG by config/env to avoid noise
-    bool allowDebug = g_enableLogging || qEnvironmentVariableIsSet("FORCE_DEBUG_LOG");
-    bool shouldLog = (type != QtDebugMsg) || allowDebug;
+    // Only write debug.log when debug mode enabled (or env override)
+    bool allowFile = g_enableLogging || qEnvironmentVariableIsSet("FORCE_DEBUG_LOG");
+    if (!allowFile) return;
+    // Gate DEBUG entries if disabled
+    bool shouldLog = (type != QtDebugMsg) || allowFile;
     if (!shouldLog) return;
     
+    static bool logCleared = false;
+    if (!logCleared) {
+        QFile::remove("debug.log"); // ensure fresh file the moment we start logging
+        logCleared = true;
+    }
+
     QFile outFile("debug.log");
     if (outFile.open(QIODevice::WriteOnly | QIODevice::Append)) {
         QTextStream ts(&outFile);
@@ -50,8 +59,17 @@ int main(int argc, char *argv[]) {
         ConfigManager tempConfig;
         g_enableLogging = tempConfig.getConfig().debugMode;
     }
+    bool forceDebug = qEnvironmentVariableIsSet("FORCE_DEBUG_LOG");
+    if (g_enableLogging || forceDebug) {
+        QFile::remove("debug.log"); // Clear previous log on startup when debug is enabled
+        g_logClearedOnStart = true;
+    }
 
     qInstallMessageHandler(customMessageHandler);
+    if (g_enableLogging || forceDebug) {
+        QFile::remove("debug.log"); // Ensure cleared after handler install too
+        g_logClearedOnStart = true;
+    }
     qDebug() << "Application starting...";
 
     QApplication a(argc, argv);
