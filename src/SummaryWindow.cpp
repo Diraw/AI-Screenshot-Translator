@@ -19,6 +19,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QColor>
+#include <algorithm>
 
 #include "TranslationManager.h"
 #include "HistoryManager.h"
@@ -100,6 +101,17 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent) {
         } else {
             qDebug() << "[JS]" << QString::fromStdString(req);
         }
+    });
+
+    // Scroll position updates from JS
+    m_webView->bind("cmd_scroll", [this](std::string seq, std::string req, void* arg) {
+        QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req));
+        if (doc.isArray() && !doc.array().isEmpty()) {
+            m_lastScrollY = doc.array().at(0).toDouble();
+        }
+    });
+    m_webView->bind("cmd_exitSelectionMode", [this](std::string, std::string, void*) {
+        if (m_selectionModeBtn) m_selectionModeBtn->setChecked(false);
     });
 
     // Bind DevTools opener for JS-triggered hotkey inside WebView
@@ -220,6 +232,8 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent) {
             if (m_webView && m_webContainer) {
                 qDebug() << "Forcing initial WebView size:" << m_webContainer->width() << "x" << m_webContainer->height();
                 m_webView->setSize(m_webContainer->width(), m_webContainer->height());
+                // Restore last scroll position
+                m_webView->eval(QString("window.scrollTo(0,%1);").arg(m_lastScrollY).toStdString());
             }
         });
     });
@@ -261,6 +275,7 @@ void SummaryWindow::closeEvent(QCloseEvent *event) {
 }
 
 void SummaryWindow::setInitialHistory(const QList<TranslationEntry>& history) {
+    captureScrollPosition();
     m_entries = history;
     refreshHtml();
 }
@@ -271,6 +286,7 @@ void SummaryWindow::addEntry(const TranslationEntry& entry) {
 }
 
 void SummaryWindow::clearEntries() {
+    captureScrollPosition();
     m_entries.clear();
     refreshHtml();
 }
@@ -325,6 +341,12 @@ qreal SummaryWindow::getZoomFactor() const {
     return m_currentZoom;
 }
 
+void SummaryWindow::captureScrollPosition() {
+    if (m_webView) {
+        m_webView->eval("if(window.cmd_scroll){window.cmd_scroll(window.scrollY);}"); 
+    }
+}
+
 // Duplicate closeEvent removed
 
 // Helper struct for math protection
@@ -365,6 +387,8 @@ void SummaryWindow::saveState() {
     QSettings settings("YourCompany", "AIScreenshotTranslator");
     settings.setValue("summaryWindow/geometry", saveGeometry());
     settings.setValue("summaryWindow/zoom", m_currentZoom);
+    captureScrollPosition();
+    settings.setValue("summaryWindow/scrollY", m_lastScrollY);
     
     // Save scroll position via JavaScript
     if (m_webView) {
@@ -386,6 +410,7 @@ void SummaryWindow::restoreState() {
     // Restore zoom
     qreal zoom = settings.value("summaryWindow/zoom", 1.0).toReal();
     setZoomFactor(zoom);
+    m_lastScrollY = settings.value("summaryWindow/scrollY", 0.0).toDouble();
 }
 
 void SummaryWindow::configureHotkeys(const QString& editKey, const QString& viewKey, const QString& screenshotKey,
@@ -430,6 +455,7 @@ void SummaryWindow::configureHotkeys(const QString& editKey, const QString& view
 }
 
 void SummaryWindow::refreshHtml() {
+    captureScrollPosition();
     initHtml();
 }
 
@@ -491,7 +517,16 @@ html, body {
   color: #111111;
 }
 body { font-family: sans-serif; padding: 8px; }
-#status-indicator { margin-bottom: 8px; font-size: 12px; }
+#status-indicator {
+  position: fixed;
+  top: 8px;
+  right: 12px;
+  font-size: 12px;
+  background: rgba(0,0,0,0.05);
+  padding: 4px 8px;
+  border-radius: 4px;
+  z-index: 9999;
+}
 .entry { margin-bottom: 12px; padding: 8px; background: #f7f7f7; color: #111111; border: 1px solid #ddd; border-radius: 4px; }
 .entry.mode-edit { outline: 1px solid #777; }
 .entry-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
@@ -505,6 +540,14 @@ body.dark-mode .raw-text { background: #1f1f1f !important; color: #e0e0e0 !impor
 body.dark-mode .rendered-html { color: #e0e0e0 !important; }
 body.dark-mode .katex,
 body.dark-mode .katex * { color: #e0e0e0 !important; }
+.entry.selected { outline: 2px solid #3d8bfd; }
+.selection-rect {
+  position: fixed;
+  border: 1px dashed #3d8bfd;
+  background: rgba(61,139,253,0.1);
+  pointer-events: none;
+  z-index: 9998;
+}
 </style>
 <script>
 const IS_DARK = __IS_DARK__;
@@ -521,6 +564,15 @@ function log(msg){
   try { if (window.cmd_log) window.cmd_log(JSON.stringify([msg])); }
   catch(e){}
 }
+let SELECTION_MODE = false;
+let lastScrollReport = 0;
+window.addEventListener('scroll', function() {
+  if (!window.cmd_scroll) return;
+  const now = Date.now();
+  if (now - lastScrollReport < 50) return;
+  lastScrollReport = now;
+  window.cmd_scroll(window.scrollY);
+}, { passive: true });
 </script>
 )RAW_HTML";
 
@@ -572,20 +624,25 @@ function log(msg){
 html = html.replace("__HTML_CLASS__", isDark ? "dark-mode" : "");
 
     // Static JS Logic
-    html += "<script>";
-    html += QString("var KEY_EDIT = '%1';\n").arg(m_editKey);
-    html += QString("var KEY_VIEW = '%1';\n").arg(m_viewKey);
-    html += QString("var KEY_SHOT = '%1';\n").arg(m_screenshotKey);
-    html += QString("var KEY_BOLD = '%1';\n").arg(m_boldKey);
-    html += QString("var KEY_UNDERLINE = '%1';\n").arg(m_underlineKey);
-    html += QString("var KEY_HIGHLIGHT = '%1';\n").arg(m_highlightKey);
-    html += R"JSCODE(
+  html += "<script>";
+  html += QString("var KEY_EDIT = '%1';\n").arg(m_editKey);
+  html += QString("var KEY_VIEW = '%1';\n").arg(m_viewKey);
+  html += QString("var KEY_SHOT = '%1';\n").arg(m_screenshotKey);
+  html += QString("var KEY_BOLD = '%1';\n").arg(m_boldKey);
+  html += QString("var KEY_UNDERLINE = '%1';\n").arg(m_underlineKey);
+  html += QString("var KEY_HIGHLIGHT = '%1';\n").arg(m_highlightKey);
+  html += QString("var RESTORE_SCROLL = %1;\n").arg(m_lastScrollY);
+  html += R"JSCODE(
 if (document.body) { applyDarkMode(IS_DARK); } else { document.addEventListener('DOMContentLoaded', () => applyDarkMode(IS_DARK), {once:true}); }
 var LAST_ENTRY = null;
 document.addEventListener('DOMContentLoaded', function() {
     if (document.body) {
         document.body.tabIndex = -1;
         document.body.focus();
+    }
+    if (typeof RESTORE_SCROLL !== 'undefined') {
+        window.scrollTo(0, RESTORE_SCROLL);
+        setTimeout(() => window.scrollTo(0, RESTORE_SCROLL), 50);
     }
     log('DOMContentLoaded; KEY_VIEW='+KEY_VIEW+' KEY_SHOT='+KEY_SHOT+' KEY_EDIT='+KEY_EDIT);
 });
@@ -703,7 +760,11 @@ function toggleEdit(entry) {
 document.addEventListener('focusin', function(e) {
    var entry = e.target.closest('.entry');
    if (entry) {
+       var id = entry.getAttribute('data-id');
+       var raw = document.getElementById('raw_' + id);
+       var isRaw = raw && raw.style.display !== 'none';
        if (entry.classList.contains('mode-edit')) updateStatus('edit');
+       else if (isRaw) updateStatus('raw');
        else updateStatus('view');
        LAST_ENTRY = entry;
    } else { updateStatus('view'); }
@@ -719,6 +780,11 @@ function handleKey(e) {
        } else {
            log('cmd_openDevTools not bound');
        }
+       e.preventDefault();
+       return;
+   }
+   if (SELECTION_MODE && e.key === 'Escape') {
+       if (window.cmd_exitSelectionMode) window.cmd_exitSelectionMode();
        e.preventDefault();
        return;
    }
@@ -828,10 +894,15 @@ function addEntryToDom(id, time, markdown, mathBlocks, originalRaw, isSelectionM
 }
 
 function toggleSelectionMode(show) {
+    SELECTION_MODE = !!show;
     var checkboxes = document.querySelectorAll('.selection-checkbox');
     checkboxes.forEach(cb => {
         cb.style.display = show ? 'block' : 'none';
-        if (!show) cb.checked = false;
+        if (!show) {
+            cb.checked = false;
+            var entry = cb.closest('.entry');
+            if (entry) entry.classList.remove('selected');
+        }
     });
 }
 
@@ -844,8 +915,63 @@ function selectAllEntries(select) {
     var checkboxes = document.querySelectorAll('.selection-checkbox');
     checkboxes.forEach(cb => {
         cb.checked = select;
+        var entry = cb.closest('.entry');
+        if (entry) entry.classList.toggle('selected', select);
     });
 }
+
+// Click-to-select in selection mode
+document.addEventListener('click', function(e) {
+    if (!SELECTION_MODE) return;
+    var entry = e.target.closest('.entry');
+    if (!entry) return;
+    var cb = entry.querySelector('.selection-checkbox');
+    if (!cb) return;
+    cb.checked = !cb.checked;
+    entry.classList.toggle('selected', cb.checked);
+    e.preventDefault();
+});
+
+// Drag rectangle selection
+let dragSelect = false;
+let dragStart = {x:0, y:0};
+let selectionRectEl = null;
+document.addEventListener('mousedown', function(e){
+    if (!SELECTION_MODE || e.button !== 0) return;
+    dragSelect = true;
+    dragStart = {x: e.clientX, y: e.clientY};
+    selectionRectEl = document.createElement('div');
+    selectionRectEl.className = 'selection-rect';
+    document.body.appendChild(selectionRectEl);
+});
+document.addEventListener('mousemove', function(e){
+    if (!dragSelect || !selectionRectEl) return;
+    var x1 = Math.min(dragStart.x, e.clientX);
+    var y1 = Math.min(dragStart.y, e.clientY);
+    var x2 = Math.max(dragStart.x, e.clientX);
+    var y2 = Math.max(dragStart.y, e.clientY);
+    selectionRectEl.style.left = x1 + 'px';
+    selectionRectEl.style.top = y1 + 'px';
+    selectionRectEl.style.width = (x2 - x1) + 'px';
+    selectionRectEl.style.height = (y2 - y1) + 'px';
+    var checkboxes = document.querySelectorAll('.selection-checkbox');
+    checkboxes.forEach(cb => {
+        var entry = cb.closest('.entry');
+        if (!entry) return;
+        var rect = entry.getBoundingClientRect();
+        var overlap = rect.left < x2 && rect.right > x1 && rect.top < y2 && rect.bottom > y1;
+        cb.checked = overlap;
+        entry.classList.toggle('selected', cb.checked);
+    });
+});
+document.addEventListener('mouseup', function(e){
+    if (!dragSelect) return;
+    dragSelect = false;
+    if (selectionRectEl) {
+        selectionRectEl.remove();
+        selectionRectEl = null;
+    }
+});
  </script>
 )JSCODE";
 
@@ -864,11 +990,14 @@ function selectAllEntries(select) {
     html += "</script>";
 
     html += "</body></html>";
-    
+
     m_webView->setHtml(html.toStdString());
     m_webView->focus();
     QString toggleJs = QString("applyDarkMode(%1);").arg(isDark ? "true" : "false");
     m_webView->eval(toggleJs.toStdString());
+    if (m_lastScrollY > 0.0) {
+        m_webView->eval(QString("window.scrollTo(0,%1);").arg(m_lastScrollY).toStdString());
+    }
 }
 
 void SummaryWindow::appendEntryHtml(const TranslationEntry& entry) {
@@ -981,6 +1110,7 @@ void SummaryWindow::loadAvailableTags() {
 }
 
 void SummaryWindow::applyFilters() {
+    captureScrollPosition();
     refreshHtml();
 }
 
@@ -1000,6 +1130,10 @@ QList<TranslationEntry> SummaryWindow::getFilteredEntries() const {
         
         filtered.append(entry);
     }
+
+    std::sort(filtered.begin(), filtered.end(), [](const TranslationEntry& a, const TranslationEntry& b){
+        return a.timestamp > b.timestamp; // newer first
+    });
     
     return filtered;
 }
@@ -1038,14 +1172,17 @@ void SummaryWindow::onBatchSelectAll() {
 
 void SummaryWindow::onBatchDelete() {
     m_webView->eval("if(window.getSelectedIds) { let ids = window.getSelectedIds(); if(ids.length > 0) window.cmd_batchDelete(...ids); }");
+    if (m_selectionModeBtn) m_selectionModeBtn->setChecked(false);
 }
 
 void SummaryWindow::onBatchAddTags() {
     m_webView->eval("if(window.getSelectedIds) { let ids = window.getSelectedIds(); if(ids.length > 0) window.cmd_batchAddTags(...ids); }");
+    if (m_selectionModeBtn) m_selectionModeBtn->setChecked(false);
 }
 
 void SummaryWindow::onBatchRemoveTags() {
     m_webView->eval("if(window.getSelectedIds) { let ids = window.getSelectedIds(); if(ids.length > 0) window.cmd_batchRemoveTags(...ids); }");
+    if (m_selectionModeBtn) m_selectionModeBtn->setChecked(false);
 }
 void SummaryWindow::updateTheme(bool isDark) {
     if (m_webView) {

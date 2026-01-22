@@ -45,6 +45,7 @@ public:
 
 signals:
     void entryMarkdownChanged(const QString& id, const QString& newMarkdown);
+    void historyFileChanged();
 
 private slots:
     void onFileChanged(const QString& path);

@@ -35,6 +35,8 @@ public:
     
     void setZoomFactor(qreal factor);
     qreal getZoomFactor() const;
+    void captureScrollPosition();
+    qreal getLastScrollY() const { return m_lastScrollY; }
     
     void configureHotkeys(const QString& editKey, const QString& viewKey, const QString& screenshotKey,
                           const QString& boldKey, const QString& underlineKey, const QString& highlightKey);
@@ -63,6 +65,7 @@ private:
     QList<TranslationEntry> m_entries;
     AppConfig m_config;
     qreal m_currentZoom = 1.0;
+    qreal m_lastScrollY = 0.0;
     
     // Filter UI
     QToolBar *m_filterToolbar = nullptr;

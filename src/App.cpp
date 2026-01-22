@@ -32,6 +32,7 @@ App::App(QObject *parent)
 
     m_summaryWindow = new SummaryWindow();
     m_summaryWindow->setConfig(cfg);
+    m_summaryWindow->setHistoryManager(&m_historyManager);
     connect(m_summaryWindow, &SummaryWindow::restorePreviewRequested, this, [this](const QString& id){
         restorePreview(id);
     });
@@ -40,6 +41,12 @@ App::App(QObject *parent)
         if (m_historyManager.deleteEntry(id)) {
             qDebug() << "Deleted entry:" << id;
         }
+    });
+
+    // Persist edits from SummaryWindow back to history.json
+    connect(m_summaryWindow, &SummaryWindow::entryEdited, this, [this](const QString& id, const QString& content){
+        qDebug() << "[SummaryWindow] entryEdited -> persist to history.json for id" << id;
+        m_historyManager.updateEntryContent(id, content);
     });
 
     connect(&m_historyManager, &HistoryManager::entryMarkdownChanged, this, [this](const QString& id, const QString& content){
@@ -52,6 +59,16 @@ App::App(QObject *parent)
                     res->externalContentUpdate(content);
                 }
             }
+        }
+    });
+
+    // Reload summary list when history.json changes externally
+    connect(&m_historyManager, &HistoryManager::historyFileChanged, this, [this](){
+        QList<TranslationEntry> history = m_historyManager.loadEntries();
+        if (m_summaryWindow) {
+            m_summaryWindow->setInitialHistory(history);
+            // Reload tags list for filters/batch tag ops
+            m_summaryWindow->setHistoryManager(&m_historyManager);
         }
     });
     
@@ -264,12 +281,21 @@ void App::onApiError(const QString &error, void* context) {
 void App::showSummary() {
     if (m_summaryWindow) {
         if (m_summaryWindow->isVisible()) {
-            // Save geometry before hiding
-            AppConfig cfg = m_configManager.getConfig();
-            cfg.summaryWindowGeometry = m_summaryWindow->saveGeometry();
-            m_configManager.setConfig(cfg);
-            m_configManager.saveConfig();
-            m_summaryWindow->hide();
+            if (m_summaryWindow->isActiveWindow()) {
+                // Save geometry before hiding
+                AppConfig cfg = m_configManager.getConfig();
+                cfg.summaryWindowGeometry = m_summaryWindow->saveGeometry();
+                m_configManager.setConfig(cfg);
+                m_configManager.saveConfig();
+                m_summaryWindow->captureScrollPosition();
+                QSettings settings("YourCompany", "AIScreenshotTranslator");
+                settings.setValue("summaryWindow/scrollY", m_summaryWindow->getLastScrollY());
+                m_summaryWindow->hide();
+            } else {
+                m_summaryWindow->setWindowState((m_summaryWindow->windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
+                m_summaryWindow->raise();
+                m_summaryWindow->activateWindow();
+            }
         } else {
             // Update history before showing
             m_summaryWindow->setInitialHistory(m_historyManager.loadEntries());
@@ -283,6 +309,7 @@ void App::showSummary() {
                 m_summaryWindow->restoreGeometry(cfg.summaryWindowGeometry);
             }
             m_summaryWindow->show();
+            m_summaryWindow->setWindowState((m_summaryWindow->windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
             m_summaryWindow->raise();
             m_summaryWindow->activateWindow();
 
@@ -450,12 +477,18 @@ void App::showConfig() {
     if (m_activeConfigDialog) {
         // Toggle: if visible, hide; if hidden, show
         if (m_activeConfigDialog->isVisible()) {
-            // Save geometry before hiding
-            AppConfig cfg = m_configManager.getConfig();
-            cfg.configWindowGeometry = m_activeConfigDialog->saveGeometry();
-            m_configManager.setConfig(cfg);
-            m_configManager.saveConfig();
-            m_activeConfigDialog->hide();
+            if (m_activeConfigDialog->isActiveWindow()) {
+                // Save geometry before hiding
+                AppConfig cfg = m_configManager.getConfig();
+                cfg.configWindowGeometry = m_activeConfigDialog->saveGeometry();
+                m_configManager.setConfig(cfg);
+                m_configManager.saveConfig();
+                m_activeConfigDialog->hide();
+            } else {
+                m_activeConfigDialog->setWindowState((m_activeConfigDialog->windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
+                m_activeConfigDialog->raise();
+                m_activeConfigDialog->activateWindow();
+            }
         } else {
             // Fix white flash: Disable updates during show/restore
             m_activeConfigDialog->setUpdatesEnabled(false);
@@ -466,6 +499,7 @@ void App::showConfig() {
                 m_activeConfigDialog->restoreGeometry(cfg.configWindowGeometry);
             }
             m_activeConfigDialog->show();
+            m_activeConfigDialog->setWindowState((m_activeConfigDialog->windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
             m_activeConfigDialog->raise();
             m_activeConfigDialog->activateWindow();
 
