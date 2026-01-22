@@ -353,7 +353,15 @@ window.addEventListener('keydown', function(e) {
     e.preventDefault();
     return;
   }
-  if (EDIT) { if(matchHK(e, HK_E)||e.key==='Escape'){ e.preventDefault(); toggleEdit(); } return; }
+  if (EDIT) {
+    if (matchHK(e, HK_E) || e.key === 'Escape') {
+      e.preventDefault(); toggleEdit(); return;
+    }
+    if (matchHK(e, HK_B)) { e.preventDefault(); applyFormat('bold'); return; }
+    if (matchHK(e, HK_U)) { e.preventDefault(); applyFormat('underline'); return; }
+    if (matchHK(e, HK_H)) { e.preventDefault(); applyFormat('highlight'); return; }
+    return;
+  }
   if (matchHK(e, HK_V)){ log("Matched View"); e.preventDefault(); toggleSource(); return; }
   if (matchHK(e, HK_E)){ log("Matched Edit"); e.preventDefault(); toggleEdit(); return; }
   if (matchHK(e, HK_S)){ log("Matched Screenshot"); e.preventDefault(); toggleScreenshot(); return; }

@@ -601,4 +601,5 @@ void HistoryManager::onFileChanged(const QString& path) {
             // Optionally notify Summary Window to reload if we want full sync
         }
     }
+    emit historyFileChanged();
 }
