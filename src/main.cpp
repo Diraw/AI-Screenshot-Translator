@@ -32,7 +32,10 @@ void customMessageHandler(QtMsgType type, const QMessageLogContext &context, con
     OutputDebugStringW(L"\n");
 #endif
 
-    if (!g_enableLogging) return;
+    // Always log INFO/WARN/CRIT; gate DEBUG by config/env to avoid noise
+    bool allowDebug = g_enableLogging || qEnvironmentVariableIsSet("FORCE_DEBUG_LOG");
+    bool shouldLog = (type != QtDebugMsg) || allowDebug;
+    if (!shouldLog) return;
     
     QFile outFile("debug.log");
     if (outFile.open(QIODevice::WriteOnly | QIODevice::Append)) {

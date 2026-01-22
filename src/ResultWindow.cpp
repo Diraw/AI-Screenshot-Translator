@@ -44,6 +44,13 @@ ResultWindow::ResultWindow(QWidget *parent) : QWidget(parent) {
     m_webContainer = new QWidget(this);
     m_webView = std::make_unique<EmbedWebView>(m_webContainer);
 
+    // DevTools shortcut for WebView debugging
+    QShortcut *devToolsShortcut = new QShortcut(QKeySequence(Qt::Key_F12), this);
+    devToolsShortcut->setContext(Qt::ApplicationShortcut);
+    connect(devToolsShortcut, &QShortcut::activated, this, [this]() {
+        if (m_webView) m_webView->openDevTools();
+    });
+
     m_toolBar = new QToolBar(this);
     m_toolBar->setMovable(false);
     m_toolBar->setFloatable(false);
@@ -77,8 +84,6 @@ ResultWindow::ResultWindow(QWidget *parent) : QWidget(parent) {
     m_statusLabel = new QLabel("MODE: VIEW", this);
     m_toolBar->addWidget(m_statusLabel);
     
-    updateTheme(ThemeUtils::isSystemDark());
-
     // --- JS BINDINGS ---
     m_webView->bind("log", [this](std::string seq, std::string req, void* arg) {
          QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req));
@@ -121,11 +126,21 @@ ResultWindow::ResultWindow(QWidget *parent) : QWidget(parent) {
     m_webView->bind("cmd_showPrevious", [this](std::string seq, std::string req, void* arg) { QMetaObject::invokeMethod(this, "showPrevious", Qt::QueuedConnection); });
     m_webView->bind("cmd_showNext", [this](std::string seq, std::string req, void* arg) { QMetaObject::invokeMethod(this, "showNext", Qt::QueuedConnection); });
     m_webView->bind("cmd_openTagDialog", [this](std::string seq, std::string req, void* arg) { QMetaObject::invokeMethod(this, "openTagDialog", Qt::QueuedConnection); });
+    m_webView->bind("cmd_openDevTools", [this](std::string, std::string, void*) {
+        if (m_webView) {
+            qDebug() << "[DevTools] Request from JS in ResultWindow";
+            m_webView->openDevTools();
+        }
+    });
 
     connect(m_webView.get(), &EmbedWebView::ready, this, [this]() {
         setUpdatesEnabled(true);
         m_webView->setSize(width(), height());
+        // Apply initial theme
+        updateTheme(ThemeUtils::isSystemDark());
     });
+    
+    updateTheme(ThemeUtils::isSystemDark());
 }
 
 void ResultWindow::toggleLock() {
@@ -162,6 +177,7 @@ void ResultWindow::setContent(const QString &markdown, const QString &originalBa
     initData["key_bold"] = m_boldKey;
     initData["key_underline"] = m_underlineKey;
     initData["key_highlight"] = m_highlightKey;
+    initData["is_dark"] = ThemeUtils::isSystemDark();
     
     QString pJson = QString::fromUtf8(QJsonDocument(initData).toJson(QJsonDocument::Compact));
     pJson.replace("</script>", "<\\/script>", Qt::CaseInsensitive);
@@ -178,18 +194,99 @@ void ResultWindow::setContent(const QString &markdown, const QString &originalBa
     auto toUri = [](const QByteArray& c, const char* t) { return QString("data:%1;charset=utf-8;base64,%2").arg(t).arg(QString(c.toBase64())); };
 
     QString html = R"RAW_HTML(
-<!DOCTYPE html><html><head><meta charset='UTF-8'><style>
-body { font-family: "Segoe UI", sans-serif; font-size: %7px; padding: 20px; padding-top: 60px; overflow-y: auto; }
-pre { background: #f4f4f4; padding: 12px; border-radius: 4px; overflow-x: auto; }
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset='UTF-8'>
+<link rel='stylesheet' href='%1'>
+<link rel='stylesheet' href='%4'>
+<style>
+html, body {
+  background: #ffffff;
+  color: #111111;
+}
+
+body {
+  font-family: "Segoe UI", sans-serif;
+  font-size: %7px;
+  padding: 20px;
+  padding-top: 60px;
+  overflow-y: auto;
+}
+
+pre {
+  background: #f4f4f4;
+  padding: 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+  color: #111111;
+}
+
 #content { line-height: 1.6; }
-#raw_view, #edit_view { display: none; white-space: pre-wrap; font-family: monospace; background: #f8f9fa; padding: 15px; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px; }
-#edit_view { width: 100%; min-height: 250px; box-sizing: border-box; background: #fff; border: 2px solid #0078d4; outline: none; font-size: 14px; resize: vertical; }
+
+#raw_view,
+#edit_view {
+  display: none;
+  white-space: pre-wrap;
+  font-family: monospace;
+  background: #f8f9fa;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-top: 10px;
+  color: #111111;
+}
+
+#edit_view {
+  width: 100%;
+  min-height: 250px;
+  box-sizing: border-box;
+  background: #fff;
+  border: 2px solid #0078d4;
+  outline: none;
+  font-size: 14px;
+  resize: vertical;
+}
+
 mark { background: #ffeb3b; color: #000; }
-@media (prefers-color-scheme: dark) { body { background: #1e1e1e; color: #e0e0e0; } pre, #raw_view, #edit_view { background: #2d2d2d; color: #e0e0e0; border-color: #444; } mark { background: #d4af37; color: #000; } }
+
+html.dark-mode,
+body.dark-mode {
+  background: #1e1e1e !important;
+  color: #e0e0e0 !important;
+}
+
+body.dark-mode pre,
+body.dark-mode code,
+body.dark-mode #raw_view,
+body.dark-mode #edit_view {
+  background: #2d2d2d !important;
+  color: #e0e0e0 !important;
+  border-color: #444 !important;
+}
+
+body.dark-mode mark { background: #d4af37; color: #000; }
+
+body.dark-mode .hljs,
+body.dark-mode pre code,
+body.dark-mode pre code.hljs {
+  color: #e0e0e0 !important;
+  background: #2d2d2d !important;
+}
+
+body.dark-mode .hljs * { color: inherit !important; }
+
+body.dark-mode .katex,
+body.dark-mode .katex * {
+  color: #e0e0e0 !important;
+}
 </style>
-<link rel='stylesheet' href='%1'><script src='%2'></script><script src='%3'></script>
-<link rel='stylesheet' href='%4'><script src='%5'></script><script src='%6'></script>
-</head><body>
+<script src='%2'></script>
+<script src='%3'></script>
+<script src='%5'></script>
+<script src='%6'></script>
+</head>
+<body>
 <input id="sink" style="position:fixed; opacity:0;" tabindex="0">
 <div id='content'><h3>Loading...</h3></div>
 <textarea id='edit_view'></textarea>
@@ -198,6 +295,9 @@ mark { background: #ffeb3b; color: #000; }
 <script>
 var INIT_DATA = {}; var CUR_MD = '';
 try { INIT_DATA = JSON.parse(document.getElementById('init-data').textContent || '{}'); CUR_MD = INIT_DATA.raw_md || ''; } catch(e) {}
+const DARK_MODE = !!INIT_DATA.is_dark;
+document.documentElement.classList.toggle('dark-mode', DARK_MODE);
+document.body.classList.toggle('dark-mode', DARK_MODE);
 function log(m) { if (window.chrome&&window.chrome.webview) window.chrome.webview.postMessage(JSON.stringify(["log", m])); }
 window.onerror = function(m,u,l,c,e) { log("JS ERR: "+m+" @ "+l+":"+c); };
 var EDIT = false;
@@ -242,6 +342,17 @@ function matchHK(e, h) { return h && !!e.ctrlKey==!!h.ctrl && !!e.altKey==!!h.al
 const HK_V=parseHK(INIT_DATA.key_view), HK_E=parseHK(INIT_DATA.key_edit), HK_S=parseHK(INIT_DATA.key_screenshot), HK_P=parseHK(INIT_DATA.key_prev), HK_N=parseHK(INIT_DATA.key_next), HK_T=parseHK(INIT_DATA.key_tag), HK_B=parseHK(INIT_DATA.key_bold), HK_U=parseHK(INIT_DATA.key_underline), HK_H=parseHK(INIT_DATA.key_highlight);
 window.addEventListener('keydown', function(e) {
   log("Keydown: " + e.key + " (code: " + e.code + ")");
+  var k = (e.key || '').toLowerCase();
+  if (k === 'f12' || (e.ctrlKey && e.shiftKey && k === 'i')) {
+    if (window.cmd_openDevTools) {
+      log('Trigger openDevTools from JS');
+      window.cmd_openDevTools();
+    } else {
+      log('cmd_openDevTools not bound');
+    }
+    e.preventDefault();
+    return;
+  }
   if (EDIT) { if(matchHK(e, HK_E)||e.key==='Escape'){ e.preventDefault(); toggleEdit(); } return; }
   if (matchHK(e, HK_V)){ log("Matched View"); e.preventDefault(); toggleSource(); return; }
   if (matchHK(e, HK_E)){ log("Matched Edit"); e.preventDefault(); toggleEdit(); return; }
@@ -270,7 +381,12 @@ document.addEventListener('DOMContentLoaded', () => { render(CUR_MD); document.g
     out.replace("__RAW_MD__", markdown.toHtmlEscaped());
     out.replace("__INIT_JSON__", pJson);
 
-    if (m_webView) m_webView->setHtml(out.toStdString());
+    if (m_webView) {
+        m_webView->setHtml(out.toStdString());
+        bool isDark = ThemeUtils::isSystemDark();
+        QString toggleJs = QString("document.documentElement.classList.toggle('dark-mode', %1); document.body.classList.toggle('dark-mode', %1);").arg(isDark ? "true" : "false");
+        m_webView->eval(toggleJs.toStdString());
+    }
 }
 
 void ResultWindow::configureHotkeys(const QString &v, const QString &e, const QString &s, const QString &b, const QString &u, const QString &h, const QString &p, const QString &n, const QString &t) {
@@ -306,7 +422,12 @@ void ResultWindow::updateNavigation() {
 }
 void ResultWindow::updateTheme(bool isDark) {
     ThemeUtils::applyThemeToWindow(this, isDark);
-    if (m_webView) { ThemeUtils::ThemeColors c = ThemeUtils::getColors(isDark); m_webView->setBackgroundColor(c.background.red(), c.background.green(), c.background.blue(), 255); }
+    if (m_webView) {
+        QColor bg = isDark ? QColor(30, 30, 30) : QColor(255, 255, 255);
+        m_webView->setBackgroundColor(bg.red(), bg.green(), bg.blue(), 255);
+        QString toggleJs = QString("document.documentElement.classList.toggle('dark-mode', %1); document.body.classList.toggle('dark-mode', %1);").arg(isDark ? "true" : "false");
+        m_webView->eval(toggleJs.toStdString());
+    }
     if (m_toolBar) m_toolBar->setStyleSheet("");
     if (m_statusLabel) m_statusLabel->setStyleSheet("");
     if (m_pageLabel) m_pageLabel->setStyleSheet("");

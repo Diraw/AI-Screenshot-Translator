@@ -10,6 +10,7 @@
 #include <QDateEdit>
 #include <QComboBox>
 #include <QPushButton>
+#include <QShortcut>
 
 #include "TranslationEntry.h"
 
@@ -50,6 +51,7 @@ signals:
 protected:
     void closeEvent(QCloseEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
     
 private:
 public:
@@ -85,6 +87,7 @@ private:
     QString m_boldKey = "ctrl+b";
     QString m_underlineKey = "ctrl+u";
     QString m_highlightKey = "ctrl+h";
+    QList<QShortcut*> m_shortcuts;
     
     void initHtml();
 

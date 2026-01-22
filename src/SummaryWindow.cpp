@@ -18,12 +18,14 @@
 #include <QRegularExpression>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QColor>
 
 #include "TranslationManager.h"
 #include "HistoryManager.h"
 
 #include "EmbedWebView.h"
 #include "TagDialog.h"
+#include "ThemeUtils.h"
 #include <QMessageBox>
 
 
@@ -42,6 +44,14 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent) {
 
     // EmbedWebView handles native window attachment
     m_webView = std::make_unique<EmbedWebView>(m_webContainer);
+    qApp->installEventFilter(this);
+
+    // DevTools shortcut for debugging WebView content
+    QShortcut *devToolsShortcut = new QShortcut(QKeySequence(Qt::Key_F12), this);
+    devToolsShortcut->setContext(Qt::ApplicationShortcut);
+    connect(devToolsShortcut, &QShortcut::activated, this, [this]() {
+        if (m_webView) m_webView->openDevTools();
+    });
 
     // Bind 'cmd_restore'
     m_webView->bind("cmd_restore", [this](std::string seq, std::string req, void* arg) {
@@ -79,6 +89,31 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent) {
                 QString content = arr.at(1).toString();
                 emit entryEdited(id, content);
             }
+        }
+    });
+
+    // JS log bridge
+    m_webView->bind("cmd_log", [this](std::string seq, std::string req, void* arg) {
+        QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req));
+        if (doc.isArray() && !doc.array().isEmpty()) {
+            qDebug() << "[JS]" << doc.array().at(0).toString();
+        } else {
+            qDebug() << "[JS]" << QString::fromStdString(req);
+        }
+    });
+
+    // Bind DevTools opener for JS-triggered hotkey inside WebView
+    m_webView->bind("cmd_openDevTools", [this](std::string, std::string, void*) {
+        if (m_webView) {
+            qDebug() << "[DevTools] Request from JS in SummaryWindow";
+            m_webView->openDevTools();
+        }
+    });
+
+    connect(m_webView.get(), &EmbedWebView::ready, this, [this]() {
+        if (m_webContainer && m_webView) {
+            m_webView->setSize(m_webContainer->width(), m_webContainer->height());
+            m_webView->focus();
         }
     });
     
@@ -196,7 +231,7 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent) {
     restoreState();
     
     // Initial Theme Update
-    updateTheme(false);
+    updateTheme(ThemeUtils::isSystemDark());
 }
 
 SummaryWindow::~SummaryWindow() {
@@ -207,6 +242,14 @@ void SummaryWindow::resizeEvent(QResizeEvent *event) {
     qDebug() << "SummaryWindow::resizeEvent - Window:" << width() << "x" << height() 
              << "Container:" << (m_webContainer ? m_webContainer->size() : QSize(0,0));
     QWidget::resizeEvent(event);
+}
+
+bool SummaryWindow::eventFilter(QObject *watched, QEvent *event) {
+    if (event->type() == QEvent::KeyPress) {
+        QKeyEvent *ke = static_cast<QKeyEvent*>(event);
+        qDebug() << "[KeyEvent]" << ke->key() << ke->text() << ke->modifiers() << "obj" << (watched ? watched->metaObject()->className() : "null");
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 // closeEvent restored
@@ -347,12 +390,42 @@ void SummaryWindow::restoreState() {
 
 void SummaryWindow::configureHotkeys(const QString& editKey, const QString& viewKey, const QString& screenshotKey,
                                      const QString& boldKey, const QString& underlineKey, const QString& highlightKey) {
-    m_editKey = editKey.toLower();
-    m_viewKey = viewKey.toLower();
-    m_screenshotKey = screenshotKey.toLower();
-    m_boldKey = boldKey.toLower();
-    m_underlineKey = underlineKey.toLower();
-    m_highlightKey = highlightKey.toLower();
+    auto normalizeHotkey = [](QString key) {
+        key = key.trimmed().toLower();
+        key.replace(" ", ""); // remove inner blanks like "ctrl + e"
+        return key;
+    };
+
+    m_editKey = normalizeHotkey(editKey);
+    m_viewKey = normalizeHotkey(viewKey);
+    m_screenshotKey = normalizeHotkey(screenshotKey);
+    m_boldKey = normalizeHotkey(boldKey);
+    m_underlineKey = normalizeHotkey(underlineKey);
+    m_highlightKey = normalizeHotkey(highlightKey);
+
+    qDeleteAll(m_shortcuts);
+    m_shortcuts.clear();
+    auto addShortcut = [this](const QString& key, const QString& js) {
+        if (key.isEmpty()) return;
+        QShortcut *sc = new QShortcut(QKeySequence(key), this);
+        sc->setContext(Qt::ApplicationShortcut);
+        connect(sc, &QShortcut::activated, this, [this, js, key]() {
+            qDebug() << "[QShortcut activated]" << key;
+            if (m_webView) m_webView->eval(js.toStdString());
+        });
+        m_shortcuts.append(sc);
+    };
+    addShortcut(m_editKey, "if(window.currentEntry){var e=currentEntry(); if(e) toggleEdit(e);}");
+    addShortcut(m_viewKey, "if(window.currentEntry){var e=currentEntry(); if(e) toggleView(e.getAttribute('data-id'));}");
+    addShortcut(m_screenshotKey, "if(window.currentEntry && window.cmd_restore){var e=currentEntry(); window.cmd_restore(e.getAttribute('data-id'));}");
+
+    qDebug() << "[Hotkeys]"
+             << "edit=" << m_editKey
+             << "view=" << m_viewKey
+             << "shot=" << m_screenshotKey
+             << "bold=" << m_boldKey
+             << "underline=" << m_underlineKey
+             << "highlight=" << m_highlightKey;
     refreshHtml();
 }
 
@@ -401,22 +474,54 @@ QString SummaryWindow::getAddEntryJs(const TranslationEntry& entry) {
 void SummaryWindow::initHtml() {
     if (!m_webView) return;
 
-    QString html = R"RAW_HTML(<!DOCTYPE html><html><head><meta charset='UTF-8'>
+    bool isDark = ThemeUtils::isSystemDark();
+
+    QString html = R"RAW_HTML(<!DOCTYPE html>
+<html class="__HTML_CLASS__">
+<head>
+<meta charset='UTF-8'>
 <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-<style>
-body { font-family: sans-serif; padding: 8px; }
-.entry { margin-bottom: 12px; padding: 8px; }
-.entry.mode-edit { outline: 1px solid #777; }
-.entry-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-.selection-checkbox { margin-right: 6px; }
-.raw-text { width: 100%; min-height: 80px; white-space: pre-wrap; }
-#status-indicator { margin-bottom: 8px; font-size: 12px; }
-</style>
 <script src='%1'></script>
 <link rel='stylesheet' href='%2'>
 <script src='%3'></script>
 <script src='%4'></script>
+<style>
+html, body {
+  background: #ffffff;
+  color: #111111;
+}
+body { font-family: sans-serif; padding: 8px; }
+#status-indicator { margin-bottom: 8px; font-size: 12px; }
+.entry { margin-bottom: 12px; padding: 8px; background: #f7f7f7; color: #111111; border: 1px solid #ddd; border-radius: 4px; }
+.entry.mode-edit { outline: 1px solid #777; }
+.entry-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.selection-checkbox { margin-right: 6px; }
+.raw-text { width: 100%; min-height: 80px; white-space: pre-wrap; background: #ffffff; color: #111111; border: 1px solid #ccc; border-radius: 4px; padding: 8px; }
+.rendered-html { color: #111111; }
+html.dark-mode, body.dark-mode { background: #1e1e1e !important; color: #e0e0e0 !important; }
+body.dark-mode .entry { background: #2a2a2a !important; color: #e0e0e0 !important; border-color: #444 !important; }
+body.dark-mode .entry-header { color: #e0e0e0 !important; }
+body.dark-mode .raw-text { background: #1f1f1f !important; color: #e0e0e0 !important; border-color: #555 !important; }
+body.dark-mode .rendered-html { color: #e0e0e0 !important; }
+body.dark-mode .katex,
+body.dark-mode .katex * { color: #e0e0e0 !important; }
+</style>
 <script>
+const IS_DARK = __IS_DARK__;
+function applyDarkMode(d) {
+  document.documentElement.classList.toggle('dark-mode', d);
+  if (document.body) {
+    document.body.classList.toggle('dark-mode', d);
+  } else {
+    document.addEventListener('DOMContentLoaded', () => applyDarkMode(d), { once: true });
+  }
+}
+applyDarkMode(IS_DARK);
+function log(msg){
+  try { if (window.cmd_log) window.cmd_log(JSON.stringify([msg])); }
+  catch(e){}
+}
+</script>
 )RAW_HTML";
 
     auto loadAsset = [](const QString& name) -> QString {
@@ -463,16 +568,39 @@ body { font-family: sans-serif; padding: 8px; }
     html = html.replace("<link rel='stylesheet' href='%2'>", "<style>\n" + cssKatex + "\n</style>");
     html = html.replace("<script src='%3'></script>", "<script>\n" + jsKatex + "\n</script>");
     html = html.replace("<script src='%4'></script>", "<script>\n" + jsKatexAuto + "\n</script>");
+    html = html.replace("__IS_DARK__", isDark ? "true" : "false");
+html = html.replace("__HTML_CLASS__", isDark ? "dark-mode" : "");
 
+    // Static JS Logic
+    html += "<script>";
     html += QString("var KEY_EDIT = '%1';\n").arg(m_editKey);
     html += QString("var KEY_VIEW = '%1';\n").arg(m_viewKey);
     html += QString("var KEY_SHOT = '%1';\n").arg(m_screenshotKey);
     html += QString("var KEY_BOLD = '%1';\n").arg(m_boldKey);
     html += QString("var KEY_UNDERLINE = '%1';\n").arg(m_underlineKey);
     html += QString("var KEY_HIGHLIGHT = '%1';\n").arg(m_highlightKey);
-
-    // Static JS Logic
     html += R"JSCODE(
+if (document.body) { applyDarkMode(IS_DARK); } else { document.addEventListener('DOMContentLoaded', () => applyDarkMode(IS_DARK), {once:true}); }
+var LAST_ENTRY = null;
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.body) {
+        document.body.tabIndex = -1;
+        document.body.focus();
+    }
+    log('DOMContentLoaded; KEY_VIEW='+KEY_VIEW+' KEY_SHOT='+KEY_SHOT+' KEY_EDIT='+KEY_EDIT);
+});
+function currentEntry() {
+    var active = document.activeElement;
+    if (active) {
+        var e = active.closest('.entry');
+        if (e) {
+            LAST_ENTRY = e;
+            return e;
+        }
+    }
+    if (LAST_ENTRY) return LAST_ENTRY;
+    return document.querySelector('.entry');
+}
 function updateStatus(mode) {
    var ind = document.getElementById('status-indicator');
    if (ind) {
@@ -518,9 +646,11 @@ function insertMarkdown(startTag, endTag) {
 }
 
 function matchHotkey(e, hotkeyStr) {
-   var parts = hotkeyStr.split('+');
-   var key = parts[parts.length-1].toLowerCase();
-   var ctrl = parts.includes('ctrl');
+   if (!hotkeyStr) return false;
+   var parts = hotkeyStr.toLowerCase().split('+').map(function(p){ return p.trim(); }).filter(Boolean);
+   if (!parts.length) return false;
+   var key = parts.pop();
+   var ctrl = parts.includes('ctrl') || parts.includes('control');
    var alt = parts.includes('alt');
    var shift = parts.includes('shift');
    return (e.key.toLowerCase() === key && e.ctrlKey === ctrl && e.altKey === alt && e.shiftKey === shift);
@@ -575,19 +705,32 @@ document.addEventListener('focusin', function(e) {
    if (entry) {
        if (entry.classList.contains('mode-edit')) updateStatus('edit');
        else updateStatus('view');
+       LAST_ENTRY = entry;
    } else { updateStatus('view'); }
 });
 
-document.addEventListener('keydown', function(e) {
-   var active = document.activeElement;
-   if (!active) return;
-   var entry = active.closest('.entry');
-   if (!entry) return;
+function handleKey(e) {
+   log(`handleKey enter key=${e.key} ctrl=${e.ctrlKey} alt=${e.altKey} shift=${e.shiftKey}`);
+   var keyLower = e.key ? e.key.toLowerCase() : '';
+   if (keyLower === 'f12' || (e.ctrlKey && e.shiftKey && keyLower === 'i')) {
+       if (window.cmd_openDevTools) {
+           log('Trigger openDevTools from JS');
+           window.cmd_openDevTools();
+       } else {
+           log('cmd_openDevTools not bound');
+       }
+       e.preventDefault();
+       return;
+   }
+   var entry = currentEntry();
+   if (!entry) { log('handleKey: no entry'); return; }
+   log(`handleKey currentEntry id=${entry.getAttribute('data-id')}`);
    
    var isEditing = entry.classList.contains('mode-edit');
-   var k = e.key.toLowerCase();
+   var k = keyLower;
+   log(`KEY_VIEW=${KEY_VIEW} KEY_SHOT=${KEY_SHOT} k=${k} isEditing=${isEditing}`);
 
-   if (matchHotkey(e, KEY_EDIT) && !isEditing) {
+   if (matchHotkey(e, KEY_EDIT)) {
        e.preventDefault(); toggleEdit(entry); return; 
    }
    
@@ -607,8 +750,8 @@ document.addEventListener('keydown', function(e) {
       return; 
     }
     if (!isEditing) {
-        if (k === KEY_VIEW) { toggleView(entry.getAttribute('data-id')); e.preventDefault(); return; }
-        if (k === KEY_SHOT) { 
+        if (matchHotkey(e, KEY_VIEW)) { toggleView(entry.getAttribute('data-id')); e.preventDefault(); return; }
+        if (matchHotkey(e, KEY_SHOT)) { 
             // Call native webview binding
             window.cmd_restore(entry.getAttribute('data-id'));
             e.preventDefault(); return; 
@@ -631,7 +774,14 @@ document.addEventListener('keydown', function(e) {
             return;
         }
     }
-});
+}
+window.addEventListener('keydown', handleKey, true);
+window.addEventListener('keydown', function(e){
+  log(`keydown key=${e.key} ctrl=${e.ctrlKey} alt=${e.altKey} shift=${e.shiftKey} target=${(e.target && e.target.tagName)}`);
+}, true);
+window.addEventListener('focus', ()=>log('window focus'), true);
+window.addEventListener('blur', ()=>log('window blur'), true);
+document.addEventListener('visibilitychange', ()=>log('visibility='+document.visibilityState), true);
 
 function updateEntryInDom(id, newMarkdown) {
    var raw = document.getElementById('raw_' + id);
@@ -696,10 +846,11 @@ function selectAllEntries(select) {
         cb.checked = select;
     });
 }
-</script>
+ </script>
 )JSCODE";
 
-    html += "</head><body>";
+    html += "</head><body class=\"__BODY_CLASS__\">";
+    html = html.replace("__BODY_CLASS__", isDark ? "dark-mode" : "");
     html += "<div id='status-indicator'>MODE: VIEW</div>";
     html += "<script>";
     QList<TranslationEntry> filteredEntries = getFilteredEntries();
@@ -715,6 +866,9 @@ function selectAllEntries(select) {
     html += "</body></html>";
     
     m_webView->setHtml(html.toStdString());
+    m_webView->focus();
+    QString toggleJs = QString("applyDarkMode(%1);").arg(isDark ? "true" : "false");
+    m_webView->eval(toggleJs.toStdString());
 }
 
 void SummaryWindow::appendEntryHtml(const TranslationEntry& entry) {
@@ -894,9 +1048,30 @@ void SummaryWindow::onBatchRemoveTags() {
     m_webView->eval("if(window.getSelectedIds) { let ids = window.getSelectedIds(); if(ids.length > 0) window.cmd_batchRemoveTags(...ids); }");
 }
 void SummaryWindow::updateTheme(bool isDark) {
-    Q_UNUSED(isDark);
-    setStyleSheet("");
-    if (m_filterToolbar) m_filterToolbar->setStyleSheet("");
-    if (m_selectionModeBtn) m_selectionModeBtn->setStyleSheet("");
-    if (m_batchDeleteBtn) m_batchDeleteBtn->setStyleSheet("");
+    if (m_webView) {
+        QColor bg = isDark ? QColor(30, 30, 30) : QColor(255, 255, 255);
+        m_webView->setBackgroundColor(bg.red(), bg.green(), bg.blue(), 255);
+        QString js = QString("if (typeof applyDarkMode === 'function') { applyDarkMode(%1); } else { document.documentElement.classList.toggle('dark-mode', %1); document.body.classList.toggle('dark-mode', %1); }").arg(isDark ? "true" : "false");
+        m_webView->eval(js.toStdString());
+    }
+
+    QString toolbarBg = isDark ? "#2a2a2a" : "#f5f5f5";
+    QString fg = isDark ? "#e0e0e0" : "#111111";
+    QString controlBg = isDark ? "#3a3a3a" : "#ffffff";
+    QString border = isDark ? "#555555" : "#cccccc";
+
+    if (m_filterToolbar) m_filterToolbar->setStyleSheet(QString("QToolBar { background:%1; color:%2; } QLabel { color:%2; }").arg(toolbarBg, fg));
+
+    QString btnStyle = QString("color:%1; background:%2; border:1px solid %3;").arg(fg, controlBg, border);
+    if (m_selectionModeBtn) m_selectionModeBtn->setStyleSheet(btnStyle);
+    if (m_batchDeleteBtn) m_batchDeleteBtn->setStyleSheet(btnStyle);
+    if (m_selectAllBtn) m_selectAllBtn->setStyleSheet(btnStyle);
+    if (m_clearFilterBtn) m_clearFilterBtn->setStyleSheet(btnStyle);
+    if (m_batchAddTagBtn) m_batchAddTagBtn->setStyleSheet(btnStyle);
+    if (m_batchRemoveTagBtn) m_batchRemoveTagBtn->setStyleSheet(btnStyle);
+
+    QString inputStyle = QString("color:%1; background:%2; border:1px solid %3; selection-background-color:%2;").arg(fg, controlBg, border);
+    if (m_tagFilterCombo) m_tagFilterCombo->setStyleSheet(inputStyle);
+    if (m_fromDateEdit) m_fromDateEdit->setStyleSheet(inputStyle);
+    if (m_toDateEdit) m_toDateEdit->setStyleSheet(inputStyle);
 }
