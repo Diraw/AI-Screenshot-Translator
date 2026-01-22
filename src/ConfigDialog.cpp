@@ -12,6 +12,7 @@
 #include <QScreen>
 #include <QLabel>
 #include <QGroupBox>
+#include <QPointer>
 
 ConfigDialog::ConfigDialog(ConfigManager *configManager, QWidget *parent)
     : QDialog(parent), m_configManager(configManager) {
@@ -605,6 +606,41 @@ void ConfigDialog::save() {
     cfg.storagePath = m_storagePathEdit->text(); // Ensure persistence
 
     m_configManager->setConfig(cfg); // Saves to current profile
+
+    // Show transient success popup that closes on any key/mouse
+    QDialog *popup = new QDialog(this, Qt::Tool | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
+    popup->setAttribute(Qt::WA_DeleteOnClose);
+    popup->setModal(false);
+    popup->setWindowOpacity(0.95);
+    QVBoxLayout *popLayout = new QVBoxLayout(popup);
+    QLabel *popLabel = new QLabel(tr("应用成功"), popup);
+    popLayout->addWidget(popLabel);
+    popup->setLayout(popLayout);
+    popup->adjustSize();
+    popup->move(this->geometry().center() - QPoint(popup->width()/2, popup->height()/2));
+
+    struct AutoCloser : QObject {
+        QPointer<QDialog> dlg;
+        bool eventFilter(QObject*, QEvent* ev) override {
+            if (!dlg) return false;
+            if (ev->type() == QEvent::KeyPress || ev->type() == QEvent::MouseButtonPress) {
+                dlg->close();
+                return false;
+            }
+            return false;
+        }
+    };
+    AutoCloser *closer = new AutoCloser();
+    closer->dlg = popup;
+    qApp->installEventFilter(closer);
+    connect(popup, &QDialog::destroyed, this, [closer](){
+        if (closer && qApp) qApp->removeEventFilter(closer);
+        closer->deleteLater();
+    });
+    popup->show();
+    QTimer::singleShot(500, popup, [popup](){
+        if (popup) popup->close();
+    });
 
     // QMessageBox::information(this, "Settings", "Settings saved!"); // Removed to reduce click fatigue? User requested modeless flow.
     // Or keep it? User didn't complain about success popup.
