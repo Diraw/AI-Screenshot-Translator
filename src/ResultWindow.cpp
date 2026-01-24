@@ -563,7 +563,17 @@ void ResultWindow::showPrevious()
   if (m_currentIndex > 0)
   {
     m_currentIndex--;
-    const auto &e = m_history[m_currentIndex];
+    TranslationEntry e = m_history[m_currentIndex];
+    // Refresh from history manager to avoid stale cached content (e.g. "Processing...").
+    if (m_historyManager && !e.id.isEmpty())
+    {
+      TranslationEntry fresh = m_historyManager->getEntryById(e.id);
+      if (!fresh.id.isEmpty())
+      {
+        m_history[m_currentIndex] = fresh;
+        e = fresh;
+      }
+    }
     setContent(e.translatedMarkdown, e.originalBase64, e.prompt, e.id);
     updateNavigation();
   }
@@ -573,7 +583,17 @@ void ResultWindow::showNext()
   if (m_currentIndex < m_history.size() - 1)
   {
     m_currentIndex++;
-    const auto &e = m_history[m_currentIndex];
+    TranslationEntry e = m_history[m_currentIndex];
+    // Refresh from history manager to avoid stale cached content (e.g. "Processing...").
+    if (m_historyManager && !e.id.isEmpty())
+    {
+      TranslationEntry fresh = m_historyManager->getEntryById(e.id);
+      if (!fresh.id.isEmpty())
+      {
+        m_history[m_currentIndex] = fresh;
+        e = fresh;
+      }
+    }
     setContent(e.translatedMarkdown, e.originalBase64, e.prompt, e.id);
     updateNavigation();
   }
@@ -731,6 +751,20 @@ void ResultWindow::showError(const QString &m) {}
 void ResultWindow::externalContentUpdate(const QString &m)
 {
   m_currentMarkdown = m;
+
+  // Keep cached history entry in sync so paging won't resurrect stale content.
+  if (!m_entryId.isEmpty())
+  {
+    for (int i = 0; i < m_history.size(); ++i)
+    {
+      if (m_history[i].id == m_entryId)
+      {
+        m_history[i].translatedMarkdown = m;
+        break;
+      }
+    }
+  }
+
   if (m_webView)
   {
     QString js = m;
