@@ -168,7 +168,7 @@ ConfigDialog::ConfigDialog(ConfigManager *configManager, QWidget *parent)
     cardLayout->addRow("Zoom Sensitivity:", m_zoomSensitivitySpin);
 
     m_cardBorderColorEdit = new QLineEdit(this);
-    m_cardBorderColorEdit->setPlaceholderText("R,G,B (e.g., 100,100,100)");
+    m_cardBorderColorEdit->setPlaceholderText("R,G,B,A (e.g., 100,100,100,128) 或 rgba(100,100,100,0.5)");
     m_useBorderCheck = new QCheckBox(this);
     m_lblCardBorderColor = new QLabel(this);
 
@@ -247,11 +247,11 @@ ConfigDialog::ConfigDialog(ConfigManager *configManager, QWidget *parent)
     editLayout->addRow("Highlight Shortcut:", m_highlightHotkeyEdit);
 
     m_highlightMarkColorEdit = new QLineEdit(this);
-    m_highlightMarkColorEdit->setPlaceholderText("#ffeb3b 或 rgb(255,235,59)");
+    m_highlightMarkColorEdit->setPlaceholderText("#ffeb3b80 或 rgba(255,235,59,0.5) 或 255,235,59,0.5");
     editLayout->addRow("Highlight Color:", m_highlightMarkColorEdit);
 
     m_highlightMarkColorDarkEdit = new QLineEdit(this);
-    m_highlightMarkColorDarkEdit->setPlaceholderText("#d4af37 或 rgb(212,175,55)");
+    m_highlightMarkColorDarkEdit->setPlaceholderText("#d4af3780 或 rgba(212,175,55,0.5) 或 212,175,55,0.5");
     editLayout->addRow("Highlight Color (Dark):", m_highlightMarkColorDarkEdit);
 
     archiveMainLayout->addWidget(grpEdit);
