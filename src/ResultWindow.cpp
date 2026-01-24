@@ -40,6 +40,53 @@
 #include "WinKeyForwarder.h"
 #endif
 
+static QString normalizeCssColor(const QString &input, const QString &fallback)
+{
+  QString s = input.trimmed();
+  if (s.isEmpty())
+    s = fallback;
+
+  // Accept rgb(r,g,b)
+  {
+    QRegularExpression re(
+        "^rgb\\(\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})\\s*\\)$",
+        QRegularExpression::CaseInsensitiveOption);
+    auto m = re.match(s);
+    if (m.hasMatch())
+    {
+      bool ok1 = false, ok2 = false, ok3 = false;
+      int r = m.captured(1).toInt(&ok1);
+      int g = m.captured(2).toInt(&ok2);
+      int b = m.captured(3).toInt(&ok3);
+      if (ok1 && ok2 && ok3 && r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255)
+        return QString("rgb(%1,%2,%3)").arg(r).arg(g).arg(b);
+    }
+  }
+
+  // Accept r,g,b
+  {
+    QStringList parts = s.split(',', Qt::SkipEmptyParts);
+    if (parts.size() == 3)
+    {
+      bool ok1 = false, ok2 = false, ok3 = false;
+      int r = parts[0].trimmed().toInt(&ok1);
+      int g = parts[1].trimmed().toInt(&ok2);
+      int b = parts[2].trimmed().toInt(&ok3);
+      if (ok1 && ok2 && ok3 && r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255)
+        return QString("rgb(%1,%2,%3)").arg(r).arg(g).arg(b);
+    }
+  }
+
+  // Accept #RGB / #RRGGBB
+  {
+    QRegularExpression re("^#([0-9a-f]{3}|[0-9a-f]{6})$", QRegularExpression::CaseInsensitiveOption);
+    if (re.match(s).hasMatch())
+      return s;
+  }
+
+  return fallback;
+}
+
 ResultWindow::ResultWindow(QWidget *parent) : QWidget(parent)
 {
   qDebug() << "[RW] ctor this=" << (void *)this;
@@ -269,6 +316,8 @@ void ResultWindow::setContent(const QString &markdown, const QString &originalBa
   initData["key_highlight"] = m_highlightKey;
   initData["is_dark"] = ThemeUtils::isSystemDark();
   initData["win_id"] = QString::number(reinterpret_cast<quintptr>(this), 16);
+  initData["mark_bg"] = normalizeCssColor(m_config.highlightMarkColor, "#ffeb3b");
+  initData["mark_bg_dark"] = normalizeCssColor(m_config.highlightMarkColorDark, "#d4af37");
 
   QString pJson = QString::fromUtf8(QJsonDocument(initData).toJson(QJsonDocument::Compact));
   pJson.replace("</script>", "<\\/script>", Qt::CaseInsensitive);
@@ -326,6 +375,12 @@ html, body {
   color: #111111;
 }
 
+:root {
+  --mark-bg: #ffeb3b;
+  --mark-bg-dark: #d4af37;
+  --mark-fg: #000;
+}
+
 body {
   font-family: "Segoe UI", sans-serif;
   font-size: %7px;
@@ -369,7 +424,7 @@ pre {
   overflow: hidden;
 }
 
-mark { background: #ffeb3b; color: #000; }
+mark { background: var(--mark-bg); color: var(--mark-fg); }
 
 html.dark-mode,
 body.dark-mode {
@@ -386,7 +441,7 @@ body.dark-mode #edit_view {
   border-color: #444 !important;
 }
 
-body.dark-mode mark { background: #d4af37; color: #000; }
+body.dark-mode mark { background: var(--mark-bg-dark); color: var(--mark-fg); }
 
 body.dark-mode .hljs,
 body.dark-mode pre code,
@@ -422,6 +477,10 @@ try { INIT_DATA = JSON.parse(document.getElementById('init-data').textContent ||
 const DARK_MODE = !!INIT_DATA.is_dark;
 document.documentElement.classList.toggle('dark-mode', DARK_MODE);
 document.body.classList.toggle('dark-mode', DARK_MODE);
+try {
+  if (INIT_DATA.mark_bg) document.documentElement.style.setProperty('--mark-bg', INIT_DATA.mark_bg);
+  if (INIT_DATA.mark_bg_dark) document.documentElement.style.setProperty('--mark-bg-dark', INIT_DATA.mark_bg_dark);
+} catch(e) {}
 function log(m) { if (window.chrome&&window.chrome.webview) window.chrome.webview.postMessage(JSON.stringify(["log", m])); }
 window.onerror = function(m,u,l,c,e) { log("JS ERR: "+m+" @ "+l+":"+c); };
 var EDIT = false;
@@ -793,6 +852,17 @@ void ResultWindow::focusEditor()
 void ResultWindow::setConfig(const AppConfig &config)
 {
   m_config = config;
+
+  if (m_webView)
+  {
+    const QString mark = normalizeCssColor(m_config.highlightMarkColor, "#ffeb3b");
+    const QString markDark = normalizeCssColor(m_config.highlightMarkColorDark, "#d4af37");
+    const QString js = QString(
+                           "(()=>{try{document.documentElement.style.setProperty('--mark-bg', '%1');"
+                           "document.documentElement.style.setProperty('--mark-bg-dark', '%2');}catch(e){}})();")
+                           .arg(mark, markDark);
+    m_webView->eval(js.toStdString());
+  }
 
   // Apply default lock state from config (used when creating new result windows).
   if (m_lockAction)

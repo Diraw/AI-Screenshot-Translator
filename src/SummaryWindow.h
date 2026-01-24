@@ -29,7 +29,7 @@ public:
     void clearEntries();
     const TranslationEntry *getEntry(const QString &id) const;
 
-    void setConfig(const AppConfig &config) { m_config = config; }
+    void setConfig(const AppConfig &config);
     void updateEntryGeometry(const QString &id, const QPoint &pos, const QSize &size);
     void updateEntryContent(const QString &id, const QString &markdown);
     void updateEntry(const QString &id, const QString &markdown); // Alias for updateEntryContent

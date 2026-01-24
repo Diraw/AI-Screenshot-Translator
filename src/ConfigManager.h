@@ -10,7 +10,8 @@
 #include <QStandardPaths>
 #include <QMap>
 
-struct AppConfig {
+struct AppConfig
+{
     // API Settings
     QString apiKey;
     QString baseUrl;
@@ -19,7 +20,7 @@ struct AppConfig {
     QString proxyUrl;
     bool useProxy = false;
     QString apiProvider = "openai"; // "openai", "gemini", "claude"
-    
+
     // Localization
     QString language = "zh"; // Default to Chinese as requested
 
@@ -27,30 +28,35 @@ struct AppConfig {
     float zoomSensitivity = 500.0f;
     QString screenshotHotkey = "ctrl+alt+s";
     QString summaryHotkey = "alt+s";
-    QString settingsHotkey = ""; 
-    int targetScreenIndex = -1; // -1 = all screens, 0+ = specific screen index 
+    QString settingsHotkey = "";
+    int targetScreenIndex = -1; // -1 = all screens, 0+ = specific screen index
     // Shortcuts for Summary Window
     QString editHotkey = "e";
     QString viewToggleHotkey = "r";
     QString screenshotToggleHotkey = "s";
-    
+
     // Formatting Shortcuts
     QString boldHotkey = "ctrl+b";
     QString underlineHotkey = "ctrl+u";
     QString highlightHotkey = "ctrl+h";
-    
+
+    // Highlight (<mark>) colors used in ResultWindow + SummaryWindow render/edit views.
+    // Accepts CSS color like "#ffeb3b" or "rgb(255,235,59)".
+    QString highlightMarkColor = "#ffeb3b";
+    QString highlightMarkColorDark = "#d4af37";
+
     int initialFontSize = 16;
     QString cardBorderColor = "100,100,100";
     bool debugMode = false;
-    
+
     // New Settings
     bool showPreviewCard = false;
     bool showResultWindow = true;
     bool useCardBorder = false; // Default to false (no border)
-    
+
     // Storage
     QString storagePath = ""; // Empty string implies default "./storage"
-    
+
     // Window State
     QByteArray summaryWindowGeometry;
     float summaryWindowZoom = 1.0f;
@@ -58,8 +64,8 @@ struct AppConfig {
 
     // Lock Behavior
     bool defaultResultWindowLocked = false; // Default unlocked as per user request
-    int lockBehavior = 0; // 0 = Reset to Unlocked, 1 = Maintain Previous State (User "Interrupt" vs "Continue")
-    
+    int lockBehavior = 0;                   // 0 = Reset to Unlocked, 1 = Maintain Previous State (User "Interrupt" vs "Continue")
+
     // Configurable Nav Hotkeys
     QString prevResultShortcut = "z";
     QString nextResultShortcut = "x";
@@ -68,26 +74,27 @@ struct AppConfig {
     // CDN Settings Removed (User requested local bundling)
 };
 
-class ConfigManager {
+class ConfigManager
+{
 public:
     ConfigManager();
     ~ConfigManager() = default;
 
     // Profile Management
     QStringList listProfiles() const;
-    bool createProfile(const QString& name);
-    bool loadProfile(const QString& name);
-    bool deleteProfile(const QString& name);
-    bool renameProfile(const QString& oldName, const QString& newName);
-    bool copyProfile(const QString& sourceName, const QString& newName);
-    bool importProfile(const QString& path);
-    bool exportProfile(const QString& name, const QString& destPath);
+    bool createProfile(const QString &name);
+    bool loadProfile(const QString &name);
+    bool deleteProfile(const QString &name);
+    bool renameProfile(const QString &oldName, const QString &newName);
+    bool copyProfile(const QString &sourceName, const QString &newName);
+    bool importProfile(const QString &path);
+    bool exportProfile(const QString &name, const QString &destPath);
     QString currentProfileName() const;
 
     void saveConfig(); // Saves to current profile
-    
+
     AppConfig getConfig() const;
-    void setConfig(const AppConfig& config);
+    void setConfig(const AppConfig &config);
 
     QString configFilePath() const; // Current profile path
 
@@ -97,9 +104,9 @@ private:
     QString m_currentProfileName;
     AppConfig m_config;
 
-    void parseJson(const QJsonObject& root);
+    void parseJson(const QJsonObject &root);
     QJsonObject toJson() const;
-    
+
     // Meta settings (active profile)
     void loadMeta();
     void saveMeta();

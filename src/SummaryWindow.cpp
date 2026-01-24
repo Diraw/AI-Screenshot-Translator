@@ -29,6 +29,66 @@
 #include "ThemeUtils.h"
 #include <QMessageBox>
 
+static QString normalizeCssColor(const QString &input, const QString &fallback)
+{
+    QString s = input.trimmed();
+    if (s.isEmpty())
+        s = fallback;
+
+    {
+        QRegularExpression re(
+            "^rgb\\(\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})\\s*\\)$",
+            QRegularExpression::CaseInsensitiveOption);
+        auto m = re.match(s);
+        if (m.hasMatch())
+        {
+            bool ok1 = false, ok2 = false, ok3 = false;
+            int r = m.captured(1).toInt(&ok1);
+            int g = m.captured(2).toInt(&ok2);
+            int b = m.captured(3).toInt(&ok3);
+            if (ok1 && ok2 && ok3 && r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255)
+                return QString("rgb(%1,%2,%3)").arg(r).arg(g).arg(b);
+        }
+    }
+
+    {
+        QStringList parts = s.split(',', Qt::SkipEmptyParts);
+        if (parts.size() == 3)
+        {
+            bool ok1 = false, ok2 = false, ok3 = false;
+            int r = parts[0].trimmed().toInt(&ok1);
+            int g = parts[1].trimmed().toInt(&ok2);
+            int b = parts[2].trimmed().toInt(&ok3);
+            if (ok1 && ok2 && ok3 && r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255)
+                return QString("rgb(%1,%2,%3)").arg(r).arg(g).arg(b);
+        }
+    }
+
+    {
+        QRegularExpression re("^#([0-9a-f]{3}|[0-9a-f]{6})$", QRegularExpression::CaseInsensitiveOption);
+        if (re.match(s).hasMatch())
+            return s;
+    }
+
+    return fallback;
+}
+
+void SummaryWindow::setConfig(const AppConfig &config)
+{
+    m_config = config;
+
+    if (m_webView)
+    {
+        const QString mark = normalizeCssColor(m_config.highlightMarkColor, "#ffeb3b");
+        const QString markDark = normalizeCssColor(m_config.highlightMarkColorDark, "#d4af37");
+        const QString js = QString(
+                               "(()=>{try{document.documentElement.style.setProperty('--mark-bg', '%1');"
+                               "document.documentElement.style.setProperty('--mark-bg-dark', '%2');}catch(e){}})();")
+                               .arg(mark, markDark);
+        m_webView->eval(js.toStdString());
+    }
+}
+
 SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent)
 {
     setWindowTitle(TranslationManager::instance().tr("summary_title"));
@@ -595,6 +655,15 @@ html, body {
   background: #ffffff;
   color: #111111;
 }
+
+:root {
+            --mark-bg: __MARK_BG__;
+            --mark-bg-dark: __MARK_BG_DARK__;
+    --mark-fg: #000;
+}
+
+mark { background: var(--mark-bg); color: var(--mark-fg); }
+body.dark-mode mark { background: var(--mark-bg-dark); color: var(--mark-fg); }
 body { font-family: sans-serif; padding: 8px; }
 #status-indicator {
   position: fixed;
@@ -639,6 +708,10 @@ function applyDarkMode(d) {
   }
 }
 applyDarkMode(IS_DARK);
+try {
+        document.documentElement.style.setProperty('--mark-bg', '__MARK_BG__');
+        document.documentElement.style.setProperty('--mark-bg-dark', '__MARK_BG_DARK__');
+} catch(e) {}
 function log(msg){
   try { if (window.cmd_log) window.cmd_log(JSON.stringify([msg])); }
   catch(e){}
@@ -707,6 +780,11 @@ window.addEventListener('scroll', function() {
     html = html.replace("<script src='%4'></script>", "<script>\n" + jsKatexAuto + "\n</script>");
     html = html.replace("__IS_DARK__", isDark ? "true" : "false");
     html = html.replace("__HTML_CLASS__", isDark ? "dark-mode" : "");
+
+    const QString mark = normalizeCssColor(m_config.highlightMarkColor, "#ffeb3b");
+    const QString markDark = normalizeCssColor(m_config.highlightMarkColorDark, "#d4af37");
+    html = html.replace("__MARK_BG__", mark);
+    html = html.replace("__MARK_BG_DARK__", markDark);
 
     // Static JS Logic
     html += "<script>";

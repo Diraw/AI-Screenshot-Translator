@@ -5,36 +5,44 @@
 #include <QMap>
 #include <QObject>
 
-class TranslationManager {
+class TranslationManager
+{
 public:
-    static TranslationManager& instance() {
+    static TranslationManager &instance()
+    {
         static TranslationManager instance;
         return instance;
     }
 
-    void setLanguage(const QString& lang) {
+    void setLanguage(const QString &lang)
+    {
         m_currentLang = lang;
     }
 
-    QString getLanguage() const {
+    QString getLanguage() const
+    {
         return m_currentLang;
     }
 
-    QString tr(const QString& key) {
-        if (m_translations.contains(m_currentLang) && m_translations[m_currentLang].contains(key)) {
+    QString tr(const QString &key)
+    {
+        if (m_translations.contains(m_currentLang) && m_translations[m_currentLang].contains(key))
+        {
             return m_translations[m_currentLang][key];
         }
         // Fallback to English/Key
-        if (m_translations["en"].contains(key)) {
+        if (m_translations["en"].contains(key))
+        {
             return m_translations["en"][key];
         }
         return key;
     }
 
 private:
-    TranslationManager() {
+    TranslationManager()
+    {
         m_currentLang = "zh"; // Default to Chinese as requested (or user setting)
-        
+
         // English
         m_translations["en"]["settings_title"] = "Settings";
         m_translations["en"]["summary_title"] = "Archive";
@@ -43,7 +51,7 @@ private:
         m_translations["en"]["tray_summary"] = "Archive";
         m_translations["en"]["tray_settings"] = "Settings";
         m_translations["en"]["tray_quit"] = "Quit";
-        
+
         m_translations["en"]["grp_profiles"] = "Profiles";
         m_translations["en"]["btn_new"] = "New";
         m_translations["en"]["btn_delete"] = "Delete";
@@ -52,7 +60,7 @@ private:
         m_translations["en"]["btn_import"] = "Import";
         m_translations["en"]["btn_export"] = "Export";
         m_translations["en"]["btn_browse"] = "Browse";
-        
+
         m_translations["en"]["rename_profile_title"] = "Rename Profile";
         m_translations["en"]["rename_profile_label"] = "New Name:";
         m_translations["en"]["new_profile_title"] = "New Profile";
@@ -64,7 +72,7 @@ private:
         m_translations["en"]["msg_profile_exists"] = "Failed to create profile. Name might exist.";
         m_translations["en"]["msg_cannot_delete_default"] = "Cannot delete Default profile.";
         m_translations["en"]["msg_cannot_rename_default"] = "Cannot rename Default profile.";
-        
+
         m_translations["en"]["import_profile_title"] = "Import Profile";
         m_translations["en"]["export_profile_title"] = "Export Profile";
         m_translations["en"]["msg_import_success"] = "Profile imported successfully.";
@@ -72,10 +80,10 @@ private:
         m_translations["en"]["msg_import_error"] = "Failed to import profile.";
         m_translations["en"]["msg_export_error"] = "Failed to export profile.";
         m_translations["en"]["json_files"] = "JSON Files (*.json)";
-        
+
         m_translations["en"]["tab_general"] = "General";
         m_translations["en"]["tab_advanced"] = "Advanced";
-        
+
         m_translations["en"]["lbl_language"] = "Language:";
         m_translations["en"]["lbl_capture_screen"] = "Capture Screen:";
         m_translations["en"]["lbl_api_key"] = "API Key:";
@@ -90,7 +98,7 @@ private:
         m_translations["en"]["btn_browse"] = "Browse...";
         m_translations["en"]["chk_preview"] = "Show Preview Card after Screenshot";
         m_translations["en"]["chk_result"] = "Show Translation Result after Screenshot";
-        
+
         m_translations["en"]["lbl_shot_hotkey"] = "Screenshot Hotkey:";
         m_translations["en"]["lbl_sum_hotkey"] = "Summary Hotkey:";
         m_translations["en"]["lbl_set_hotkey"] = "Settings Hotkey:";
@@ -103,7 +111,7 @@ private:
         m_translations["en"]["lbl_border_color"] = "Card Border Color:";
         m_translations["en"]["lbl_font_size"] = "Initial Font Size:";
         m_translations["en"]["lbl_zoom_sens"] = "Zoom Sensitivity:";
-        
+
         m_translations["en"]["btn_save"] = "Save and Apply";
         m_translations["en"]["msg_saved"] = "Settings saved!";
         m_translations["en"]["tag_dialog_title"] = "Manage Tags";
@@ -126,7 +134,7 @@ private:
         m_translations["en"]["btn_batch_remove_tag"] = "Remove Tags";
         m_translations["en"]["chk_debug"] = "Enable Debug Mode";
         m_translations["en"]["grp_advanced"] = "Advanced Settings";
-        
+
         // Chinese
         m_translations["zh"]["settings_title"] = "设置";
         m_translations["zh"]["summary_title"] = "归档";
@@ -135,7 +143,7 @@ private:
         m_translations["zh"]["tray_summary"] = "归档";
         m_translations["zh"]["tray_settings"] = "设置";
         m_translations["zh"]["tray_quit"] = "退出";
-        
+
         m_translations["zh"]["grp_profiles"] = "配置方案";
         m_translations["zh"]["btn_new"] = "新建";
         m_translations["zh"]["btn_delete"] = "删除";
@@ -144,7 +152,7 @@ private:
         m_translations["zh"]["btn_import"] = "导入";
         m_translations["zh"]["btn_export"] = "导出";
         m_translations["zh"]["btn_browse"] = "浏览...";
-        
+
         m_translations["zh"]["rename_profile_title"] = "重命名配置";
         m_translations["zh"]["rename_profile_label"] = "新名称:";
         m_translations["zh"]["new_profile_title"] = "新建配置";
@@ -184,10 +192,10 @@ private:
         m_translations["zh"]["btn_batch_remove_tag"] = "批量减标签";
         m_translations["zh"]["chk_debug"] = "开启 Debug 模式";
         m_translations["zh"]["grp_advanced"] = "高级设置";
-        
+
         m_translations["zh"]["tab_general"] = "常规";
         m_translations["zh"]["tab_advanced"] = "高级";
-        
+
         m_translations["zh"]["lbl_language"] = "语言:";
         m_translations["zh"]["lbl_capture_screen"] = "捕获屏幕:";
         m_translations["zh"]["lbl_api_key"] = "API 密钥:";
@@ -205,7 +213,7 @@ private:
         m_translations["zh"]["btn_browse"] = "浏览...";
         m_translations["zh"]["chk_preview"] = "截图后显示截图卡片";
         m_translations["zh"]["chk_result"] = "截图后显示翻译结果";
-        
+
         m_translations["zh"]["lbl_shot_hotkey"] = "截图快捷键:";
         m_translations["zh"]["lbl_sum_hotkey"] = "摘要窗口快捷键:";
         m_translations["zh"]["lbl_set_hotkey"] = "设置快捷键:";
@@ -215,22 +223,24 @@ private:
         m_translations["zh"]["lbl_bold"] = "加粗快捷键:";
         m_translations["zh"]["lbl_underline"] = "下划线快捷键:";
         m_translations["zh"]["lbl_highlight"] = "高亮快捷键:";
+        m_translations["zh"]["lbl_highlight_color"] = "高亮颜色:";
+        m_translations["zh"]["lbl_highlight_color_dark"] = "高亮颜色(暗色):";
         m_translations["zh"]["lbl_border_color"] = "卡片边框颜色:";
         m_translations["zh"]["lbl_font_size"] = "初始字体大小:";
         m_translations["zh"]["lbl_zoom_sens"] = "缩放灵敏度:";
-        
+
         m_translations["zh"]["btn_save"] = "保存并应用";
         m_translations["zh"]["msg_saved"] = "设置已保存！";
-        
+
         // New Settings Groups
         m_translations["en"]["tab_translation"] = "Translation Window";
         m_translations["en"]["tab_archive"] = "Archive Window";
         m_translations["en"]["tab_other"] = "Other";
-        
+
         m_translations["zh"]["tab_translation"] = "翻译窗口";
         m_translations["zh"]["tab_archive"] = "归档窗口";
         m_translations["zh"]["tab_other"] = "其他";
-        
+
         // Lock Settings
         m_translations["en"]["lbl_default_lock"] = "Default Locked State:";
         m_translations["en"]["lbl_lock_behavior"] = "When All Locked Windows Close:";
@@ -239,7 +249,7 @@ private:
         m_translations["en"]["lbl_prev_hotkey"] = "Prev Page Hotkey:";
         m_translations["en"]["lbl_next_hotkey"] = "Next Page Hotkey:";
         m_translations["en"]["lbl_tag_hotkey"] = "Tag Dialog Hotkey:";
-        
+
         m_translations["zh"]["lbl_default_lock"] = "默认锁定状态";
         m_translations["zh"]["lbl_lock_behavior"] = "所有锁定窗口关闭后:";
         m_translations["zh"]["opt_lock_reset"] = "重置为未锁定";
@@ -252,19 +262,22 @@ private:
         m_translations["en"]["grp_card_settings"] = "Screenshot Card Settings";
         m_translations["en"]["grp_trans_settings"] = "Translation Window Settings";
         m_translations["en"]["chk_use_border"] = "Enable Border";
-        
+
         m_translations["zh"]["grp_card_settings"] = "截图卡片设置";
         m_translations["zh"]["grp_trans_settings"] = "翻译窗口设置";
         m_translations["zh"]["chk_use_border"] = "启用边框";
-        
+
         m_translations["zh"]["tab_translation"] = "翻译组"; // Requested "Translation Group"
-        
+
         // New Archive/Other Groups
         m_translations["en"]["tab_archive_interface"] = "Archive Interface";
         m_translations["en"]["grp_shortcuts"] = "Shortcut Settings";
         m_translations["en"]["grp_view_toggle"] = "View Toggle";
         m_translations["en"]["grp_edit_mode"] = "Edit Mode";
-        
+
+        m_translations["en"]["lbl_highlight_color"] = "Highlight Color:";
+        m_translations["en"]["lbl_highlight_color_dark"] = "Highlight Color (Dark):";
+
         m_translations["zh"]["tab_archive_interface"] = "归档界面";
         m_translations["zh"]["grp_shortcuts"] = "快捷键设置";
         m_translations["zh"]["grp_view_toggle"] = "视图切换";

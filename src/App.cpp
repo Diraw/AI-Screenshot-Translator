@@ -659,8 +659,23 @@ QString App::updateConfig(const AppConfig &cfg)
 
     if (m_summaryWindow)
     {
+        m_summaryWindow->setConfig(cfg);
         m_summaryWindow->configureHotkeys(cfg.editHotkey, cfg.viewToggleHotkey, cfg.screenshotToggleHotkey,
                                           cfg.boldHotkey, cfg.underlineHotkey, cfg.highlightHotkey);
+    }
+
+    // Sync to active ResultWindows so changes (e.g. <mark> highlight colors) apply immediately.
+    for (auto w : m_activeWindows)
+    {
+        if (!w)
+            continue;
+
+        if (ResultWindow *rw = qobject_cast<ResultWindow *>(w.data()))
+        {
+            AppConfig cfgForWindow = cfg;
+            cfgForWindow.defaultResultWindowLocked = rw->isLocked();
+            rw->setConfig(cfgForWindow);
+        }
     }
 
     // Sync to active PreviewCards
