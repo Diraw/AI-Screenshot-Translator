@@ -36,6 +36,10 @@
 #include <windows.h>
 #endif
 
+#ifdef _WIN32
+#include "WinKeyForwarder.h"
+#endif
+
 ResultWindow::ResultWindow(QWidget *parent) : QWidget(parent)
 {
   qDebug() << "[RW] ctor this=" << (void *)this;
@@ -152,6 +156,60 @@ ResultWindow::ResultWindow(QWidget *parent) : QWidget(parent)
     requestFocusToWeb(false); });
 
   updateTheme(ThemeUtils::isSystemDark());
+
+#ifdef _WIN32
+  // Register this window for native key forwarding (WebView2 often consumes WM_KEYDOWN).
+  WinKeyForwarder::instance().registerResultWindow(this);
+#endif
+}
+
+void ResultWindow::triggerScreenshotFromNative()
+{
+#ifdef _WIN32
+  {
+    QString msg = QString("[RW] triggerScreenshotFromNative entryId=%1 idx=%2 hist=%3 origB64=%4")
+                      .arg(m_entryId)
+                      .arg(m_currentIndex)
+                      .arg(m_history.size())
+                      .arg(m_originalBase64.size());
+    QByteArray line = msg.toUtf8();
+    WinKeyForwarder::trace(line.constData());
+  }
+#endif
+  // Native hotkey path: do not rely on JS keydown or Qt shortcuts.
+  if (m_currentIndex >= 0 && m_currentIndex < m_history.size())
+  {
+#ifdef _WIN32
+    {
+      const auto &e = m_history[m_currentIndex];
+      QString msg = QString("[RW] emit screenshotRequested from history id=%1 b64=%2")
+                        .arg(e.id)
+                        .arg(e.originalBase64.size());
+      QByteArray line = msg.toUtf8();
+      WinKeyForwarder::trace(line.constData());
+    }
+#endif
+    emit screenshotRequested(m_history[m_currentIndex].id, m_history[m_currentIndex].originalBase64);
+    return;
+  }
+  if (!m_originalBase64.isEmpty())
+  {
+#ifdef _WIN32
+    {
+      QString msg = QString("[RW] emit screenshotRequested from current entryId=%1 b64=%2")
+                        .arg(m_entryId)
+                        .arg(m_originalBase64.size());
+      QByteArray line = msg.toUtf8();
+      WinKeyForwarder::trace(line.constData());
+    }
+#endif
+    emit screenshotRequested(m_entryId, m_originalBase64);
+    return;
+  }
+
+#ifdef _WIN32
+  WinKeyForwarder::trace("[RW] NO EMIT (no valid index and originalBase64 empty)");
+#endif
 }
 
 void ResultWindow::toggleLock()
@@ -199,11 +257,12 @@ void ResultWindow::setContent(const QString &markdown, const QString &originalBa
 
   QJsonObject initData;
   initData["raw_md"] = markdown;
-  initData["key_view"] = m_viewToggleKey;
-  initData["key_edit"] = m_editToggleKey;
-  initData["key_screenshot"] = m_screenshotToggleKey;
-  initData["key_prev"] = m_prevKey;
-  initData["key_next"] = m_nextKey;
+  // Provide fallbacks so empty shortcut strings won't disable key handling.
+  initData["key_view"] = m_viewToggleKey.isEmpty() ? "r" : m_viewToggleKey;
+  initData["key_edit"] = m_editToggleKey.isEmpty() ? "e" : m_editToggleKey;
+  initData["key_screenshot"] = m_screenshotToggleKey.isEmpty() ? "s" : m_screenshotToggleKey;
+  initData["key_prev"] = m_prevKey.isEmpty() ? "z" : m_prevKey;
+  initData["key_next"] = m_nextKey.isEmpty() ? "x" : m_nextKey;
   initData["key_tag"] = m_tagKey.isEmpty() ? "t" : m_tagKey;
   initData["key_bold"] = m_boldKey;
   initData["key_underline"] = m_underlineKey;
@@ -349,6 +408,7 @@ body.dark-mode .katex * {
 <script src='%6'></script>
 </head>
 <body>
+<div id='keytrap' tabindex='0' style='position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;'></div>
 <div id='content'><h3>Loading...</h3></div>
 <textarea id='edit_view'></textarea>
 <div id='raw_view'></div>
@@ -367,7 +427,12 @@ window.onerror = function(m,u,l,c,e) { log("JS ERR: "+m+" @ "+l+":"+c); };
 var EDIT = false;
 function focusSink() {
   try {
-    document.body.tabIndex = -1;
+    var kt = document.getElementById('keytrap');
+    if (kt && kt.focus) {
+      kt.focus({ preventScroll: true });
+      return;
+    }
+    document.body.tabIndex = 0;
     document.body.focus({ preventScroll: true });
   } catch(e) {}
 }
@@ -532,11 +597,11 @@ void ResultWindow::configureHotkeys(const QString &v, const QString &e, const QS
     m_navShortcuts.append(sc);
   };
   add(m_viewToggleKey, [this]()
-      { if(m_webView) m_webView->eval("toggleSource();"); }, Qt::WindowShortcut);
+      { if(m_webView) m_webView->eval("toggleSource();"); }, Qt::ApplicationShortcut);
   add(m_editToggleKey, [this]()
-      { if(m_webView) m_webView->eval("toggleEdit();"); }, Qt::WindowShortcut);
+      { if(m_webView) m_webView->eval("toggleEdit();"); }, Qt::ApplicationShortcut);
   add(m_screenshotToggleKey, [this]()
-      { if(m_webView) m_webView->eval("toggleScreenshot();"); }, Qt::WindowShortcut);
+      { if(m_webView) m_webView->eval("toggleScreenshot();"); }, Qt::ApplicationShortcut);
   add(m_boldKey, [this]()
       { if(m_webView) m_webView->eval("applyFormat('bold');"); });
   add(m_underlineKey, [this]()
@@ -544,11 +609,11 @@ void ResultWindow::configureHotkeys(const QString &v, const QString &e, const QS
   add(m_highlightKey, [this]()
       { if(m_webView) m_webView->eval("applyFormat('highlight');"); });
   add(m_prevKey, [this]()
-      { showPrevious(); });
+      { showPrevious(); }, Qt::ApplicationShortcut);
   add(m_nextKey, [this]()
-      { showNext(); });
+      { showNext(); }, Qt::ApplicationShortcut);
   add(m_tagKey, [this]()
-      { openTagDialog(); });
+      { openTagDialog(); }, Qt::ApplicationShortcut);
 }
 
 void ResultWindow::addEntry(const TranslationEntry &entry)
@@ -716,7 +781,13 @@ void ResultWindow::focusEditor()
     QTimer::singleShot(0, this, [this]()
                        {
         if (m_webView)
-          m_webView->eval("(()=>{try{document.body.tabIndex=-1;document.body.focus({preventScroll:true});}catch(e){}})();"); });
+          m_webView->eval(R"JS((()=>{try{
+  const kt = document.getElementById('keytrap');
+  if (kt && kt.focus) { kt.focus({preventScroll:true}); return; }
+  document.body.tabIndex = 0;
+  document.body.focus({preventScroll:true});
+}catch(e){}})();
+)JS"); });
   }
 }
 void ResultWindow::setConfig(const AppConfig &config)
@@ -774,6 +845,9 @@ void ResultWindow::externalContentUpdate(const QString &m)
 }
 ResultWindow::~ResultWindow()
 {
+#ifdef _WIN32
+  WinKeyForwarder::instance().unregisterResultWindow(this);
+#endif
   qDebug() << "[RW] dtor this=" << (void *)this;
 }
 

@@ -257,10 +257,6 @@ QList<TranslationEntry> HistoryManager::loadEntries()
             entry.tags = obj["tags"].toVariant().toStringList();
         }
 
-        // Update caches
-        m_markdownCache[entry.id] = entry.translatedMarkdown;
-        m_entryCache[entry.id] = entry;
-
         QImage img(fullPath);
         if (!img.isNull())
         {
@@ -270,6 +266,10 @@ QList<TranslationEntry> HistoryManager::loadEntries()
             img.save(&buffer, "PNG");
             entry.originalBase64 = ba.toBase64();
             entry.localImagePath = fullPath;
+
+            // Update caches (must include image/base64 for screenshot toggling)
+            m_markdownCache[entry.id] = entry.translatedMarkdown;
+            m_entryCache[entry.id] = entry;
         }
         else
         {

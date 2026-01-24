@@ -19,6 +19,8 @@ set(PROJECT_SOURCES
     src/main.cpp
     src/App.cpp
     src/App.h
+    src/WinKeyForwarder.cpp
+    src/WinKeyForwarder.h
     src/ConfigManager.cpp
     src/ConfigManager.h
     src/GlobalHotkey.cpp
