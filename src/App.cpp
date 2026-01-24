@@ -11,6 +11,7 @@
 #include <QtConcurrent>
 #include <QFuture>
 #include <QFutureWatcher>
+#include <QScreen>
 
 #include "TranslationManager.h"
 
@@ -557,11 +558,54 @@ void App::restorePreview(const QString &entryId)
 
 #ifdef _WIN32
     {
-        QString msg = QString("[APP] pixmap OK size=%1x%2").arg(pixmap.width()).arg(pixmap.height());
+        const qreal rawDpr = pixmap.devicePixelRatio();
+        const QSize rawPx = pixmap.size();
+        const QSizeF rawDip = pixmap.deviceIndependentSize();
+        QString msg = QString("[APP] pixmap OK rawPx=%1x%2 rawDpr=%3 rawDip=%4x%5")
+                          .arg(rawPx.width())
+                          .arg(rawPx.height())
+                          .arg(rawDpr, 0, 'f', 3)
+                          .arg(rawDip.width(), 0, 'f', 1)
+                          .arg(rawDip.height(), 0, 'f', 1);
         QByteArray line = msg.toUtf8();
         WinKeyForwarder::trace(line.constData());
     }
 #endif
+
+    // If the screenshot came from a HiDPI monitor, the captured image is usually in physical pixels,
+    // but decoding from PNG loses the original DPR metadata. Restore an appropriate DPR so the
+    // PreviewCard (which sizes itself by deviceIndependentSize) doesn't jump larger after toggling.
+    {
+        qreal desiredDpr = 1.0;
+        const QList<QScreen *> screens = QGuiApplication::screens();
+        const int idx = cfg.targetScreenIndex;
+        if (idx >= 0 && idx < screens.size() && screens[idx])
+            desiredDpr = screens[idx]->devicePixelRatio();
+        else if (QGuiApplication::primaryScreen())
+            desiredDpr = QGuiApplication::primaryScreen()->devicePixelRatio();
+
+        if (desiredDpr <= 0.0)
+            desiredDpr = 1.0;
+
+        if (qAbs(pixmap.devicePixelRatio() - desiredDpr) > 0.001)
+        {
+            pixmap.setDevicePixelRatio(desiredDpr);
+#ifdef _WIN32
+            {
+                const QSize px = pixmap.size();
+                const QSizeF dip = pixmap.deviceIndependentSize();
+                QString msg = QString("[APP] pixmap DPR adjusted to %1 -> dip=%2x%3 (px=%4x%5)")
+                                  .arg(desiredDpr, 0, 'f', 3)
+                                  .arg(dip.width(), 0, 'f', 1)
+                                  .arg(dip.height(), 0, 'f', 1)
+                                  .arg(px.width())
+                                  .arg(px.height());
+                QByteArray line = msg.toUtf8();
+                WinKeyForwarder::trace(line.constData());
+            }
+#endif
+        }
+    }
 
     PreviewCard *card = new PreviewCard(pixmap);
     card->setZoomSensitivity(cfg.zoomSensitivity);
