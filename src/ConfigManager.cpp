@@ -302,6 +302,9 @@ void ConfigManager::parseJson(const QJsonObject &root)
         m_config.underlineHotkey = app["underline_hotkey"].toString("ctrl+u");
         m_config.highlightHotkey = app["highlight_hotkey"].toString("ctrl+h");
 
+        m_config.highlightMarkColor = app["highlight_mark_color"].toString("#ffeb3b");
+        m_config.highlightMarkColorDark = app["highlight_mark_color_dark"].toString("#d4af37");
+
         m_config.initialFontSize = app["initial_font_size"].toInt(16);
         m_config.cardBorderColor = app["card_border_color"].toString("100,100,100");
         m_config.debugMode = app["debug_mode"].toBool(false);
@@ -370,6 +373,8 @@ QJsonObject ConfigManager::toJson() const
     app["bold_hotkey"] = m_config.boldHotkey;
     app["underline_hotkey"] = m_config.underlineHotkey;
     app["highlight_hotkey"] = m_config.highlightHotkey;
+    app["highlight_mark_color"] = m_config.highlightMarkColor;
+    app["highlight_mark_color_dark"] = m_config.highlightMarkColorDark;
     app["initial_font_size"] = m_config.initialFontSize;
     app["card_border_color"] = m_config.cardBorderColor;
     app["debug_mode"] = m_config.debugMode;
