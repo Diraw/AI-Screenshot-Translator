@@ -389,15 +389,8 @@ void App::showResult(const QString &entryId)
 
     ResultWindow *window = new ResultWindow();
 
-    // Determine initial lock state
-    if (m_preferredLockState)
-    {
-        cfg.defaultResultWindowLocked = true;
-    }
-    else
-    {
-        cfg.defaultResultWindowLocked = false;
-    }
+    // Determine initial lock state for newly created ResultWindow
+    cfg.defaultResultWindowLocked = m_preferredLockState;
 
     window->setConfig(cfg);
     window->configureHotkeys(cfg.viewToggleHotkey, cfg.editHotkey, cfg.screenshotToggleHotkey,
@@ -520,6 +513,9 @@ QString App::updateConfig(const AppConfig &cfg)
     g_enableLogging = cfg.debugMode;
     TranslationManager::instance().setLanguage(cfg.language);
     setupTray();
+
+    // Apply lock-related preferences immediately for future ResultWindow creation.
+    m_preferredLockState = cfg.defaultResultWindowLocked;
 
     reloadHotkeys();
 
