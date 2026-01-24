@@ -66,6 +66,8 @@ protected:
     void resizeEvent(QResizeEvent *event) override;
     void showEvent(QShowEvent *event) override;
     bool event(QEvent *event) override;
+public slots:
+    void triggerScreenshotFromNative();
 private slots:
     void toggleLock();
     void showPrevious();

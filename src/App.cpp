@@ -14,12 +14,28 @@
 
 #include "TranslationManager.h"
 
+#ifdef _WIN32
+#include "WinKeyForwarder.h"
+#endif
+
 App::App(QObject *parent)
     : QObject(parent), m_configManager(),
       m_screenshotHotkey(100, this),
       m_summaryHotkey(101, this),
       m_settingsHotkey(102, this)
 {
+#ifdef _WIN32
+    // WebView2 often consumes WM_KEYDOWN in its child HWND, bypassing Qt shortcuts.
+    // Use a low-level keyboard hook as a reliable path.
+    static bool s_hookInstalled = false;
+    if (!s_hookInstalled)
+    {
+        WinKeyForwarder::trace("[WKF] installing forwarder");
+        WinKeyForwarder::instance().install();
+        s_hookInstalled = true;
+    }
+#endif
+
     AppConfig cfg = m_configManager.getConfig();
     g_enableLogging = cfg.debugMode;
     TranslationManager::instance().setLanguage(cfg.language);
@@ -100,6 +116,10 @@ App::App(QObject *parent)
 
 App::~App()
 {
+#ifdef _WIN32
+    WinKeyForwarder::trace("[WKF] uninstall forwarder");
+    WinKeyForwarder::instance().uninstall();
+#endif
     if (m_summaryWindow)
         delete m_summaryWindow;
 }
@@ -374,6 +394,11 @@ void App::showResult(const QString &entryId)
             if (!rw)
                 continue;
 
+            // Ensure screenshot toggle ("s") works for reused locked windows as well.
+            connect(rw, &ResultWindow::screenshotRequested,
+                    this, &App::onResultWindowScreenshotRequested,
+                    Qt::UniqueConnection);
+
             AppConfig cfgForLocked = cfg;
             cfgForLocked.defaultResultWindowLocked = rw->isLocked();
             rw->setConfig(cfgForLocked);
@@ -400,11 +425,9 @@ void App::showResult(const QString &entryId)
     window->setHistoryManager(&m_historyManager);
 
     // Connect Screenshot Request (Fixes 's' hotkey)
-    connect(window, &ResultWindow::screenshotRequested, this, [this](const QString &id, const QString &b64)
-            {
-        // Reuse existing preview restoration or trigger new screenshot tool?
-        // Usually 's' is "Show Screenshot" of current entry
-        restorePreview(id); });
+    connect(window, &ResultWindow::screenshotRequested,
+            this, &App::onResultWindowScreenshotRequested,
+            Qt::UniqueConnection);
 
     window->setContent(entry.translatedMarkdown, entry.originalBase64, entry.prompt, entry.id);
     window->show();
@@ -440,14 +463,45 @@ void App::showResult(const QString &entryId)
             { m_historyManager.updateEntryTags(id, tags); });
 }
 
+void App::onResultWindowScreenshotRequested(const QString &entryId, const QString &base64)
+{
+#ifdef _WIN32
+    {
+        QString msg = QString("[APP] got screenshotRequested id=%1 b64=%2")
+                          .arg(entryId)
+                          .arg(base64.size());
+        QByteArray line = msg.toUtf8();
+        WinKeyForwarder::trace(line.constData());
+    }
+#endif
+    Q_UNUSED(base64);
+    restorePreview(entryId);
+}
+
 void App::restorePreview(const QString &entryId)
 {
+#ifdef _WIN32
+    {
+        QString msg = QString("[APP] restorePreview entryId=%1").arg(entryId);
+        QByteArray line = msg.toUtf8();
+        WinKeyForwarder::trace(line.constData());
+    }
+#endif
+
     if (entryId.isEmpty())
+    {
+#ifdef _WIN32
+        WinKeyForwarder::trace("[APP] restorePreview abort: empty entryId");
+#endif
         return;
+    }
 
     // Toggle behavior: if already open for this entry, close it.
     if (m_previewCards.contains(entryId) && m_previewCards[entryId])
     {
+#ifdef _WIN32
+        WinKeyForwarder::trace("[APP] restorePreview toggle: closing existing PreviewCard");
+#endif
         m_previewCards[entryId]->close();
         // QPointer will null it out automatically because WA_DeleteOnClose is set
         return;
@@ -455,7 +509,20 @@ void App::restorePreview(const QString &entryId)
 
     TranslationEntry entry = m_historyManager.getEntryById(entryId);
     if (entry.id.isEmpty())
+    {
+#ifdef _WIN32
+        WinKeyForwarder::trace("[APP] restorePreview abort: entry not found in history");
+#endif
         return;
+    }
+
+#ifdef _WIN32
+    {
+        QString msg = QString("[APP] entry found: b64=%1").arg(entry.originalBase64.size());
+        QByteArray line = msg.toUtf8();
+        WinKeyForwarder::trace(line.constData());
+    }
+#endif
 
     AppConfig cfg = m_configManager.getConfig();
 
@@ -463,11 +530,38 @@ void App::restorePreview(const QString &entryId)
     if (!entry.originalBase64.isEmpty())
     {
         QByteArray bytes = QByteArray::fromBase64(entry.originalBase64.toLatin1());
+#ifdef _WIN32
+        {
+            QString msg = QString("[APP] decoded bytes=%1").arg(bytes.size());
+            QByteArray line = msg.toUtf8();
+            WinKeyForwarder::trace(line.constData());
+        }
+#endif
         pixmap.loadFromData(bytes);
     }
 
+    if (entry.originalBase64.isEmpty())
+    {
+#ifdef _WIN32
+        WinKeyForwarder::trace("[APP] restorePreview abort: entry.originalBase64 empty");
+#endif
+    }
+
     if (pixmap.isNull())
+    {
+#ifdef _WIN32
+        WinKeyForwarder::trace("[APP] restorePreview abort: pixmap.isNull (decode failed)");
+#endif
         return;
+    }
+
+#ifdef _WIN32
+    {
+        QString msg = QString("[APP] pixmap OK size=%1x%2").arg(pixmap.width()).arg(pixmap.height());
+        QByteArray line = msg.toUtf8();
+        WinKeyForwarder::trace(line.constData());
+    }
+#endif
 
     PreviewCard *card = new PreviewCard(pixmap);
     card->setZoomSensitivity(cfg.zoomSensitivity);
