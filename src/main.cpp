@@ -16,87 +16,106 @@
 #endif
 
 bool g_enableLogging = false;
-static bool g_logClearedOnStart = false;
 
-void customMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg) {
+void customMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
+{
     QString text;
-    switch (type) {
-        case QtDebugMsg: text = "DEBUG: " + msg; break;
-        case QtInfoMsg: text = "INFO: " + msg; break;
-        case QtWarningMsg: text = "WARN: " + msg; break;
-        case QtCriticalMsg: text = "CRIT: " + msg; break;
-        case QtFatalMsg: text = "FATAL: " + msg; break;
+    switch (type)
+    {
+    case QtDebugMsg:
+        text = "DEBUG: " + msg;
+        break;
+    case QtInfoMsg:
+        text = "INFO: " + msg;
+        break;
+    case QtWarningMsg:
+        text = "WARN: " + msg;
+        break;
+    case QtCriticalMsg:
+        text = "CRIT: " + msg;
+        break;
+    case QtFatalMsg:
+        text = "FATAL: " + msg;
+        break;
     }
 
 #ifdef _WIN32
-    OutputDebugStringW(reinterpret_cast<const wchar_t*>(text.utf16()));
+    OutputDebugStringW(reinterpret_cast<const wchar_t *>(text.utf16()));
     OutputDebugStringW(L"\n");
 #endif
 
     // Only write debug.log when debug mode enabled (or env override)
     bool allowFile = g_enableLogging || qEnvironmentVariableIsSet("FORCE_DEBUG_LOG");
-    if (!allowFile) return;
+    if (!allowFile)
+        return;
     // Gate DEBUG entries if disabled
     bool shouldLog = (type != QtDebugMsg) || allowFile;
-    if (!shouldLog) return;
-    
+    if (!shouldLog)
+        return;
+
     static bool logCleared = false;
-    if (!logCleared) {
+    if (!logCleared)
+    {
         QFile::remove("debug.log"); // ensure fresh file the moment we start logging
         logCleared = true;
     }
 
     QFile outFile("debug.log");
-    if (outFile.open(QIODevice::WriteOnly | QIODevice::Append)) {
+    if (outFile.open(QIODevice::WriteOnly | QIODevice::Append))
+    {
         QTextStream ts(&outFile);
         ts << QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss.zzz ") << text << Qt::endl;
     }
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
     // Determine debug mode from config before initializing logging
     {
         ConfigManager tempConfig;
         g_enableLogging = tempConfig.getConfig().debugMode;
     }
     bool forceDebug = qEnvironmentVariableIsSet("FORCE_DEBUG_LOG");
-    if (g_enableLogging || forceDebug) {
+    bool enableFileLog = g_enableLogging || forceDebug;
+    if (enableFileLog)
+    {
         QFile::remove("debug.log"); // Clear previous log on startup when debug is enabled
-        g_logClearedOnStart = true;
     }
 
     qInstallMessageHandler(customMessageHandler);
-    if (g_enableLogging || forceDebug) {
-        QFile::remove("debug.log"); // Ensure cleared after handler install too
-        g_logClearedOnStart = true;
-    }
     qDebug() << "Application starting...";
 
     QApplication a(argc, argv);
-    
+
     // Ensure we don't quit when the last window closes (because we live in the tray)
     a.setQuitOnLastWindowClosed(false);
     a.setWindowIcon(QIcon(":/assets/icon.ico"));
-    
+
     // Single Instance Check
     QLockFile lockFile(QDir::temp().filePath("AI-Screenshot-Translator.lock"));
-    if (!lockFile.tryLock(100)) {
+    if (!lockFile.tryLock(100))
+    {
         qDebug() << "App already running, exiting.";
-        QMessageBox::warning(nullptr, "AI Screenshot Translator", 
+        QMessageBox::warning(nullptr, "AI Screenshot Translator",
                              "The application is already running.\nCheck the system tray.");
         return 1;
     }
 
-    try {
+    try
+    {
         qDebug() << "Initializing App...";
         App app;
         qDebug() << "App initialized. Entering exec loop.";
         return a.exec();
-    } catch (const std::exception& e) {
+    }
+    catch (const std::exception &e)
+    {
         qCritical() << "Uncaught exception: " << e.what();
         QMessageBox::critical(nullptr, "Crash", QString("Uncaught exception failed: %1").arg(e.what()));
         return -1;
-    } catch (...) {
+    }
+    catch (...)
+    {
         qCritical() << "Unknown crash occurred.";
         QMessageBox::critical(nullptr, "Crash", "Unknown error occurred.");
         return -1;

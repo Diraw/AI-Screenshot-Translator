@@ -29,12 +29,12 @@
 #include "ThemeUtils.h"
 #include <QMessageBox>
 
-
-SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent) {
+SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent)
+{
     setWindowTitle(TranslationManager::instance().tr("summary_title"));
     setWindowIcon(QIcon(":/assets/icon.ico"));
     resize(1000, 750); // Landscape default as requested
-    
+
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
 
@@ -50,21 +50,22 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent) {
     // DevTools shortcut for debugging WebView content
     QShortcut *devToolsShortcut = new QShortcut(QKeySequence(Qt::Key_F12), this);
     devToolsShortcut->setContext(Qt::ApplicationShortcut);
-    connect(devToolsShortcut, &QShortcut::activated, this, [this]() {
-        if (m_webView) m_webView->openDevTools();
-    });
+    connect(devToolsShortcut, &QShortcut::activated, this, [this]()
+            {
+        if (m_webView) m_webView->openDevTools(); });
 
     // Bind 'cmd_restore'
-    m_webView->bind("cmd_restore", [this](std::string seq, std::string req, void* arg) {
+    m_webView->bind("cmd_restore", [this](std::string seq, std::string req, void *arg)
+                    {
         QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req));
         if (doc.isArray() && !doc.array().isEmpty()) {
             QString id = doc.array().at(0).toString();
             emit restorePreviewRequested(id);
-        }
-    });
+        } });
 
     // Bind 'cmd_delete'
-    m_webView->bind("cmd_delete", [this](std::string seq, std::string req, void* arg) {
+    m_webView->bind("cmd_delete", [this](std::string seq, std::string req, void *arg)
+                    {
         QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req));
         if (doc.isArray() && !doc.array().isEmpty()) {
             QString id = doc.array().at(0).toString();
@@ -76,11 +77,11 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent) {
                 }
             }
             emit requestDeleteEntry(id);
-        }
-    });
-    
+        } });
+
     // Bind 'cmd_updateEntry'
-    m_webView->bind("cmd_updateEntry", [this](std::string seq, std::string req, void* arg) {
+    m_webView->bind("cmd_updateEntry", [this](std::string seq, std::string req, void *arg)
+                    {
         // req is JSON array [id, content]
         QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req));
         if (doc.isArray()) {
@@ -90,74 +91,83 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent) {
                 QString content = arr.at(1).toString();
                 emit entryEdited(id, content);
             }
-        }
-    });
+        } });
 
     // JS log bridge
-    m_webView->bind("cmd_log", [this](std::string seq, std::string req, void* arg) {
+    m_webView->bind("cmd_log", [this](std::string seq, std::string req, void *arg)
+                    {
         QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req));
         if (doc.isArray() && !doc.array().isEmpty()) {
             qDebug() << "[JS]" << doc.array().at(0).toString();
         } else {
             qDebug() << "[JS]" << QString::fromStdString(req);
-        }
-    });
+        } });
 
     // Scroll position updates from JS
-    m_webView->bind("cmd_scroll", [this](std::string seq, std::string req, void* arg) {
+    m_webView->bind("cmd_scroll", [this](std::string seq, std::string req, void *arg)
+                    {
         QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req));
         if (doc.isArray() && !doc.array().isEmpty()) {
             m_lastScrollY = doc.array().at(0).toDouble();
-        }
-    });
-    m_webView->bind("cmd_exitSelectionMode", [this](std::string, std::string, void*) {
-        if (m_selectionModeBtn) m_selectionModeBtn->setChecked(false);
-    });
+        } });
+    m_webView->bind("cmd_exitSelectionMode", [this](std::string, std::string, void *)
+                    {
+        if (m_selectionModeBtn) m_selectionModeBtn->setChecked(false); });
 
     // Bind DevTools opener for JS-triggered hotkey inside WebView
-    m_webView->bind("cmd_openDevTools", [this](std::string, std::string, void*) {
+    m_webView->bind("cmd_openDevTools", [this](std::string, std::string, void *)
+                    {
         if (m_webView) {
             qDebug() << "[DevTools] Request from JS in SummaryWindow";
             m_webView->openDevTools();
-        }
-    });
+        } });
 
-    connect(m_webView.get(), &EmbedWebView::ready, this, [this]() {
+    connect(m_webView.get(), &EmbedWebView::ready, this, [this]()
+            {
         if (m_webContainer && m_webView) {
             m_webView->setSize(m_webContainer->width(), m_webContainer->height());
-            m_webView->focus();
-        }
-    });
-    
-    auto parseIdsFromReq = [](const std::string& req) -> QStringList {
+            m_webView->focusNative();
+        } });
+
+    auto parseIdsFromReq = [](const std::string &req) -> QStringList
+    {
         QStringList ids;
         QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req));
-        if (!doc.isArray()) return ids;
+        if (!doc.isArray())
+            return ids;
 
         QJsonArray arr = doc.array();
         // Case A: ["id1", "id2"] - multiple args passed from JSspread
         // Case B: ["[\"id1\", \"id2\"]"] - user's reported "double encoded" case
-        
-        for (const auto& v : arr) {
+
+        for (const auto &v : arr)
+        {
             QString s = v.toString();
-            if (s.startsWith("[") && s.endsWith("]")) {
+            if (s.startsWith("[") && s.endsWith("]"))
+            {
                 // Try to parse inner array
                 QJsonDocument innerDoc = QJsonDocument::fromJson(s.toUtf8());
-                if (innerDoc.isArray()) {
-                    for (const auto& iv : innerDoc.array()) ids << iv.toString();
-                    continue; 
+                if (innerDoc.isArray())
+                {
+                    for (const auto &iv : innerDoc.array())
+                        ids << iv.toString();
+                    continue;
                 }
             }
-            if (v.isString()) ids << s;
-            else if (v.isArray()) {
-                for (const auto& iv : v.toArray()) ids << iv.toString();
+            if (v.isString())
+                ids << s;
+            else if (v.isArray())
+            {
+                for (const auto &iv : v.toArray())
+                    ids << iv.toString();
             }
         }
         return ids;
     };
 
     // Bind batch operations
-    m_webView->bind("cmd_batchDelete", [this, parseIdsFromReq](std::string seq, std::string req, void* arg) {
+    m_webView->bind("cmd_batchDelete", [this, parseIdsFromReq](std::string seq, std::string req, void *arg)
+                    {
         qDebug() << "cmd_batchDelete triggered. Raw request:" << QString::fromStdString(req);
         QStringList ids = parseIdsFromReq(req);
         qDebug() << "Extracted IDs count:" << ids.size() << "IDs:" << ids;
@@ -175,10 +185,10 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent) {
             } else {
                 qDebug() << "Batch delete failed in HistoryManager.";
             }
-        }
-    });
+        } });
 
-    m_webView->bind("cmd_batchAddTags", [this, parseIdsFromReq](std::string seq, std::string req, void* arg) {
+    m_webView->bind("cmd_batchAddTags", [this, parseIdsFromReq](std::string seq, std::string req, void *arg)
+                    {
         qDebug() << "cmd_batchAddTags triggered. Raw request:" << QString::fromStdString(req);
         QStringList ids = parseIdsFromReq(req);
         qDebug() << "Extracted IDs count:" << ids.size() << "IDs:" << ids;
@@ -198,10 +208,10 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent) {
             }
         });
         dialog->exec();
-        dialog->deleteLater();
-    });
+        dialog->deleteLater(); });
 
-    m_webView->bind("cmd_batchRemoveTags", [this, parseIdsFromReq](std::string seq, std::string req, void* arg) {
+    m_webView->bind("cmd_batchRemoveTags", [this, parseIdsFromReq](std::string seq, std::string req, void *arg)
+                    {
         qDebug() << "cmd_batchRemoveTags triggered. Raw request:" << QString::fromStdString(req);
         QStringList ids = parseIdsFromReq(req);
         qDebug() << "Extracted IDs count:" << ids.size() << "IDs:" << ids;
@@ -221,11 +231,11 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent) {
             }
         });
         dialog->exec();
-        dialog->deleteLater();
-    });
+        dialog->deleteLater(); });
 
     // We need to initialize HTML after webview is ready.
-    QTimer::singleShot(0, this, [this](){
+    QTimer::singleShot(0, this, [this]()
+                       {
         initHtml();
         // Force an initial resize to ensure WebView matches container
         QTimer::singleShot(100, this, [this](){
@@ -235,72 +245,85 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent) {
                 // Restore last scroll position
                 m_webView->eval(QString("window.scrollTo(0,%1);").arg(m_lastScrollY).toStdString());
             }
-        });
-    });
-    
+        }); });
+
     // Setup filter toolbar
     setupFilterUI();
-    
+
     // Restore window state from previous session
     restoreState();
-    
+
     // Initial Theme Update
     updateTheme(ThemeUtils::isSystemDark());
 }
 
-SummaryWindow::~SummaryWindow() {
+SummaryWindow::~SummaryWindow()
+{
     // unique_ptr handles cleanup
 }
 
-void SummaryWindow::resizeEvent(QResizeEvent *event) {
-    qDebug() << "SummaryWindow::resizeEvent - Window:" << width() << "x" << height() 
-             << "Container:" << (m_webContainer ? m_webContainer->size() : QSize(0,0));
+void SummaryWindow::resizeEvent(QResizeEvent *event)
+{
+    qDebug() << "SummaryWindow::resizeEvent - Window:" << width() << "x" << height()
+             << "Container:" << (m_webContainer ? m_webContainer->size() : QSize(0, 0));
     QWidget::resizeEvent(event);
 }
 
-bool SummaryWindow::eventFilter(QObject *watched, QEvent *event) {
-    if (event->type() == QEvent::KeyPress) {
-        QKeyEvent *ke = static_cast<QKeyEvent*>(event);
+bool SummaryWindow::eventFilter(QObject *watched, QEvent *event)
+{
+    if (event->type() == QEvent::KeyPress)
+    {
+        QKeyEvent *ke = static_cast<QKeyEvent *>(event);
         qDebug() << "[KeyEvent]" << ke->key() << ke->text() << ke->modifiers() << "obj" << (watched ? watched->metaObject()->className() : "null");
     }
     return QWidget::eventFilter(watched, event);
 }
 
 // closeEvent restored
-void SummaryWindow::closeEvent(QCloseEvent *event) {
+void SummaryWindow::closeEvent(QCloseEvent *event)
+{
     saveState();
     emit closed();
-    hide(); // Just hide instead of close
+    hide();          // Just hide instead of close
     event->ignore(); // Don't actually close, just hide
 }
 
-void SummaryWindow::setInitialHistory(const QList<TranslationEntry>& history) {
+void SummaryWindow::setInitialHistory(const QList<TranslationEntry> &history)
+{
     captureScrollPosition();
     m_entries = history;
     refreshHtml();
 }
 
-void SummaryWindow::addEntry(const TranslationEntry& entry) {
+void SummaryWindow::addEntry(const TranslationEntry &entry)
+{
     m_entries.append(entry);
     appendEntryHtml(entry);
 }
 
-void SummaryWindow::clearEntries() {
+void SummaryWindow::clearEntries()
+{
     captureScrollPosition();
     m_entries.clear();
     refreshHtml();
 }
 
-const TranslationEntry* SummaryWindow::getEntry(const QString& id) const {
-    for (const auto& entry : m_entries) {
-        if (entry.id == id) return &entry;
+const TranslationEntry *SummaryWindow::getEntry(const QString &id) const
+{
+    for (const auto &entry : m_entries)
+    {
+        if (entry.id == id)
+            return &entry;
     }
     return nullptr;
 }
 
-void SummaryWindow::updateEntryGeometry(const QString& id, const QPoint& pos, const QSize& size) {
-    for (auto& entry : m_entries) {
-        if (entry.id == id) {
+void SummaryWindow::updateEntryGeometry(const QString &id, const QPoint &pos, const QSize &size)
+{
+    for (auto &entry : m_entries)
+    {
+        if (entry.id == id)
+        {
             entry.lastPosition = pos;
             entry.lastSize = size;
             entry.hasLastPosition = true;
@@ -309,19 +332,24 @@ void SummaryWindow::updateEntryGeometry(const QString& id, const QPoint& pos, co
     }
 }
 
-void SummaryWindow::updateEntry(const QString& id, const QString& markdown) {
+void SummaryWindow::updateEntry(const QString &id, const QString &markdown)
+{
     // Alias for updateEntryContent to match the API calls from App.cpp
     updateEntryContent(id, markdown);
 }
 
-void SummaryWindow::updateEntryContent(const QString& id, const QString& markdown) {
-    for (auto& entry : m_entries) {
-        if (entry.id == id) {
+void SummaryWindow::updateEntryContent(const QString &id, const QString &markdown)
+{
+    for (auto &entry : m_entries)
+    {
+        if (entry.id == id)
+        {
             entry.translatedMarkdown = markdown;
             break;
         }
     }
-    if (m_webView) {
+    if (m_webView)
+    {
         // Simple unescape for JS injection
         QString safeMd = markdown;
         safeMd.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
@@ -330,52 +358,60 @@ void SummaryWindow::updateEntryContent(const QString& id, const QString& markdow
     }
 }
 
-void SummaryWindow::setZoomFactor(qreal factor) {
+void SummaryWindow::setZoomFactor(qreal factor)
+{
     m_currentZoom = factor;
-    if (m_webView) {
-         m_webView->eval("document.body.style.zoom = '" + std::to_string(factor) + "'");
+    if (m_webView)
+    {
+        m_webView->eval("document.body.style.zoom = '" + std::to_string(factor) + "'");
     }
 }
 
-qreal SummaryWindow::getZoomFactor() const {
+qreal SummaryWindow::getZoomFactor() const
+{
     return m_currentZoom;
 }
 
-void SummaryWindow::captureScrollPosition() {
-    if (m_webView) {
-        m_webView->eval("if(window.cmd_scroll){window.cmd_scroll(window.scrollY);}"); 
+void SummaryWindow::captureScrollPosition()
+{
+    if (m_webView)
+    {
+        m_webView->eval("if(window.cmd_scroll){window.cmd_scroll(window.scrollY);}");
     }
 }
 
 // Duplicate closeEvent removed
 
 // Helper struct for math protection
-struct ProtectedContent {
+struct ProtectedContent
+{
     QString text;
     QStringList mathBlocks;
 };
 
-static ProtectedContent protectMath(const QString &markdown) {
+static ProtectedContent protectMath(const QString &markdown)
+{
     ProtectedContent result;
     result.text = markdown;
-    
+
     QRegularExpression finalRegex(R"((\$\$[\s\S]*?\$\$)|(\\\[[\s\S]*?\\\])|(\\\([\s\S]*?\\\))|(\$[^\$\n]+\$))");
 
     int counter = 0;
     QString newText;
     int lastPos = 0;
-    
+
     QRegularExpressionMatchIterator i = finalRegex.globalMatch(result.text);
-    while (i.hasNext()) {
+    while (i.hasNext())
+    {
         QRegularExpressionMatch match = i.next();
         newText.append(result.text.mid(lastPos, match.capturedStart() - lastPos));
-        
+
         QString matchStr = match.captured();
         result.mathBlocks.append(matchStr);
-        
+
         QString placeholder = QString("MATHBLOCKPH%1").arg(counter++);
         newText.append(placeholder);
-        
+
         lastPos = match.capturedEnd();
     }
     newText.append(result.text.mid(lastPos));
@@ -383,39 +419,45 @@ static ProtectedContent protectMath(const QString &markdown) {
     return result;
 }
 
-void SummaryWindow::saveState() {
+void SummaryWindow::saveState()
+{
     QSettings settings("YourCompany", "AIScreenshotTranslator");
     settings.setValue("summaryWindow/geometry", saveGeometry());
     settings.setValue("summaryWindow/zoom", m_currentZoom);
     captureScrollPosition();
     settings.setValue("summaryWindow/scrollY", m_lastScrollY);
-    
+
     // Save scroll position via JavaScript
-    if (m_webView) {
+    if (m_webView)
+    {
         QString jsGetScroll = "window.scrollY;";
         // Note: eval doesn't return values directly, would need binding for this
         // For now just save geometry
     }
 }
 
-void SummaryWindow::restoreState() {
+void SummaryWindow::restoreState()
+{
     QSettings settings("YourCompany", "AIScreenshotTranslator");
-    
+
     // Restore geometry
     QByteArray geom = settings.value("summaryWindow/geometry").toByteArray();
-    if (!geom.isEmpty()) {
+    if (!geom.isEmpty())
+    {
         restoreGeometry(geom);
     }
-    
+
     // Restore zoom
     qreal zoom = settings.value("summaryWindow/zoom", 1.0).toReal();
     setZoomFactor(zoom);
     m_lastScrollY = settings.value("summaryWindow/scrollY", 0.0).toDouble();
 }
 
-void SummaryWindow::configureHotkeys(const QString& editKey, const QString& viewKey, const QString& screenshotKey,
-                                     const QString& boldKey, const QString& underlineKey, const QString& highlightKey) {
-    auto normalizeHotkey = [](QString key) {
+void SummaryWindow::configureHotkeys(const QString &editKey, const QString &viewKey, const QString &screenshotKey,
+                                     const QString &boldKey, const QString &underlineKey, const QString &highlightKey)
+{
+    auto normalizeHotkey = [](QString key)
+    {
         key = key.trimmed().toLower();
         key.replace(" ", ""); // remove inner blanks like "ctrl + e"
         return key;
@@ -430,14 +472,16 @@ void SummaryWindow::configureHotkeys(const QString& editKey, const QString& view
 
     qDeleteAll(m_shortcuts);
     m_shortcuts.clear();
-    auto addShortcut = [this](const QString& key, const QString& js) {
-        if (key.isEmpty()) return;
+    auto addShortcut = [this](const QString &key, const QString &js)
+    {
+        if (key.isEmpty())
+            return;
         QShortcut *sc = new QShortcut(QKeySequence(key), this);
         sc->setContext(Qt::ApplicationShortcut);
-        connect(sc, &QShortcut::activated, this, [this, js, key]() {
+        connect(sc, &QShortcut::activated, this, [this, js, key]()
+                {
             qDebug() << "[QShortcut activated]" << key;
-            if (m_webView) m_webView->eval(js.toStdString());
-        });
+            if (m_webView) m_webView->eval(js.toStdString()); });
         m_shortcuts.append(sc);
     };
     addShortcut(m_editKey, "if(window.currentEntry){var e=currentEntry(); if(e) toggleEdit(e);}");
@@ -454,39 +498,45 @@ void SummaryWindow::configureHotkeys(const QString& editKey, const QString& view
     refreshHtml();
 }
 
-void SummaryWindow::refreshHtml() {
+void SummaryWindow::refreshHtml()
+{
     captureScrollPosition();
     initHtml();
 }
 
-QString SummaryWindow::getAddEntryJs(const TranslationEntry& entry) {
+QString SummaryWindow::getAddEntryJs(const TranslationEntry &entry)
+{
     QString originalMarkdown = entry.translatedMarkdown;
     ProtectedContent protectedData = protectMath(originalMarkdown);
-    
+
     QString safeContent = protectedData.text;
     safeContent.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "");
-    
+
     QString mathBlocksJs = "[";
-    for (int i=0; i<protectedData.mathBlocks.size(); ++i) {
-         QString b = protectedData.mathBlocks[i];
-         b.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "");
-         if (i>0) mathBlocksJs += ",";
-         mathBlocksJs += "\"" + b + "\"";
+    for (int i = 0; i < protectedData.mathBlocks.size(); ++i)
+    {
+        QString b = protectedData.mathBlocks[i];
+        b.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "");
+        if (i > 0)
+            mathBlocksJs += ",";
+        mathBlocksJs += "\"" + b + "\"";
     }
     mathBlocksJs += "]";
-    
+
     QString originalSafe = originalMarkdown;
     originalSafe.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "");
-    
+
     QString tagsJs = "[";
-    for (int i=0; i<entry.tags.size(); ++i) {
-        if (i>0) tagsJs += ",";
+    for (int i = 0; i < entry.tags.size(); ++i)
+    {
+        if (i > 0)
+            tagsJs += ",";
         QString t = entry.tags[i];
         t.replace("\\", "\\\\").replace("\"", "\\\"");
         tagsJs += "\"" + t + "\"";
     }
     tagsJs += "]";
-    
+
     return QString("addEntryToDom('%1', '%2', \"%3\", %4, \"%5\", %6, %7);")
         .arg(entry.id)
         .arg(entry.timestamp.toString("yyyy-MM-dd HH:mm:ss"))
@@ -497,10 +547,39 @@ QString SummaryWindow::getAddEntryJs(const TranslationEntry& entry) {
         .arg(tagsJs);
 }
 
-void SummaryWindow::initHtml() {
-    if (!m_webView) return;
+void SummaryWindow::initHtml()
+{
+    if (!m_webView)
+        return;
 
     bool isDark = ThemeUtils::isSystemDark();
+
+    // If the HTML shell has already been loaded once, avoid calling setHtml() again (it is intentionally guarded
+    // in EmbedWebView to prevent reload-induced focus issues). Instead, update entries via JS.
+    if (m_htmlLoaded)
+    {
+        QList<TranslationEntry> filteredEntries = getFilteredEntries();
+
+        QString js;
+        js += "(()=>{";
+        js += QString("try{applyDarkMode(%1);}catch(e){};").arg(isDark ? "true" : "false");
+        js += QString("try{SELECTION_MODE=%1;}catch(e){};").arg(m_selectionMode ? "true" : "false");
+        js += "try{document.querySelectorAll('.entry').forEach(function(n){n.remove();});}catch(e){};";
+        for (const auto &entry : filteredEntries)
+        {
+            js += getAddEntryJs(entry) + ";";
+        }
+        if (m_currentZoom != 1.0)
+        {
+            js += QString("try{document.body.style.zoom='%1';}catch(e){};").arg(m_currentZoom);
+        }
+        js += "})();";
+
+        m_webView->eval(js.toStdString());
+        if (m_lastScrollY > 0.0)
+            m_webView->eval(QString("window.scrollTo(0,%1);").arg(m_lastScrollY).toStdString());
+        return;
+    }
 
     QString html = R"RAW_HTML(<!DOCTYPE html>
 <html class="__HTML_CLASS__">
@@ -576,10 +655,12 @@ window.addEventListener('scroll', function() {
 </script>
 )RAW_HTML";
 
-    auto loadAsset = [](const QString& name) -> QString {
+    auto loadAsset = [](const QString &name) -> QString
+    {
         QString path = QCoreApplication::applicationDirPath() + "/assets/libs/" + name;
         QFile file(path);
-        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        {
             return "";
         }
         return QString::fromUtf8(file.readAll());
@@ -590,22 +671,26 @@ window.addEventListener('scroll', function() {
     QString jsKatex = loadAsset("katex.min.js");
     QString jsKatexAuto = loadAsset("auto-render.min.js");
 
-    auto embedFonts = [](QString css) -> QString {
+    auto embedFonts = [](QString css) -> QString
+    {
         QString fontDir = QCoreApplication::applicationDirPath() + "/assets/libs/fonts/";
         QRegularExpression regex("url\\(fonts/([^)]+)\\)");
         QRegularExpressionMatchIterator it = regex.globalMatch(css);
         QString result = css;
-        while (it.hasNext()) {
+        while (it.hasNext())
+        {
             QRegularExpressionMatch match = it.next();
             QString filename = match.captured(1);
             QString extension = QFileInfo(filename).suffix().toLower();
-            if (extension != "woff2") {
+            if (extension != "woff2")
+            {
                 result.replace(match.captured(0), "url(data:application/x-font-placeholder;base64,AAA=)");
                 continue;
             }
             QString filePath = fontDir + filename;
             QFile fontFile(filePath);
-            if (fontFile.open(QIODevice::ReadOnly)) {
+            if (fontFile.open(QIODevice::ReadOnly))
+            {
                 QString base64 = fontFile.readAll().toBase64();
                 QString dataUri = QString("url(data:font/woff2;base64,%1)").arg(base64);
                 result.replace(match.captured(0), dataUri);
@@ -621,18 +706,19 @@ window.addEventListener('scroll', function() {
     html = html.replace("<script src='%3'></script>", "<script>\n" + jsKatex + "\n</script>");
     html = html.replace("<script src='%4'></script>", "<script>\n" + jsKatexAuto + "\n</script>");
     html = html.replace("__IS_DARK__", isDark ? "true" : "false");
-html = html.replace("__HTML_CLASS__", isDark ? "dark-mode" : "");
+    html = html.replace("__HTML_CLASS__", isDark ? "dark-mode" : "");
 
     // Static JS Logic
-  html += "<script>";
-  html += QString("var KEY_EDIT = '%1';\n").arg(m_editKey);
-  html += QString("var KEY_VIEW = '%1';\n").arg(m_viewKey);
-  html += QString("var KEY_SHOT = '%1';\n").arg(m_screenshotKey);
-  html += QString("var KEY_BOLD = '%1';\n").arg(m_boldKey);
-  html += QString("var KEY_UNDERLINE = '%1';\n").arg(m_underlineKey);
-  html += QString("var KEY_HIGHLIGHT = '%1';\n").arg(m_highlightKey);
-  html += QString("var RESTORE_SCROLL = %1;\n").arg(m_lastScrollY);
-  html += R"JSCODE(
+    html += "<script>";
+    html += "if (typeof marked !== 'undefined') { marked.setOptions({ breaks: true, gfm: true }); }\n";
+    html += QString("var KEY_EDIT = '%1';\n").arg(m_editKey);
+    html += QString("var KEY_VIEW = '%1';\n").arg(m_viewKey);
+    html += QString("var KEY_SHOT = '%1';\n").arg(m_screenshotKey);
+    html += QString("var KEY_BOLD = '%1';\n").arg(m_boldKey);
+    html += QString("var KEY_UNDERLINE = '%1';\n").arg(m_underlineKey);
+    html += QString("var KEY_HIGHLIGHT = '%1';\n").arg(m_highlightKey);
+    html += QString("var RESTORE_SCROLL = %1;\n").arg(m_lastScrollY);
+    html += R"JSCODE(
 if (document.body) { applyDarkMode(IS_DARK); } else { document.addEventListener('DOMContentLoaded', () => applyDarkMode(IS_DARK), {once:true}); }
 var LAST_ENTRY = null;
 document.addEventListener('DOMContentLoaded', function() {
@@ -679,19 +765,40 @@ function protectMathJs(text) {
    return {text: protectedText, blocks: blocks};
 }
 
-function renderContent(id) {
-   var raw = document.getElementById('raw_' + id);
-   var rendered = document.getElementById('rendered_' + id);
-   var markdown = raw.innerText;
-   var p = protectMathJs(markdown);
-   var html = marked.parse(p.text);
-   p.blocks.forEach(function(block, index) {
-       html = html.replace('MATHBLOCKPH' + index, block);
-   });
-   rendered.innerHTML = html;
-   requestAnimationFrame(function() {
-     renderMathInElement(rendered, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}, {left: '\\(', right: '\\)', display: false}, {left: '\\[', right: '\\]', display: true}], throwOnError : false});
-   });
+function extractMarkdown(rawEl) {
+    if (!rawEl) return '';
+    var html = rawEl.innerHTML || '';
+    html = html.replace(/<div><br\s*\/?>\s*<\/div>/gi, '\n');
+    html = html.replace(/<div>/gi, '\n').replace(/<\/div>/gi, '');
+    html = html.replace(/<p>/gi, '').replace(/<\/p>/gi, '\n');
+    html = html.replace(/<br\s*\/?>/gi, '\n');
+    html = html.replace(/&nbsp;/gi, ' ');
+    var tmp = document.createElement('div');
+    tmp.style.whiteSpace = 'pre-wrap';
+    tmp.innerHTML = html;
+    return (tmp.textContent || '').replace(/\r\n?/g, '\n');
+}
+
+function ensureMarkedOptions() {
+    if (typeof marked !== 'undefined') {
+         marked.setOptions({ breaks: true, gfm: true });
+    }
+}
+
+function renderContent(id, markdownOverride) {
+    ensureMarkedOptions();
+    var raw = document.getElementById('raw_' + id);
+    var rendered = document.getElementById('rendered_' + id);
+    var markdown = (typeof markdownOverride === 'string') ? markdownOverride : (raw ? raw.textContent : '');
+    var p = protectMathJs(markdown);
+    var html = marked.parse(p.text);
+    p.blocks.forEach(function(block, index) {
+         html = html.replace('MATHBLOCKPH' + index, block);
+    });
+    rendered.innerHTML = html;
+    requestAnimationFrame(function() {
+      renderMathInElement(rendered, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}, {left: '\\(', right: '\\)', display: false}, {left: '\\[', right: '\\]', display: true}], throwOnError : false});
+    });
 }
 
 function insertMarkdown(startTag, endTag) {
@@ -737,13 +844,16 @@ function toggleEdit(entry) {
        entry.classList.add('mode-view');
        updateStatus('view');
        raw.contentEditable = 'false';
-       renderContent(id);
+
+       var markdown = extractMarkdown(raw);
+       raw.innerText = markdown;
+       renderContent(id, markdown);
+
        raw.style.display = 'none';
        rendered.style.display = 'block';
        
        // Notify C++ of edit
-       // Pass as multiple arguments to the bridge
-       window.cmd_updateEntry(id, raw.innerText);
+       window.cmd_updateEntry(id, markdown);
 
        entry.focus();
    } else {
@@ -841,13 +951,20 @@ function handleKey(e) {
         }
     }
 }
-window.addEventListener('keydown', handleKey, true);
-window.addEventListener('keydown', function(e){
-  log(`keydown key=${e.key} ctrl=${e.ctrlKey} alt=${e.altKey} shift=${e.shiftKey} target=${(e.target && e.target.tagName)}`);
-}, true);
-window.addEventListener('focus', ()=>log('window focus'), true);
-window.addEventListener('blur', ()=>log('window blur'), true);
-document.addEventListener('visibilitychange', ()=>log('visibility='+document.visibilityState), true);
+
+if (!window.__INIT_ONCE__) {
+    window.__INIT_ONCE__ = true;
+    window.__FOCUS_GUARD_ID__ = (Math.random().toString(16).slice(2) + Date.now().toString(16));
+    log('init_guard gid=' + window.__FOCUS_GUARD_ID__);
+    window.addEventListener('keydown', handleKey, true);
+    window.addEventListener('keydown', function(e){
+        log(`keydown key=${e.key} ctrl=${e.ctrlKey} alt=${e.altKey} shift=${e.shiftKey} target=${(e.target && e.target.tagName)}`);
+    }, true);
+    // 非 capture：避免把元素级 focus/blur 误记为 window focus/blur。
+    window.addEventListener('focus', ()=>log('window focus gid=' + window.__FOCUS_GUARD_ID__));
+    window.addEventListener('blur', ()=>log('window blur gid=' + window.__FOCUS_GUARD_ID__));
+    document.addEventListener('visibilitychange', ()=>log('visibility='+document.visibilityState), true);
+}
 
 function updateEntryInDom(id, newMarkdown) {
    var raw = document.getElementById('raw_' + id);
@@ -855,7 +972,7 @@ function updateEntryInDom(id, newMarkdown) {
        raw.innerText = newMarkdown;
        var entry = raw.closest('.entry');
        if (entry && !entry.classList.contains('mode-edit')) {
-           renderContent(id);
+           renderContent(id, newMarkdown);
        }
    }
 }
@@ -888,7 +1005,7 @@ function addEntryToDom(id, time, markdown, mathBlocks, originalRaw, isSelectionM
   
   var rawContainer = document.getElementById('raw_' + id);
   if (rawContainer) {
-      rawContainer.innerText = originalRaw; 
+      rawContainer.textContent = originalRaw; 
       renderContent(id);
   }
 }
@@ -980,11 +1097,13 @@ document.addEventListener('mouseup', function(e){
     html += "<div id='status-indicator'>MODE: VIEW</div>";
     html += "<script>";
     QList<TranslationEntry> filteredEntries = getFilteredEntries();
-    for (const auto& entry : filteredEntries) {
+    for (const auto &entry : filteredEntries)
+    {
         html += getAddEntryJs(entry);
     }
     // Apply zoom
-    if (m_currentZoom != 1.0) {
+    if (m_currentZoom != 1.0)
+    {
         html += QString("document.body.style.zoom = '%1';").arg(m_currentZoom);
     }
     html += "</script>";
@@ -992,63 +1111,68 @@ document.addEventListener('mouseup', function(e){
     html += "</body></html>";
 
     m_webView->setHtml(html.toStdString());
-    m_webView->focus();
+    m_htmlLoaded = true;
+    m_webView->focusNative();
     QString toggleJs = QString("applyDarkMode(%1);").arg(isDark ? "true" : "false");
     m_webView->eval(toggleJs.toStdString());
-    if (m_lastScrollY > 0.0) {
+    if (m_lastScrollY > 0.0)
+    {
         m_webView->eval(QString("window.scrollTo(0,%1);").arg(m_lastScrollY).toStdString());
     }
 }
 
-void SummaryWindow::appendEntryHtml(const TranslationEntry& entry) {
-    if (!m_webView) return;
+void SummaryWindow::appendEntryHtml(const TranslationEntry &entry)
+{
+    if (!m_webView)
+        return;
     QString js = getAddEntryJs(entry);
     m_webView->eval(js.toStdString());
 }
 
-void SummaryWindow::setupFilterUI() {
+void SummaryWindow::setupFilterUI()
+{
     m_filterToolbar = new QToolBar(this);
     m_filterToolbar->setAttribute(Qt::WA_StyledBackground, true);
     m_filterToolbar->setAutoFillBackground(true);
     // Dark style to match application and prevent white flash
     // Style will be set by updateTheme
-    
+
     m_filterToolbar->addWidget(new QLabel(TranslationManager::instance().tr("filter_from_date") + ": ", this));
     m_fromDateEdit = new QDateEdit(this);
     m_fromDateEdit->setCalendarPopup(true);
     m_fromDateEdit->setDate(QDate::currentDate().addMonths(-1));
     m_fromDateEdit->setDisplayFormat("yyyy-MM-dd");
     m_filterToolbar->addWidget(m_fromDateEdit);
-    
+
     m_filterToolbar->addSeparator();
-    
+
     m_filterToolbar->addWidget(new QLabel(TranslationManager::instance().tr("filter_to_date") + ": ", this));
     m_toDateEdit = new QDateEdit(this);
     m_toDateEdit->setCalendarPopup(true);
     m_toDateEdit->setDate(QDate::currentDate());
     m_toDateEdit->setDisplayFormat("yyyy-MM-dd");
     m_filterToolbar->addWidget(m_toDateEdit);
-    
+
     m_filterToolbar->addSeparator();
-    
+
     m_filterToolbar->addWidget(new QLabel(TranslationManager::instance().tr("filter_tags") + ": ", this));
     m_tagFilterCombo = new QComboBox(this);
     m_tagFilterCombo->setEditable(false);
     m_tagFilterCombo->addItem(TranslationManager::instance().tr("filter_all_tags"), "");
     m_filterToolbar->addWidget(m_tagFilterCombo);
-    
+
     m_filterToolbar->addSeparator();
-    
+
     m_clearFilterBtn = new QPushButton(TranslationManager::instance().tr("filter_clear"), this);
     m_filterToolbar->addWidget(m_clearFilterBtn);
-    
+
     m_filterToolbar->addSeparator();
 
     m_selectionModeBtn = new QPushButton(TranslationManager::instance().tr("btn_selection_mode"), this);
     m_selectionModeBtn->setCheckable(true);
     // Fix dark mode text visibility issues
     // Style will be set by updateTheme
-    
+
     connect(m_selectionModeBtn, &QPushButton::toggled, this, &SummaryWindow::toggleSelectionMode);
     m_filterToolbar->addWidget(m_selectionModeBtn);
 
@@ -1073,82 +1197,101 @@ void SummaryWindow::setupFilterUI() {
     connect(m_batchRemoveTagBtn, &QPushButton::clicked, this, &SummaryWindow::onBatchRemoveTags);
     m_batchRemoveTagAction = m_filterToolbar->addWidget(m_batchRemoveTagBtn);
     m_batchRemoveTagAction->setVisible(false);
-    
-    QVBoxLayout* mainLayout = qobject_cast<QVBoxLayout*>(layout());
-    if (mainLayout) {
+
+    QVBoxLayout *mainLayout = qobject_cast<QVBoxLayout *>(layout());
+    if (mainLayout)
+    {
         mainLayout->insertWidget(0, m_filterToolbar);
     }
-    
+
     connect(m_fromDateEdit, &QDateEdit::dateChanged, this, &SummaryWindow::applyFilters);
     connect(m_toDateEdit, &QDateEdit::dateChanged, this, &SummaryWindow::applyFilters);
-    connect(m_tagFilterCombo, static_cast<void(QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, &SummaryWindow::applyFilters);
-    connect(m_clearFilterBtn, &QPushButton::clicked, this, [this]() {
+    connect(m_tagFilterCombo, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, &SummaryWindow::applyFilters);
+    connect(m_clearFilterBtn, &QPushButton::clicked, this, [this]()
+            {
         m_fromDateEdit->setDate(QDate::currentDate().addMonths(-1));
         m_toDateEdit->setDate(QDate::currentDate());
         m_tagFilterCombo->setCurrentIndex(0);
-        applyFilters();
-    });
+        applyFilters(); });
 }
 
-void SummaryWindow::setHistoryManager(HistoryManager* historyManager) {
+void SummaryWindow::setHistoryManager(HistoryManager *historyManager)
+{
     m_historyManager = historyManager;
     loadAvailableTags();
 }
 
-void SummaryWindow::loadAvailableTags() {
-    if (!m_historyManager || !m_tagFilterCombo) return;
-    
+void SummaryWindow::loadAvailableTags()
+{
+    if (!m_historyManager || !m_tagFilterCombo)
+        return;
+
     QStringList allTags = m_historyManager->getAllTags();
-    
-    while (m_tagFilterCombo->count() > 1) {
+
+    while (m_tagFilterCombo->count() > 1)
+    {
         m_tagFilterCombo->removeItem(1);
     }
-    
-    for (const QString& tag : allTags) {
+
+    for (const QString &tag : allTags)
+    {
         m_tagFilterCombo->addItem(tag, tag);
     }
 }
 
-void SummaryWindow::applyFilters() {
+void SummaryWindow::applyFilters()
+{
     captureScrollPosition();
     refreshHtml();
 }
 
-QList<TranslationEntry> SummaryWindow::getFilteredEntries() const {
+QList<TranslationEntry> SummaryWindow::getFilteredEntries() const
+{
     QList<TranslationEntry> filtered;
-    
+
     QDate fromDate = m_fromDateEdit ? m_fromDateEdit->date() : QDate();
     QDate toDate = m_toDateEdit ? m_toDateEdit->date() : QDate();
     QString selectedTag = m_tagFilterCombo ? m_tagFilterCombo->currentData().toString() : "";
-    
-    for (const TranslationEntry& entry : m_entries) {
+
+    for (const TranslationEntry &entry : m_entries)
+    {
         QDate entryDate = entry.timestamp.date();
-        if (m_fromDateEdit && entryDate < fromDate) continue;
-        if (m_toDateEdit && entryDate > toDate) continue;
-        
-        if (!selectedTag.isEmpty() && !entry.tags.contains(selectedTag)) continue;
-        
+        if (m_fromDateEdit && entryDate < fromDate)
+            continue;
+        if (m_toDateEdit && entryDate > toDate)
+            continue;
+
+        if (!selectedTag.isEmpty() && !entry.tags.contains(selectedTag))
+            continue;
+
         filtered.append(entry);
     }
 
-    std::sort(filtered.begin(), filtered.end(), [](const TranslationEntry& a, const TranslationEntry& b){
-        return a.timestamp > b.timestamp; // newer first
-    });
-    
+    std::sort(filtered.begin(), filtered.end(), [](const TranslationEntry &a, const TranslationEntry &b)
+              {
+                  return a.timestamp > b.timestamp; // newer first
+              });
+
     return filtered;
 }
 
 // Toggle Selection Mode Logic
-void SummaryWindow::toggleSelectionMode() {
+void SummaryWindow::toggleSelectionMode()
+{
     m_selectionMode = m_selectionModeBtn->isChecked();
-    if (m_batchDeleteAction) m_batchDeleteAction->setVisible(m_selectionMode);
-    if (m_batchAddTagAction) m_batchAddTagAction->setVisible(m_selectionMode);
-    if (m_batchRemoveTagAction) m_batchRemoveTagAction->setVisible(m_selectionMode);
-    if (m_batchSelectAllAction) m_batchSelectAllAction->setVisible(m_selectionMode);
-    
+    if (m_batchDeleteAction)
+        m_batchDeleteAction->setVisible(m_selectionMode);
+    if (m_batchAddTagAction)
+        m_batchAddTagAction->setVisible(m_selectionMode);
+    if (m_batchRemoveTagAction)
+        m_batchRemoveTagAction->setVisible(m_selectionMode);
+    if (m_batchSelectAllAction)
+        m_batchSelectAllAction->setVisible(m_selectionMode);
+
     // Reset Select All state when toggling mode
     m_allSelected = false;
-    if (m_selectAllBtn) {
+    if (m_selectAllBtn)
+    {
         m_selectAllBtn->setText(TranslationManager::instance().tr("btn_select_all"));
     }
 
@@ -1156,11 +1299,13 @@ void SummaryWindow::toggleSelectionMode() {
     m_webView->eval(QString("if(window.toggleSelectionMode) window.toggleSelectionMode(%1);").arg(m_selectionMode ? "true" : "false").toStdString());
 }
 
-void SummaryWindow::onBatchSelectAll() {
+void SummaryWindow::onBatchSelectAll()
+{
     m_allSelected = !m_allSelected;
-    
+
     // Update button text
-    if (m_selectAllBtn) {
+    if (m_selectAllBtn)
+    {
         QString key = m_allSelected ? "btn_deselect_all" : "btn_select_all";
         m_selectAllBtn->setText(TranslationManager::instance().tr(key));
     }
@@ -1170,22 +1315,30 @@ void SummaryWindow::onBatchSelectAll() {
     m_webView->eval(js.toStdString());
 }
 
-void SummaryWindow::onBatchDelete() {
+void SummaryWindow::onBatchDelete()
+{
     m_webView->eval("if(window.getSelectedIds) { let ids = window.getSelectedIds(); if(ids.length > 0) window.cmd_batchDelete(...ids); }");
-    if (m_selectionModeBtn) m_selectionModeBtn->setChecked(false);
+    if (m_selectionModeBtn)
+        m_selectionModeBtn->setChecked(false);
 }
 
-void SummaryWindow::onBatchAddTags() {
+void SummaryWindow::onBatchAddTags()
+{
     m_webView->eval("if(window.getSelectedIds) { let ids = window.getSelectedIds(); if(ids.length > 0) window.cmd_batchAddTags(...ids); }");
-    if (m_selectionModeBtn) m_selectionModeBtn->setChecked(false);
+    if (m_selectionModeBtn)
+        m_selectionModeBtn->setChecked(false);
 }
 
-void SummaryWindow::onBatchRemoveTags() {
+void SummaryWindow::onBatchRemoveTags()
+{
     m_webView->eval("if(window.getSelectedIds) { let ids = window.getSelectedIds(); if(ids.length > 0) window.cmd_batchRemoveTags(...ids); }");
-    if (m_selectionModeBtn) m_selectionModeBtn->setChecked(false);
+    if (m_selectionModeBtn)
+        m_selectionModeBtn->setChecked(false);
 }
-void SummaryWindow::updateTheme(bool isDark) {
-    if (m_webView) {
+void SummaryWindow::updateTheme(bool isDark)
+{
+    if (m_webView)
+    {
         QColor bg = isDark ? QColor(30, 30, 30) : QColor(255, 255, 255);
         m_webView->setBackgroundColor(bg.red(), bg.green(), bg.blue(), 255);
         QString js = QString("if (typeof applyDarkMode === 'function') { applyDarkMode(%1); } else { document.documentElement.classList.toggle('dark-mode', %1); document.body.classList.toggle('dark-mode', %1); }").arg(isDark ? "true" : "false");
@@ -1197,18 +1350,28 @@ void SummaryWindow::updateTheme(bool isDark) {
     QString controlBg = isDark ? "#3a3a3a" : "#ffffff";
     QString border = isDark ? "#555555" : "#cccccc";
 
-    if (m_filterToolbar) m_filterToolbar->setStyleSheet(QString("QToolBar { background:%1; color:%2; } QLabel { color:%2; }").arg(toolbarBg, fg));
+    if (m_filterToolbar)
+        m_filterToolbar->setStyleSheet(QString("QToolBar { background:%1; color:%2; } QLabel { color:%2; }").arg(toolbarBg, fg));
 
     QString btnStyle = QString("color:%1; background:%2; border:1px solid %3;").arg(fg, controlBg, border);
-    if (m_selectionModeBtn) m_selectionModeBtn->setStyleSheet(btnStyle);
-    if (m_batchDeleteBtn) m_batchDeleteBtn->setStyleSheet(btnStyle);
-    if (m_selectAllBtn) m_selectAllBtn->setStyleSheet(btnStyle);
-    if (m_clearFilterBtn) m_clearFilterBtn->setStyleSheet(btnStyle);
-    if (m_batchAddTagBtn) m_batchAddTagBtn->setStyleSheet(btnStyle);
-    if (m_batchRemoveTagBtn) m_batchRemoveTagBtn->setStyleSheet(btnStyle);
+    if (m_selectionModeBtn)
+        m_selectionModeBtn->setStyleSheet(btnStyle);
+    if (m_batchDeleteBtn)
+        m_batchDeleteBtn->setStyleSheet(btnStyle);
+    if (m_selectAllBtn)
+        m_selectAllBtn->setStyleSheet(btnStyle);
+    if (m_clearFilterBtn)
+        m_clearFilterBtn->setStyleSheet(btnStyle);
+    if (m_batchAddTagBtn)
+        m_batchAddTagBtn->setStyleSheet(btnStyle);
+    if (m_batchRemoveTagBtn)
+        m_batchRemoveTagBtn->setStyleSheet(btnStyle);
 
     QString inputStyle = QString("color:%1; background:%2; border:1px solid %3; selection-background-color:%2;").arg(fg, controlBg, border);
-    if (m_tagFilterCombo) m_tagFilterCombo->setStyleSheet(inputStyle);
-    if (m_fromDateEdit) m_fromDateEdit->setStyleSheet(inputStyle);
-    if (m_toDateEdit) m_toDateEdit->setStyleSheet(inputStyle);
+    if (m_tagFilterCombo)
+        m_tagFilterCombo->setStyleSheet(inputStyle);
+    if (m_fromDateEdit)
+        m_fromDateEdit->setStyleSheet(inputStyle);
+    if (m_toDateEdit)
+        m_toDateEdit->setStyleSheet(inputStyle);
 }
