@@ -1,16 +1,19 @@
 #include "EmbedWebView.h"
+
 #include <QDebug>
-#include <QWidget>
 #include <QEvent>
+#include <QPointer>
 #include <QResizeEvent>
+#include <QMetaObject>
+#include <QTimer>
+#include <QWidget>
+#include <QString>
+
 #include <functional>
 
-// Define helper macros to ensure static linkage of webview.h functions
-// and prevent LNK2005
+// Ensure static linkage for webview.h symbols
 #define WEBVIEW_API static
 #include "webview.h"
-
-#include <QTimer>
 
 #ifdef _WIN32
 #include "WebView2.h"
@@ -27,48 +30,53 @@ static HWND findWebViewChild(HWND parent)
         HWND found = nullptr;
     } ctx;
 
-    EnumChildWindows(parent, [](HWND h, LPARAM lParam) -> BOOL
-                     {
-        auto *ctx = reinterpret_cast<Ctx *>(lParam);
-        if (!IsWindowVisible(h) || !IsWindowEnabled(h))
-            return TRUE;
-
-        wchar_t cls[256] = {0};
-        GetClassNameW(h, cls, 255);
-        if (wcsstr(cls, L"Chrome_WidgetWin") != nullptr)
-        {
-            ctx->found = h;
-            return FALSE;
-        }
-        return TRUE; }, (LPARAM)&ctx);
-
-    if (!ctx.found)
+    auto scan = [](HWND p) -> HWND
     {
-        EnumChildWindows(parent, [](HWND h, LPARAM lParam) -> BOOL
+        if (!IsWindow(p))
+            return nullptr;
+
+        struct Ctx
+        {
+            HWND found = nullptr;
+        } ctx;
+
+        EnumChildWindows(p, [](HWND h, LPARAM lParam) -> BOOL
                          {
             auto *ctx = reinterpret_cast<Ctx *>(lParam);
-            if (!IsWindowVisible(h) || !IsWindowEnabled(h))
-                return TRUE;
-            ctx->found = h;
-            return FALSE; }, (LPARAM)&ctx);
+            wchar_t cls[256] = {0};
+            GetClassNameW(h, cls, 255);
+            if (wcsstr(cls, L"Chrome_WidgetWin") != nullptr)
+            {
+                ctx->found = h;
+                return FALSE;
+            }
+            return TRUE; }, (LPARAM)&ctx);
+
+        return ctx.found;
+    };
+
+    HWND found = scan(parent);
+    if (!found)
+    {
+        HWND root = GetAncestor(parent, GA_ROOT);
+        if (root && root != parent)
+            found = scan(root);
     }
-    return ctx.found;
+    return found;
 }
 #endif
 
 class EmbedWebView::Impl : public webview::webview
 {
 public:
-    Impl(void *hwnd) : webview::webview(false, hwnd) {}
+    explicit Impl(void *hwnd) : webview::webview(false, hwnd) {}
 
     bool isReady() const { return is_init(); }
 
     void setVisible(bool visible)
     {
-        if (is_init())
-        {
+        if (is_init() && m_controller)
             m_controller->put_IsVisible(visible ? TRUE : FALSE);
-        }
     }
 
     void resize_controller(int width, int height)
@@ -92,21 +100,23 @@ public:
                  << "DPI:" << dpi << "Scale:" << scale
                  << "Physical:" << physicalWidth << "x" << physicalHeight;
 
-        RECT bounds = {0, 0, physicalWidth, physicalHeight};
+        COREWEBVIEW2_RECT bounds{};
+        bounds.X = 0;
+        bounds.Y = 0;
+        bounds.Width = physicalWidth;
+        bounds.Height = physicalHeight;
         m_controller->put_Bounds(bounds);
     }
 
     void focus()
     {
-        if (is_init())
-        {
+        if (is_init() && m_controller)
             m_controller->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
-        }
     }
 
     void focus_native()
     {
-        if (!is_init())
+        if (!is_init() || !m_controller)
             return;
 
         HWND host = (HWND)m_window;
@@ -128,30 +138,31 @@ public:
 #else
         ::SetFocus(host);
 #endif
-        m_controller->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+
+        // NOTE: MoveFocus(PROGRAMMATIC) 很容易引起 WebView2 内部 focus/blur 抖动。
+        // 这里先仅保留 OS 级 SetFocus 到子窗口，观察是否能消除 window blur。
     }
 
     void setBackgroundColor(int r, int g, int b, int a)
     {
-        if (is_init())
+        if (!is_init() || !m_controller)
+            return;
+
+        ICoreWebView2Controller2 *controller2 = nullptr;
+        HRESULT hr = m_controller->QueryInterface(__uuidof(ICoreWebView2Controller2), (void **)&controller2);
+        if (SUCCEEDED(hr) && controller2)
         {
-            ICoreWebView2Controller2 *controller2 = nullptr;
-            HRESULT hr = m_controller->QueryInterface(__uuidof(ICoreWebView2Controller2), (void **)&controller2);
-            if (SUCCEEDED(hr) && controller2)
-            {
-                COREWEBVIEW2_COLOR color;
-                color.A = a;
-                color.R = r;
-                color.G = g;
-                color.B = b;
-                controller2->put_DefaultBackgroundColor(color);
-                controller2->Release();
-            }
+            COREWEBVIEW2_COLOR color{};
+            color.A = static_cast<BYTE>(a);
+            color.R = static_cast<BYTE>(r);
+            color.G = static_cast<BYTE>(g);
+            color.B = static_cast<BYTE>(b);
+            controller2->put_DefaultBackgroundColor(color);
+            controller2->Release();
         }
     }
 
 #ifdef _WIN32
-private:
     HWND m_webChild = nullptr;
 #endif
 };
@@ -180,9 +191,12 @@ EmbedWebView::EmbedWebView(QWidget *parent) : QObject(parent)
         QPointer<QWidget> p = m_parentWidget;
         connect(m_resizeTimer, &QTimer::timeout, this, [this, p]()
                 {
-            if (!p) return;
-            if (!p->isVisible()) return;
-            if (p->width() <= 0 || p->height() <= 0) return;
+            if (!p)
+                return;
+            if (!p->isVisible())
+                return;
+            if (p->width() <= 0 || p->height() <= 0)
+                return;
             setSize(p->width(), p->height()); });
 
         // Start polling for readiness
@@ -192,8 +206,10 @@ EmbedWebView::EmbedWebView(QWidget *parent) : QObject(parent)
 
         connect(parent, &QObject::destroyed, this, [this]()
                 {
-                    if (m_resizeTimer) m_resizeTimer->stop();
-                    if (m_initTimer) m_initTimer->stop();
+                    if (m_resizeTimer)
+                        m_resizeTimer->stop();
+                    if (m_initTimer)
+                        m_initTimer->stop();
                     m_pendingActions.clear();
                     m_impl.reset();
                     m_isReady = false;
@@ -251,6 +267,49 @@ void EmbedWebView::checkReady()
         }
 
 #ifdef _WIN32
+        // WebView2 focus tracing + auto-refocus fallback.
+        // 用于确认 JS blur 是否对应 WV2 LostFocus，并在丢焦时快速抢回。
+        if (m_impl->m_controller)
+        {
+            EventRegistrationToken gotToken{};
+            EventRegistrationToken lostToken{};
+            QPointer<EmbedWebView> self(this);
+
+            m_impl->m_controller->add_GotFocus(
+                Callback<ICoreWebView2FocusChangedEventHandler>(
+                    [self](ICoreWebView2Controller *, IUnknown *) -> HRESULT
+                    {
+                        if (!self)
+                            return S_OK;
+                        qDebug() << "[WV2] GotFocus";
+                        return S_OK;
+                    })
+                    .Get(),
+                &gotToken);
+
+            m_impl->m_controller->add_LostFocus(
+                Callback<ICoreWebView2FocusChangedEventHandler>(
+                    [self](ICoreWebView2Controller *, IUnknown *) -> HRESULT
+                    {
+                        if (!self)
+                            return S_OK;
+                        qDebug() << "[WV2] LostFocus -> refocus";
+                        QMetaObject::invokeMethod(
+                            self,
+                            [self]()
+                            {
+                                if (!self)
+                                    return;
+                                self->focusNative();
+                                self->eval("(()=>{try{document.body.tabIndex=-1;document.body.focus({preventScroll:true});}catch(e){}})();");
+                            },
+                            Qt::QueuedConnection);
+                        return S_OK;
+                    })
+                    .Get(),
+                &lostToken);
+        }
+
         // Ensure DevTools are enabled and capture F12/Ctrl+Shift+I even when focus is inside WebView
         if (m_impl->m_webview)
         {
@@ -306,8 +365,16 @@ void EmbedWebView::checkReady()
 
 void EmbedWebView::setHtml(const std::string &html)
 {
-    if (!m_impl)
-        return;
+    static int setHtmlCount = 0;
+    QWidget *p = m_parentWidget.data();
+    QWidget *top = p ? p->window() : nullptr;
+    qDebug() << "[Native] setHtml called" << ++setHtmlCount
+             << "EmbedWebView=" << (void *)this
+             << "parentWidget=" << (void *)p
+             << "topWindow=" << (void *)top
+             << (top ? top->windowTitle() : QString("<null>"))
+             << "len=" << static_cast<int>(html.size());
+
     if (m_hasEverSetHtml)
     {
         qWarning() << "[Native] setHtml ignored (already loaded once)" << (void *)this;
@@ -315,6 +382,8 @@ void EmbedWebView::setHtml(const std::string &html)
     }
     m_hasEverSetHtml = true;
 
+    if (!m_impl)
+        return;
     if (!m_isReady)
     {
         m_pendingActions.push_back([this, html]()
@@ -423,7 +492,9 @@ void EmbedWebView::setVisible(bool visible)
     else if (!m_isReady)
     {
         m_pendingActions.push_back([this, visible]()
-                                   { if (m_impl) m_impl->setVisible(visible); });
+                                   {
+            if (m_impl)
+                m_impl->setVisible(visible); });
     }
 }
 
@@ -439,7 +510,6 @@ void EmbedWebView::openDevTools()
             return;
 
         ICoreWebView2 *webview = nullptr;
-        // Prefer cached webview
         if (m_impl->m_webview)
         {
             webview = m_impl->m_webview;
