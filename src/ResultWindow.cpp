@@ -699,7 +699,27 @@ void ResultWindow::focusEditor()
           m_webView->eval("(()=>{try{document.body.tabIndex=-1;document.body.focus({preventScroll:true});}catch(e){}})();"); });
   }
 }
-void ResultWindow::setConfig(const AppConfig &config) { m_config = config; }
+void ResultWindow::setConfig(const AppConfig &config)
+{
+  m_config = config;
+
+  // Apply default lock state from config (used when creating new result windows).
+  if (m_lockAction)
+  {
+    const bool wantLocked = m_config.defaultResultWindowLocked;
+    if (m_lockAction->isChecked() != wantLocked)
+    {
+      m_lockAction->setChecked(wantLocked);
+      toggleLock();
+    }
+    else if (m_isLocked != wantLocked)
+    {
+      // Keep internal state consistent with the action state.
+      toggleLock();
+    }
+  }
+}
+
 ResultWindow::ProtectedContent ResultWindow::protectMath(const QString &m)
 {
   ProtectedContent p;
