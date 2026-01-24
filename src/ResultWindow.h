@@ -10,54 +10,56 @@
 #include <QAction>
 #include <QLabel>
 #include <QList>
+#include <QElapsedTimer>
 #include "TranslationManager.h" // For TranslationEntry struct if defined there, otherwise minimal struct needed here or forward decl
 // Actually TranslationEntry is in HistoryManager.h usually, let's check or define a local struct/use shared.
-// Based on App.cpp, TranslationManager seems to handle strings. HistoryManager handles persistence. 
+// Based on App.cpp, TranslationManager seems to handle strings. HistoryManager handles persistence.
 // TranslationEntry is used in App.cpp line 73. It's likely in HistoryManager.h or a common header.
 // Let's assume it's available or we can use a struct here.
-// Checking App.cpp includes: HistoryManager.h. 
-#include "HistoryManager.h" 
+// Checking App.cpp includes: HistoryManager.h.
+#include "HistoryManager.h"
 #include "ConfigManager.h"
 
 class EmbedWebView;
 
-class ResultWindow : public QWidget {
+class ResultWindow : public QWidget
+{
     Q_OBJECT
 public:
     explicit ResultWindow(QWidget *parent = nullptr);
     ~ResultWindow();
-    
+
     void setContent(const QString &markdown, const QString &originalBase64, const QString &prompt, const QString &entryId = "");
     void externalContentUpdate(const QString &markdown);
-    
+
     // Locked Window Methods
     bool isLocked() const { return m_isLocked; }
-    void addEntry(const TranslationEntry& entry);
+    void addEntry(const TranslationEntry &entry);
     void updateNavigation();
 
     QString entryId() const { return m_entryId; }
     void showLoading();
     void showError(const QString &msg);
-    
-    void configureHotkeys(const QString &viewToggle, const QString &editToggle, 
-                         const QString &screenshotToggle, const QString &boldKey,
-                         const QString &underlineKey, const QString &highlightKey,
-                         const QString &prevKey, const QString &nextKey,
-                         const QString &tagKey);
-    
-    void setHistoryManager(class HistoryManager* historyManager);
 
-    void setConfig(const AppConfig& config);
+    void configureHotkeys(const QString &viewToggle, const QString &editToggle,
+                          const QString &screenshotToggle, const QString &boldKey,
+                          const QString &underlineKey, const QString &highlightKey,
+                          const QString &prevKey, const QString &nextKey,
+                          const QString &tagKey);
+
+    void setHistoryManager(class HistoryManager *historyManager);
+
+    void setConfig(const AppConfig &config);
     void focusEditor(); // Restore focus to WebView
     void updateTheme(bool isDark);
 
 signals:
     void closed();
     void retranslateRequested();
-    void screenshotRequested(const QString &entryId, const QString &base64); // New signal
-    void contentUpdated(const QString &newMarkdown); // Legacy Signal
+    void screenshotRequested(const QString &entryId, const QString &base64);  // New signal
+    void contentUpdated(const QString &newMarkdown);                          // Legacy Signal
     void contentUpdatedWithId(const QString &id, const QString &newMarkdown); // Signal for persistence with ID
-    void tagsUpdated(const QString &id, const QStringList &tags); // Signal for tag updates
+    void tagsUpdated(const QString &id, const QStringList &tags);             // Signal for tag updates
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -73,7 +75,7 @@ private slots:
 private:
     std::unique_ptr<EmbedWebView> m_webView;
     QWidget *m_webContainer;
-    
+
     // UI Elements
     // UI Elements
     QToolBar *m_toolBar = nullptr;
@@ -92,7 +94,7 @@ private:
     QString m_originalPrompt;
     QString m_entryId;
     AppConfig m_config;
-    
+
     // Hotkey configuration
     // State for async retrieval
     QString m_currentMarkdown;
@@ -110,22 +112,27 @@ private:
     QString m_tagKey;
 
     // Tag management
-    class HistoryManager* m_historyManager = nullptr;
+    class HistoryManager *m_historyManager = nullptr;
     QStringList m_currentTags;
 
     QString loadTemplate();
-    
-    struct ProtectedContent {
+
+    struct ProtectedContent
+    {
         QString text;
         QStringList mathBlocks;
     };
-    
+
     ProtectedContent protectMath(const QString &markdown);
-    
+
     // New Members
-    QList<QShortcut*> m_navShortcuts;
+    QList<QShortcut *> m_navShortcuts;
     void updateShortcuts();
     bool m_isFirstLoad = true;
+    bool m_focusPending = false;
+    QElapsedTimer m_lastFocus;
+    void requestFocusToWeb(bool allowActivate = false);
+    bool m_htmlLoaded = false;
 };
 
 #endif // RESULTWINDOW_H
