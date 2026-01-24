@@ -20,15 +20,26 @@
 #include <wrl.h>
 using Microsoft::WRL::Callback;
 
+static int parseChromeWidgetSuffix(const wchar_t *cls)
+{
+    if (!cls)
+        return -1;
+    const wchar_t *underscore = wcsrchr(cls, L'_');
+    if (!underscore || !underscore[1])
+        return -1;
+    wchar_t *end = nullptr;
+    long v = wcstol(underscore + 1, &end, 10);
+    if (end == underscore + 1)
+        return -1;
+    if (v < 0 || v > 100000)
+        return -1;
+    return static_cast<int>(v);
+}
+
 static HWND findWebViewChild(HWND parent)
 {
     if (!IsWindow(parent))
         return nullptr;
-
-    struct Ctx
-    {
-        HWND found = nullptr;
-    } ctx;
 
     auto scan = [](HWND p) -> HWND
     {
@@ -37,7 +48,8 @@ static HWND findWebViewChild(HWND parent)
 
         struct Ctx
         {
-            HWND found = nullptr;
+            HWND best = nullptr;
+            int bestScore = -1;
         } ctx;
 
         EnumChildWindows(p, [](HWND h, LPARAM lParam) -> BOOL
@@ -45,14 +57,28 @@ static HWND findWebViewChild(HWND parent)
             auto *ctx = reinterpret_cast<Ctx *>(lParam);
             wchar_t cls[256] = {0};
             GetClassNameW(h, cls, 255);
-            if (wcsstr(cls, L"Chrome_WidgetWin") != nullptr)
+            if (wcsstr(cls, L"Chrome_WidgetWin") == nullptr)
+                return TRUE;
+
+            // Prefer a window that looks like the actual input target.
+            // Score: visible + enabled + higher suffix wins.
+            int score = 0;
+            if (IsWindowVisible(h))
+                score += 1000;
+            if (IsWindowEnabled(h))
+                score += 100;
+            int suffix = parseChromeWidgetSuffix(cls);
+            if (suffix >= 0)
+                score += suffix;
+
+            if (score >= ctx->bestScore)
             {
-                ctx->found = h;
-                return FALSE;
+                ctx->bestScore = score;
+                ctx->best = h;
             }
             return TRUE; }, (LPARAM)&ctx);
 
-        return ctx.found;
+        return ctx.best;
     };
 
     HWND found = scan(parent);
@@ -100,11 +126,11 @@ public:
                  << "DPI:" << dpi << "Scale:" << scale
                  << "Physical:" << physicalWidth << "x" << physicalHeight;
 
-        COREWEBVIEW2_RECT bounds{};
-        bounds.X = 0;
-        bounds.Y = 0;
-        bounds.Width = physicalWidth;
-        bounds.Height = physicalHeight;
+        RECT bounds{};
+        bounds.left = 0;
+        bounds.top = 0;
+        bounds.right = physicalWidth;
+        bounds.bottom = physicalHeight;
         m_controller->put_Bounds(bounds);
     }
 
@@ -124,6 +150,20 @@ public:
             return;
 
 #ifdef _WIN32
+        // If focus is already inside this WebView's Chrome widget subtree, do not interrupt it.
+        // Repeated SetFocus can cause WV2 to emit internal focus/blur transitions.
+        HWND root = GetAncestor(host, GA_ROOT);
+        HWND f = ::GetFocus();
+        if (f)
+        {
+            wchar_t fcls[256] = {0};
+            ::GetClassNameW(f, fcls, 255);
+            bool isChrome = (wcsstr(fcls, L"Chrome_WidgetWin") != nullptr);
+            bool inTree = ::IsChild(host, f) || (root && ::IsChild(root, f));
+            if (isChrome && inTree)
+                return;
+        }
+
         if (!m_webChild || !IsWindow(m_webChild))
         {
             m_webChild = findWebViewChild(host);
@@ -282,6 +322,7 @@ void EmbedWebView::checkReady()
                         if (!self)
                             return S_OK;
                         qDebug() << "[WV2] GotFocus";
+                        self->m_wv2RefocusPending = false;
                         return S_OK;
                     })
                     .Get(),
@@ -293,17 +334,11 @@ void EmbedWebView::checkReady()
                     {
                         if (!self)
                             return S_OK;
-                        qDebug() << "[WV2] LostFocus -> refocus";
-                        QMetaObject::invokeMethod(
-                            self,
-                            [self]()
-                            {
-                                if (!self)
-                                    return;
-                                self->focusNative();
-                                self->eval("(()=>{try{document.body.tabIndex=-1;document.body.focus({preventScroll:true});}catch(e){}})();");
-                            },
-                            Qt::QueuedConnection);
+                        qDebug() << "[WV2] LostFocus";
+
+                        // IMPORTANT: do not auto-refocus here.
+                        // WebView2 may emit internal focus transitions during navigation/resize/show.
+                        // Forcing SetFocus in this callback can amplify into a GotFocus/LostFocus loop.
                         return S_OK;
                     })
                     .Get(),
