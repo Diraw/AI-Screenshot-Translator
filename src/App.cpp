@@ -355,6 +355,38 @@ void App::showResult(const QString &entryId)
 
     AppConfig cfg = m_configManager.getConfig();
 
+    // If there are locked ResultWindows, reuse them instead of creating a new one.
+    // Multiple locked windows should stay in sync by receiving the same new entry.
+    QList<ResultWindow *> lockedWindows;
+    for (auto w : m_activeWindows)
+    {
+        ResultWindow *rw = qobject_cast<ResultWindow *>(w.data());
+        if (rw && rw->isLocked())
+        {
+            lockedWindows.append(rw);
+        }
+    }
+
+    if (!lockedWindows.isEmpty())
+    {
+        for (ResultWindow *rw : lockedWindows)
+        {
+            if (!rw)
+                continue;
+
+            AppConfig cfgForLocked = cfg;
+            cfgForLocked.defaultResultWindowLocked = rw->isLocked();
+            rw->setConfig(cfgForLocked);
+            rw->configureHotkeys(cfg.viewToggleHotkey, cfg.editHotkey, cfg.screenshotToggleHotkey,
+                                 cfg.boldHotkey, cfg.underlineHotkey, cfg.highlightHotkey,
+                                 cfg.prevResultShortcut, cfg.nextResultShortcut,
+                                 cfg.tagHotkey);
+            rw->setHistoryManager(&m_historyManager);
+            rw->addEntry(entry);
+        }
+        return;
+    }
+
     ResultWindow *window = new ResultWindow();
 
     // Determine initial lock state
@@ -387,6 +419,7 @@ void App::showResult(const QString &entryId)
 
     connect(window, &ResultWindow::closed, this, [this, window]()
             {
+         m_activeWindows.removeAll(window);
          bool wasLocked = window->isLocked();
          bool otherLocked = false;
          for(auto w : m_activeWindows) {
