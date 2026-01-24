@@ -35,6 +35,42 @@ static QString normalizeCssColor(const QString &input, const QString &fallback)
     if (s.isEmpty())
         s = fallback;
 
+    auto clamp255 = [](int v)
+    { return std::max(0, std::min(255, v)); };
+    auto normalizeAlpha01 = [](double a)
+    {
+        if (a <= 1.0)
+            return std::max(0.0, std::min(1.0, a));
+        if (a <= 255.0)
+            return std::max(0.0, std::min(1.0, a / 255.0));
+        return 1.0;
+    };
+
+    // Accept rgba(r,g,b,a) where a is 0..1 or 0..255
+    {
+        QRegularExpression re(
+            "^rgba\\(\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})\\s*,\\s*([0-9]*\\.?[0-9]+)\\s*\\)$",
+            QRegularExpression::CaseInsensitiveOption);
+        auto m = re.match(s);
+        if (m.hasMatch())
+        {
+            bool ok1 = false, ok2 = false, ok3 = false, ok4 = false;
+            int r = m.captured(1).toInt(&ok1);
+            int g = m.captured(2).toInt(&ok2);
+            int b = m.captured(3).toInt(&ok3);
+            double a = m.captured(4).toDouble(&ok4);
+            if (ok1 && ok2 && ok3 && ok4 && r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255)
+            {
+                const double a01 = normalizeAlpha01(a);
+                return QString("rgba(%1,%2,%3,%4)")
+                    .arg(r)
+                    .arg(g)
+                    .arg(b)
+                    .arg(a01, 0, 'f', 3);
+            }
+        }
+    }
+
     {
         QRegularExpression re(
             "^rgb\\(\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})\\s*\\)$",
@@ -61,6 +97,81 @@ static QString normalizeCssColor(const QString &input, const QString &fallback)
             int b = parts[2].trimmed().toInt(&ok3);
             if (ok1 && ok2 && ok3 && r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255)
                 return QString("rgb(%1,%2,%3)").arg(r).arg(g).arg(b);
+        }
+
+        if (parts.size() == 4)
+        {
+            bool ok1 = false, ok2 = false, ok3 = false, ok4 = false;
+            int r = parts[0].trimmed().toInt(&ok1);
+            int g = parts[1].trimmed().toInt(&ok2);
+            int b = parts[2].trimmed().toInt(&ok3);
+            double a = parts[3].trimmed().toDouble(&ok4);
+            if (ok1 && ok2 && ok3 && ok4 && r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255)
+            {
+                const double a01 = normalizeAlpha01(a);
+                return QString("rgba(%1,%2,%3,%4)")
+                    .arg(r)
+                    .arg(g)
+                    .arg(b)
+                    .arg(a01, 0, 'f', 3);
+            }
+        }
+    }
+
+    // Accept #RGBA / #RRGGBBAA (normalize to rgba for broad compatibility)
+    {
+        QRegularExpression re4("^#([0-9a-f]{4})$", QRegularExpression::CaseInsensitiveOption);
+        auto m = re4.match(s);
+        if (m.hasMatch())
+        {
+            const QString hex = m.captured(1);
+            bool ok = false;
+            const int r = QString(hex[0]).repeated(2).toInt(&ok, 16);
+            if (!ok)
+                return fallback;
+            const int g = QString(hex[1]).repeated(2).toInt(&ok, 16);
+            if (!ok)
+                return fallback;
+            const int b = QString(hex[2]).repeated(2).toInt(&ok, 16);
+            if (!ok)
+                return fallback;
+            const int a255 = QString(hex[3]).repeated(2).toInt(&ok, 16);
+            if (!ok)
+                return fallback;
+            const double a01 = normalizeAlpha01((double)clamp255(a255));
+            return QString("rgba(%1,%2,%3,%4)")
+                .arg(clamp255(r))
+                .arg(clamp255(g))
+                .arg(clamp255(b))
+                .arg(a01, 0, 'f', 3);
+        }
+    }
+
+    {
+        QRegularExpression re8("^#([0-9a-f]{8})$", QRegularExpression::CaseInsensitiveOption);
+        auto m = re8.match(s);
+        if (m.hasMatch())
+        {
+            const QString hex = m.captured(1);
+            bool ok = false;
+            const int r = hex.mid(0, 2).toInt(&ok, 16);
+            if (!ok)
+                return fallback;
+            const int g = hex.mid(2, 2).toInt(&ok, 16);
+            if (!ok)
+                return fallback;
+            const int b = hex.mid(4, 2).toInt(&ok, 16);
+            if (!ok)
+                return fallback;
+            const int a255 = hex.mid(6, 2).toInt(&ok, 16);
+            if (!ok)
+                return fallback;
+            const double a01 = normalizeAlpha01((double)clamp255(a255));
+            return QString("rgba(%1,%2,%3,%4)")
+                .arg(clamp255(r))
+                .arg(clamp255(g))
+                .arg(clamp255(b))
+                .arg(a01, 0, 'f', 3);
         }
     }
 
