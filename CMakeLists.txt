@@ -18,7 +18,15 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Network Gui Core Concurrent)
 set(PROJECT_SOURCES
     src/main.cpp
     src/App.cpp
+    src/App_Tray.cpp
+    src/App_Screenshot.cpp
+    src/App_Api.cpp
+    src/App_Windows.cpp
+    src/App_Config.cpp
+    src/App_Theme.cpp
     src/App.h
+    src/ColorUtils.cpp
+    src/ColorUtils.h
     src/WinKeyForwarder.cpp
     src/WinKeyForwarder.h
     src/ConfigManager.cpp
@@ -30,18 +38,33 @@ set(PROJECT_SOURCES
     src/PreviewCard.cpp
     src/PreviewCard.h
     src/ResultWindow.cpp
+    src/ResultWindow_Html.cpp
+    src/ResultWindow_StateHotkeys.cpp
+    src/ResultWindow_Theme.cpp
     src/ResultWindow.h
     src/ConfigDialog.cpp
+    src/ConfigDialog_Ui.cpp
+    src/ConfigDialog_Profiles.cpp
+    src/ConfigDialog_Config.cpp
     src/ConfigDialog.h
     src/ApiClient.cpp
     src/ApiClient.h
     src/SummaryWindow.cpp
+    src/SummaryWindow_Entries.cpp
+    src/SummaryWindow_StateHotkeys.cpp
+    src/SummaryWindow_Html.cpp
+    src/SummaryWindow_Filters.cpp
     src/SummaryWindow.h
     src/TagDialog.h
     src/TagDialog.cpp
     src/HistoryManager.cpp
+    src/HistoryManager_Paths.cpp
+    src/HistoryManager_Entries.cpp
+    src/HistoryManager_Tags.cpp
+    src/HistoryManager_Watcher.cpp
     src/HistoryManager.h
     src/EmbedWebView.cpp
+    src/EmbedWebView_Actions.cpp
     assets.qrc
 )
 

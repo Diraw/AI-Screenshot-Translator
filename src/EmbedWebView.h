@@ -60,4 +60,16 @@ private:
     // WebView2 LostFocus 时的兜底抢回（需要节流，避免陷入 GotFocus/LostFocus 回环）
     QElapsedTimer m_lastWv2Refocus;
     bool m_wv2RefocusPending = false;
+
+    // Impl wrappers (implemented in EmbedWebView.cpp where Impl is complete)
+    void implSetHtml(const std::string &html);
+    void implEval(const std::string &js);
+    void implResolve(const std::string &seq, int status, const std::string &result);
+    void implSetSize(int width, int height);
+    void implFocus();
+    void implFocusNative();
+    void implSetBackgroundColor(int r, int g, int b, int a);
+    void implBind(const std::string &name, BindCallback fn);
+    void implSetVisible(bool visible);
+    void implOpenDevTools();
 };

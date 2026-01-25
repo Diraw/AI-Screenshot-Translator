@@ -47,6 +47,8 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}
 ; 卸载时清理用户数据目录
 Type: filesandordirs; Name: "{userappdata}\AI_Screenshot_Translator-Cpp"
 Type: filesandordirs; Name: "{app}\storage"
+Type: filesandordirs; Name: "{app}\wkf.log"
+Type: filesandordirs; Name: "{app}\debug.log"
 Type: filesandordirs; Name: "{app}\imageformats"
 Type: filesandordirs; Name: "{app}\platforms"
 Type: filesandordirs; Name: "{app}\styles"
