@@ -72,6 +72,8 @@ private:
 
     // Filter UI
     QToolBar *m_filterToolbar = nullptr;
+    QWidget *m_filtersGroup = nullptr;
+    QWidget *m_actionsGroup = nullptr;
     QDateEdit *m_fromDateEdit = nullptr;
     QDateEdit *m_toDateEdit = nullptr;
     QComboBox *m_tagFilterCombo = nullptr;

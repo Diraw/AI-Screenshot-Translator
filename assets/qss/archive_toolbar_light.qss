@@ -1,0 +1,116 @@
+QToolBar#archiveFilterToolbar {
+  background: #f6f7f9;
+  border: none;
+  padding: 1px 3px;
+}
+
+QWidget#archiveFiltersGroup,
+QWidget#archiveActionsGroup {
+  background: transparent;
+  border: none;
+  border-radius: 0px;
+}
+
+QToolBar#archiveFilterToolbar QLabel[role="caption"] {
+  color: #64748b;
+  padding: 0 1px;
+}
+
+QWidget#archiveFiltersGroup QDateEdit,
+QWidget#archiveFiltersGroup QComboBox {
+  color: #0f172a;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0px;
+  padding: 1px 6px;
+  min-height: 20px;
+}
+
+QWidget#archiveFiltersGroup QDateEdit:hover,
+QWidget#archiveFiltersGroup QComboBox:hover {
+  background: #eef2f7;
+  border-color: #94a3b8;
+}
+
+QWidget#archiveFiltersGroup QDateEdit:focus,
+QWidget#archiveFiltersGroup QComboBox:focus {
+  background: #e2e8f0;
+  border: 1px solid #2563eb;
+}
+
+QWidget#archiveFiltersGroup QComboBox::drop-down,
+QWidget#archiveFiltersGroup QDateEdit::drop-down {
+  border: none;
+  width: 16px;
+}
+
+QToolBar#archiveFilterToolbar QPushButton {
+  color: #0f172a;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0px;
+  padding: 1px 8px;
+  min-height: 20px;
+}
+
+QToolBar#archiveFilterToolbar QPushButton:hover {
+  background: #e2e8f0;
+}
+
+QToolBar#archiveFilterToolbar QPushButton:pressed {
+  background: #e2e8f0;
+}
+
+QToolBar#archiveFilterToolbar QPushButton:disabled {
+  color: #9aa4b2;
+  background: transparent;
+  border-color: #eef2f7;
+}
+
+QToolBar#archiveFilterToolbar QPushButton:checked {
+  background: #dbeafe;
+  border: 1px solid #2563eb;
+}
+
+QToolBar#archiveFilterToolbar QPushButton[variant="danger"] {
+  color: #dc2626;
+}
+
+QToolBar#archiveFilterToolbar QPushButton[variant="danger"]:hover {
+  background: #fecaca;
+  border-color: #ef4444;
+}
+
+QToolBar#archiveFilterToolbar QPushButton[variant="danger"]:pressed {
+  background: #fca5a5;
+}
+
+/* ComboBox popup: make hovered option more obvious */
+QWidget#archiveFiltersGroup QComboBox QAbstractItemView {
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  outline: 0;
+  selection-background-color: #dbeafe;
+  selection-color: #0f172a;
+}
+
+QWidget#archiveFiltersGroup QComboBox QAbstractItemView::item {
+  padding: 6px 10px;
+}
+
+QWidget#archiveFiltersGroup QComboBox QAbstractItemView::item:hover {
+  background: #bfdbfe;
+}
+
+QWidget#archiveFiltersGroup QComboBox QAbstractItemView::item:selected {
+  background: #93c5fd;
+}
+
+/* Tooltip (if any) */
+QToolTip {
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  padding: 4px 6px;
+}

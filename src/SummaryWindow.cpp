@@ -1,4 +1,6 @@
 #include "SummaryWindow.h"
+#include <QHBoxLayout>
+#include <QFrame>
 #include <QVBoxLayout>
 #include <QLabel>
 #include <QCloseEvent>
@@ -33,7 +35,7 @@ static QString normalizeCssColor(const QString &input, const QString &fallback)
 {
     QString s = input.trimmed();
     if (s.isEmpty())
-        s = fallback;
+        return fallback;
 
     auto clamp255 = [](int v)
     { return std::max(0, std::min(255, v)); };
@@ -46,7 +48,7 @@ static QString normalizeCssColor(const QString &input, const QString &fallback)
         return 1.0;
     };
 
-    // Accept rgba(r,g,b,a) where a is 0..1 or 0..255
+    // rgba(r,g,b,a) where a is 0..1 or 0..255
     {
         QRegularExpression re(
             "^rgba\\(\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})\\s*,\\s*([0-9]*\\.?[0-9]+)\\s*\\)$",
@@ -59,18 +61,18 @@ static QString normalizeCssColor(const QString &input, const QString &fallback)
             int g = m.captured(2).toInt(&ok2);
             int b = m.captured(3).toInt(&ok3);
             double a = m.captured(4).toDouble(&ok4);
-            if (ok1 && ok2 && ok3 && ok4 && r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255)
-            {
-                const double a01 = normalizeAlpha01(a);
-                return QString("rgba(%1,%2,%3,%4)")
-                    .arg(r)
-                    .arg(g)
-                    .arg(b)
-                    .arg(a01, 0, 'f', 3);
-            }
+            if (!(ok1 && ok2 && ok3 && ok4))
+                return fallback;
+            const double a01 = normalizeAlpha01(a);
+            return QString("rgba(%1,%2,%3,%4)")
+                .arg(clamp255(r))
+                .arg(clamp255(g))
+                .arg(clamp255(b))
+                .arg(a01, 0, 'f', 3);
         }
     }
 
+    // rgb(r,g,b)
     {
         QRegularExpression re(
             "^rgb\\(\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})\\s*\\)$",
@@ -82,74 +84,26 @@ static QString normalizeCssColor(const QString &input, const QString &fallback)
             int r = m.captured(1).toInt(&ok1);
             int g = m.captured(2).toInt(&ok2);
             int b = m.captured(3).toInt(&ok3);
-            if (ok1 && ok2 && ok3 && r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255)
-                return QString("rgb(%1,%2,%3)").arg(r).arg(g).arg(b);
-        }
-    }
-
-    {
-        QStringList parts = s.split(',', Qt::SkipEmptyParts);
-        if (parts.size() == 3)
-        {
-            bool ok1 = false, ok2 = false, ok3 = false;
-            int r = parts[0].trimmed().toInt(&ok1);
-            int g = parts[1].trimmed().toInt(&ok2);
-            int b = parts[2].trimmed().toInt(&ok3);
-            if (ok1 && ok2 && ok3 && r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255)
-                return QString("rgb(%1,%2,%3)").arg(r).arg(g).arg(b);
-        }
-
-        if (parts.size() == 4)
-        {
-            bool ok1 = false, ok2 = false, ok3 = false, ok4 = false;
-            int r = parts[0].trimmed().toInt(&ok1);
-            int g = parts[1].trimmed().toInt(&ok2);
-            int b = parts[2].trimmed().toInt(&ok3);
-            double a = parts[3].trimmed().toDouble(&ok4);
-            if (ok1 && ok2 && ok3 && ok4 && r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255)
-            {
-                const double a01 = normalizeAlpha01(a);
-                return QString("rgba(%1,%2,%3,%4)")
-                    .arg(r)
-                    .arg(g)
-                    .arg(b)
-                    .arg(a01, 0, 'f', 3);
-            }
-        }
-    }
-
-    // Accept #RGBA / #RRGGBBAA (normalize to rgba for broad compatibility)
-    {
-        QRegularExpression re4("^#([0-9a-f]{4})$", QRegularExpression::CaseInsensitiveOption);
-        auto m = re4.match(s);
-        if (m.hasMatch())
-        {
-            const QString hex = m.captured(1);
-            bool ok = false;
-            const int r = QString(hex[0]).repeated(2).toInt(&ok, 16);
-            if (!ok)
+            if (!(ok1 && ok2 && ok3))
                 return fallback;
-            const int g = QString(hex[1]).repeated(2).toInt(&ok, 16);
-            if (!ok)
-                return fallback;
-            const int b = QString(hex[2]).repeated(2).toInt(&ok, 16);
-            if (!ok)
-                return fallback;
-            const int a255 = QString(hex[3]).repeated(2).toInt(&ok, 16);
-            if (!ok)
-                return fallback;
-            const double a01 = normalizeAlpha01((double)clamp255(a255));
-            return QString("rgba(%1,%2,%3,%4)")
+            return QString("rgb(%1,%2,%3)")
                 .arg(clamp255(r))
                 .arg(clamp255(g))
-                .arg(clamp255(b))
-                .arg(a01, 0, 'f', 3);
+                .arg(clamp255(b));
         }
     }
 
+    // #RGB or #RRGGBB
     {
-        QRegularExpression re8("^#([0-9a-f]{8})$", QRegularExpression::CaseInsensitiveOption);
-        auto m = re8.match(s);
+        QRegularExpression re("^#([0-9a-f]{3}|[0-9a-f]{6})$", QRegularExpression::CaseInsensitiveOption);
+        if (re.match(s).hasMatch())
+            return s;
+    }
+
+    // #RRGGBBAA
+    {
+        QRegularExpression re("^#([0-9a-f]{8})$", QRegularExpression::CaseInsensitiveOption);
+        auto m = re.match(s);
         if (m.hasMatch())
         {
             const QString hex = m.captured(1);
@@ -173,12 +127,6 @@ static QString normalizeCssColor(const QString &input, const QString &fallback)
                 .arg(clamp255(b))
                 .arg(a01, 0, 'f', 3);
         }
-    }
-
-    {
-        QRegularExpression re("^#([0-9a-f]{3}|[0-9a-f]{6})$", QRegularExpression::CaseInsensitiveOption);
-        if (re.match(s).hasMatch())
-            return s;
     }
 
     return fallback;
@@ -1321,71 +1269,135 @@ void SummaryWindow::appendEntryHtml(const TranslationEntry &entry)
 void SummaryWindow::setupFilterUI()
 {
     m_filterToolbar = new QToolBar(this);
+    m_filterToolbar->setObjectName("archiveFilterToolbar");
     m_filterToolbar->setAttribute(Qt::WA_StyledBackground, true);
     m_filterToolbar->setAutoFillBackground(true);
+    m_filterToolbar->setMovable(false);
+    m_filterToolbar->setFloatable(false);
+    m_filterToolbar->setContextMenuPolicy(Qt::PreventContextMenu);
+    m_filterToolbar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     // Dark style to match application and prevent white flash
     // Style will be set by updateTheme
 
-    m_filterToolbar->addWidget(new QLabel(TranslationManager::instance().tr("filter_from_date") + ": ", this));
+    const int controlHeight = 22;
+    const int dateWidth = 128;
+
+    // Left group: filters
+    m_filtersGroup = new QWidget(this);
+    m_filtersGroup->setObjectName("archiveFiltersGroup");
+    // Keep filters compact so the right-side batch actions don't get pushed into the overflow.
+    m_filtersGroup->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+    QHBoxLayout *filtersLayout = new QHBoxLayout(m_filtersGroup);
+    filtersLayout->setContentsMargins(3, 0, 3, 0);
+    filtersLayout->setSpacing(3);
+
+    QLabel *fromLabel = new QLabel(TranslationManager::instance().tr("filter_from_date") + ":", this);
+    fromLabel->setProperty("role", "caption");
+    filtersLayout->addWidget(fromLabel);
+
     m_fromDateEdit = new QDateEdit(this);
+    m_fromDateEdit->setObjectName("fromDateEdit");
     m_fromDateEdit->setCalendarPopup(true);
     m_fromDateEdit->setDate(QDate::currentDate().addMonths(-1));
     m_fromDateEdit->setDisplayFormat("yyyy-MM-dd");
-    m_filterToolbar->addWidget(m_fromDateEdit);
+    m_fromDateEdit->setFixedHeight(controlHeight);
+    m_fromDateEdit->setFixedWidth(dateWidth);
+    filtersLayout->addWidget(m_fromDateEdit);
 
-    m_filterToolbar->addSeparator();
+    QLabel *toLabel = new QLabel(TranslationManager::instance().tr("filter_to_date") + ":", this);
+    toLabel->setProperty("role", "caption");
+    filtersLayout->addWidget(toLabel);
 
-    m_filterToolbar->addWidget(new QLabel(TranslationManager::instance().tr("filter_to_date") + ": ", this));
     m_toDateEdit = new QDateEdit(this);
+    m_toDateEdit->setObjectName("toDateEdit");
     m_toDateEdit->setCalendarPopup(true);
     m_toDateEdit->setDate(QDate::currentDate());
     m_toDateEdit->setDisplayFormat("yyyy-MM-dd");
-    m_filterToolbar->addWidget(m_toDateEdit);
+    m_toDateEdit->setFixedHeight(controlHeight);
+    m_toDateEdit->setFixedWidth(dateWidth);
+    filtersLayout->addWidget(m_toDateEdit);
 
-    m_filterToolbar->addSeparator();
+    QLabel *tagLabel = new QLabel(TranslationManager::instance().tr("filter_tags") + ":", this);
+    tagLabel->setProperty("role", "caption");
+    filtersLayout->addWidget(tagLabel);
 
-    m_filterToolbar->addWidget(new QLabel(TranslationManager::instance().tr("filter_tags") + ": ", this));
     m_tagFilterCombo = new QComboBox(this);
+    m_tagFilterCombo->setObjectName("tagFilterCombo");
     m_tagFilterCombo->setEditable(false);
     m_tagFilterCombo->addItem(TranslationManager::instance().tr("filter_all_tags"), "");
-    m_filterToolbar->addWidget(m_tagFilterCombo);
-
-    m_filterToolbar->addSeparator();
+    m_tagFilterCombo->setFixedHeight(controlHeight);
+    m_tagFilterCombo->setFixedWidth(96);
+    m_tagFilterCombo->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    filtersLayout->addWidget(m_tagFilterCombo);
 
     m_clearFilterBtn = new QPushButton(TranslationManager::instance().tr("filter_clear"), this);
-    m_filterToolbar->addWidget(m_clearFilterBtn);
+    m_clearFilterBtn->setObjectName("clearFilterBtn");
+    m_clearFilterBtn->setProperty("variant", "ghost");
+    m_clearFilterBtn->setFixedHeight(controlHeight);
+    filtersLayout->addWidget(m_clearFilterBtn);
 
-    m_filterToolbar->addSeparator();
+    m_filterToolbar->addWidget(m_filtersGroup);
+
+    // Push batch actions to the right
+    QWidget *spacer = new QWidget(this);
+    spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    m_filterToolbar->addWidget(spacer);
+
+    // Right group: batch actions
+    m_actionsGroup = new QWidget(this);
+    m_actionsGroup->setObjectName("archiveActionsGroup");
+    m_actionsGroup->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+    QHBoxLayout *actionsLayout = new QHBoxLayout(m_actionsGroup);
+    actionsLayout->setContentsMargins(3, 0, 3, 0);
+    actionsLayout->setSpacing(2);
 
     m_selectionModeBtn = new QPushButton(TranslationManager::instance().tr("btn_selection_mode"), this);
+    m_selectionModeBtn->setObjectName("selectionModeBtn");
     m_selectionModeBtn->setCheckable(true);
-    // Fix dark mode text visibility issues
-    // Style will be set by updateTheme
-
+    m_selectionModeBtn->setProperty("variant", "toggle");
+    m_selectionModeBtn->setFixedHeight(controlHeight);
     connect(m_selectionModeBtn, &QPushButton::toggled, this, &SummaryWindow::toggleSelectionMode);
-    m_filterToolbar->addWidget(m_selectionModeBtn);
+    actionsLayout->addWidget(m_selectionModeBtn);
 
     m_selectAllBtn = new QPushButton(TranslationManager::instance().tr("btn_select_all"), this);
+    m_selectAllBtn->setObjectName("selectAllBtn");
+    m_selectAllBtn->setProperty("variant", "ghost");
+    m_selectAllBtn->setFixedHeight(controlHeight);
     connect(m_selectAllBtn, &QPushButton::clicked, this, &SummaryWindow::onBatchSelectAll);
-    m_batchSelectAllAction = m_filterToolbar->addWidget(m_selectAllBtn);
-    m_batchSelectAllAction->setVisible(false);
+    actionsLayout->addWidget(m_selectAllBtn);
+    m_selectAllBtn->setVisible(false);
 
     m_batchDeleteBtn = new QPushButton(TranslationManager::instance().tr("btn_batch_delete"), this);
-    // Red color for delete - special case, handled in updateTheme or kept here if constant?
-    // Let's move to updateTheme to ensure contrast.
+    m_batchDeleteBtn->setObjectName("batchDeleteBtn");
+    m_batchDeleteBtn->setProperty("variant", "danger");
+    m_batchDeleteBtn->setFixedHeight(controlHeight);
     connect(m_batchDeleteBtn, &QPushButton::clicked, this, &SummaryWindow::onBatchDelete);
-    m_batchDeleteAction = m_filterToolbar->addWidget(m_batchDeleteBtn);
-    m_batchDeleteAction->setVisible(false);
+    actionsLayout->addWidget(m_batchDeleteBtn);
+    m_batchDeleteBtn->setVisible(false);
 
     m_batchAddTagBtn = new QPushButton(TranslationManager::instance().tr("btn_batch_add_tag"), this);
+    m_batchAddTagBtn->setObjectName("batchAddTagBtn");
+    m_batchAddTagBtn->setProperty("variant", "ghost");
+    m_batchAddTagBtn->setFixedHeight(controlHeight);
     connect(m_batchAddTagBtn, &QPushButton::clicked, this, &SummaryWindow::onBatchAddTags);
-    m_batchAddTagAction = m_filterToolbar->addWidget(m_batchAddTagBtn);
-    m_batchAddTagAction->setVisible(false);
+    actionsLayout->addWidget(m_batchAddTagBtn);
+    m_batchAddTagBtn->setVisible(false);
 
     m_batchRemoveTagBtn = new QPushButton(TranslationManager::instance().tr("btn_batch_remove_tag"), this);
+    m_batchRemoveTagBtn->setObjectName("batchRemoveTagBtn");
+    m_batchRemoveTagBtn->setProperty("variant", "ghost");
+    m_batchRemoveTagBtn->setFixedHeight(controlHeight);
     connect(m_batchRemoveTagBtn, &QPushButton::clicked, this, &SummaryWindow::onBatchRemoveTags);
-    m_batchRemoveTagAction = m_filterToolbar->addWidget(m_batchRemoveTagBtn);
-    m_batchRemoveTagAction->setVisible(false);
+    actionsLayout->addWidget(m_batchRemoveTagBtn);
+    m_batchRemoveTagBtn->setVisible(false);
+
+    // These actions used to come from QToolBar::addWidget; keep them null and use button visibility instead.
+    m_batchSelectAllAction = nullptr;
+    m_batchDeleteAction = nullptr;
+    m_batchAddTagAction = nullptr;
+    m_batchRemoveTagAction = nullptr;
+
+    m_filterToolbar->addWidget(m_actionsGroup);
 
     QVBoxLayout *mainLayout = qobject_cast<QVBoxLayout *>(layout());
     if (mainLayout)
@@ -1468,14 +1480,29 @@ QList<TranslationEntry> SummaryWindow::getFilteredEntries() const
 void SummaryWindow::toggleSelectionMode()
 {
     m_selectionMode = m_selectionModeBtn->isChecked();
-    if (m_batchDeleteAction)
-        m_batchDeleteAction->setVisible(m_selectionMode);
-    if (m_batchAddTagAction)
-        m_batchAddTagAction->setVisible(m_selectionMode);
-    if (m_batchRemoveTagAction)
-        m_batchRemoveTagAction->setVisible(m_selectionMode);
-    if (m_batchSelectAllAction)
-        m_batchSelectAllAction->setVisible(m_selectionMode);
+    if (m_selectionModeBtn)
+    {
+        const QString key = m_selectionMode ? "btn_cancel_selection_mode" : "btn_selection_mode";
+        m_selectionModeBtn->setText(TranslationManager::instance().tr(key));
+    }
+    if (m_batchDeleteBtn)
+        m_batchDeleteBtn->setVisible(m_selectionMode);
+    if (m_batchAddTagBtn)
+        m_batchAddTagBtn->setVisible(m_selectionMode);
+    if (m_batchRemoveTagBtn)
+        m_batchRemoveTagBtn->setVisible(m_selectionMode);
+    if (m_selectAllBtn)
+        m_selectAllBtn->setVisible(m_selectionMode);
+
+    // QToolBar may overflow widgets when width is tight; force a relayout when toggling.
+    if (m_actionsGroup)
+        m_actionsGroup->adjustSize();
+    if (m_filterToolbar)
+    {
+        m_filterToolbar->updateGeometry();
+        if (m_filterToolbar->layout())
+            m_filterToolbar->layout()->invalidate();
+    }
 
     // Reset Select All state when toggling mode
     m_allSelected = false;
@@ -1534,33 +1561,21 @@ void SummaryWindow::updateTheme(bool isDark)
         m_webView->eval(js.toStdString());
     }
 
-    QString toolbarBg = isDark ? "#2a2a2a" : "#f5f5f5";
-    QString fg = isDark ? "#e0e0e0" : "#111111";
-    QString controlBg = isDark ? "#3a3a3a" : "#ffffff";
-    QString border = isDark ? "#555555" : "#cccccc";
-
     if (m_filterToolbar)
-        m_filterToolbar->setStyleSheet(QString("QToolBar { background:%1; color:%2; } QLabel { color:%2; }").arg(toolbarBg, fg));
-
-    QString btnStyle = QString("color:%1; background:%2; border:1px solid %3;").arg(fg, controlBg, border);
-    if (m_selectionModeBtn)
-        m_selectionModeBtn->setStyleSheet(btnStyle);
-    if (m_batchDeleteBtn)
-        m_batchDeleteBtn->setStyleSheet(btnStyle);
-    if (m_selectAllBtn)
-        m_selectAllBtn->setStyleSheet(btnStyle);
-    if (m_clearFilterBtn)
-        m_clearFilterBtn->setStyleSheet(btnStyle);
-    if (m_batchAddTagBtn)
-        m_batchAddTagBtn->setStyleSheet(btnStyle);
-    if (m_batchRemoveTagBtn)
-        m_batchRemoveTagBtn->setStyleSheet(btnStyle);
-
-    QString inputStyle = QString("color:%1; background:%2; border:1px solid %3; selection-background-color:%2;").arg(fg, controlBg, border);
-    if (m_tagFilterCombo)
-        m_tagFilterCombo->setStyleSheet(inputStyle);
-    if (m_fromDateEdit)
-        m_fromDateEdit->setStyleSheet(inputStyle);
-    if (m_toDateEdit)
-        m_toDateEdit->setStyleSheet(inputStyle);
+    {
+        const QString qssPath = isDark ? ":/assets/qss/archive_toolbar_dark.qss" : ":/assets/qss/archive_toolbar_light.qss";
+        QFile f(qssPath);
+        if (f.open(QIODevice::ReadOnly | QIODevice::Text))
+        {
+            const QString qss = QString::fromUtf8(f.readAll());
+            m_filterToolbar->setStyleSheet(qss);
+        }
+        else
+        {
+            // Fallback: keep it readable even if resource is missing.
+            const QString bg = isDark ? "#1f1f1f" : "#f6f7f9";
+            const QString border = isDark ? "#343434" : "#d8dde6";
+            m_filterToolbar->setStyleSheet(QString("QToolBar#archiveFilterToolbar{background:%1;border:none;border-bottom:1px solid %2;}").arg(bg, border));
+        }
+    }
 }
