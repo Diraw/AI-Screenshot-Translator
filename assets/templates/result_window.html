@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset='UTF-8'>
+<link rel='stylesheet' href='__CSS_HL__'>
+<link rel='stylesheet' href='__CSS_KATEX__'>
+<style>
+html, body {
+  background: #ffffff;
+  color: #111111;
+}
+
+:root {
+  --mark-bg: #ffeb3b;
+  --mark-bg-dark: #d4af37;
+  --mark-fg: #000;
+}
+
+body {
+  font-family: "Segoe UI", sans-serif;
+  font-size: __FONT_SIZE__px;
+  padding: 20px;
+  padding-top: 60px;
+  overflow-y: auto;
+}
+
+pre {
+  background: #f4f4f4;
+  padding: 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+  color: #111111;
+}
+
+#content { line-height: 1.6; }
+
+#raw_view,
+#edit_view {
+  display: none;
+  white-space: pre-wrap;
+  font-family: monospace;
+  background: #f8f9fa;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-top: 10px;
+  color: #111111;
+}
+
+#edit_view {
+  width: 100%;
+  min-height: 250px;
+  box-sizing: border-box;
+  background: #fff;
+  border: 2px solid #0078d4;
+  outline: none;
+  font-size: 14px;
+  resize: none;
+  overflow: hidden;
+}
+
+mark { background: var(--mark-bg); color: var(--mark-fg); }
+
+html.dark-mode,
+body.dark-mode {
+  background: #1e1e1e !important;
+  color: #e0e0e0 !important;
+}
+
+body.dark-mode pre,
+body.dark-mode code,
+body.dark-mode #raw_view,
+body.dark-mode #edit_view {
+  background: #2d2d2d !important;
+  color: #e0e0e0 !important;
+  border-color: #444 !important;
+}
+
+body.dark-mode mark { background: var(--mark-bg-dark); color: var(--mark-fg); }
+
+body.dark-mode .hljs,
+body.dark-mode pre code,
+body.dark-mode pre code.hljs {
+  color: #e0e0e0 !important;
+  background: #2d2d2d !important;
+}
+
+body.dark-mode .hljs * { color: inherit !important; }
+
+body.dark-mode .katex,
+body.dark-mode .katex * {
+  color: #e0e0e0 !important;
+}
+</style>
+<script src='__JS_MARKED__'></script>
+<script src='__JS_HL__'></script>
+<script src='__JS_KATEX__'></script>
+<script src='__JS_KATEX_AUTO__'></script>
+</head>
+<body>
+<div id='keytrap' tabindex='0' style='position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;'></div>
+<div id='content'><h3>Loading...</h3></div>
+<textarea id='edit_view'></textarea>
+<div id='raw_view'></div>
+<script id="init-data" type="application/json">__INIT_JSON__</script>
+<script>
+__RESULT_LOGIC__
+</script>
+</body>
+</html>
