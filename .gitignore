@@ -3,7 +3,6 @@
 /build*/
 /bin/
 /lib/
-webview2_pkg/
 *.obj
 *.o
 *.lo
@@ -17,6 +16,19 @@ webview2_pkg/
 *.exp
 *.idb
 *.tmp
+
+# webview2_pkg
+webview2_pkg/**
+!webview2_pkg/build/
+!webview2_pkg/build/native/
+!webview2_pkg/build/native/include/
+!webview2_pkg/build/native/include/**
+!webview2_pkg/build/native/x64/
+!webview2_pkg/build/native/x64/**
+!webview2_pkg/WebView2.idl
+!webview2_pkg/WebView2.tlb
+!webview2_pkg/LICENSE.txt
+!webview2_pkg/NOTICE.txt
 
 # CMake
 CMakeCache.txt

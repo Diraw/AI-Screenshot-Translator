@@ -127,6 +127,7 @@ private:
         m_translations["en"]["filter_clear"] = "Clear Filters";
         m_translations["en"]["lbl_api_provider"] = "API Provider:";
         m_translations["en"]["btn_selection_mode"] = "Select";
+        m_translations["en"]["btn_cancel_selection_mode"] = "Cancel";
         m_translations["en"]["btn_select_all"] = "Select All";
         m_translations["en"]["btn_deselect_all"] = "Deselect All";
         m_translations["en"]["btn_batch_delete"] = "Delete";
@@ -185,6 +186,7 @@ private:
         m_translations["zh"]["filter_clear"] = "清除筛选";
         m_translations["zh"]["lbl_api_provider"] = "API 格式:";
         m_translations["zh"]["btn_selection_mode"] = "批量选择";
+        m_translations["zh"]["btn_cancel_selection_mode"] = "取消选择";
         m_translations["zh"]["btn_select_all"] = "全选";
         m_translations["zh"]["btn_deselect_all"] = "取消全选";
         m_translations["zh"]["btn_batch_delete"] = "批量删除";

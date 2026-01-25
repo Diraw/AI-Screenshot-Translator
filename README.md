@@ -26,14 +26,10 @@
 - WebView2 Runtime（Windows 11 默认有，或单独安装）。
 - 已自带 WebView2 SDK 包（`webview2_pkg`）和前端库。
 
-### WebView2 包管理
-- 为减小仓库体积，建议将 `webview2_pkg/` 作为外部依赖（子模块或单独下载）。
-- 子模块示例（请替换为你托管 WebView2 包的地址）：
-  ```powershell
-  git submodule add <your-webview2-repo-url> webview2_pkg
-  git submodule update --init --recursive
-  ```
-- 或者在克隆后手动下载并解压 WebView2 SDK 到 `webview2_pkg/` 目录。
+### WebView2 包说明
+- 仓库已内置官方 NuGet 包 **Microsoft.Web.WebView2 1.0.2903.40**（原样解压，保留 LICENSE/NOTICE），克隆后可直接编译。
+- 需要精简仓库且只支持 x64 时，可只保留 `build/native/x64/WebView2Loader.dll(.lib)` 与 `WebView2.h/.idl/.tlb`；否则保持整包最稳妥。
+- 若读者拿到的仓库未包含 `webview2_pkg/`，请执行 `nuget install Microsoft.Web.WebView2 -Version 1.0.2903.40 -OutputDirectory third_party`，然后将生成的 `.nupkg` 解压到仓库根目录的 `webview2_pkg/`。
 
 ## 本地构建
 1. 确认已安装 Qt 6（并设置好 `CMAKE_PREFIX_PATH` 或在 VS 开发者命令行里使用 `-DCMAKE_PREFIX_PATH=".../Qt/6.x/msvc2019_64/lib/cmake"`）。
@@ -91,3 +87,4 @@ cmake -E copy_directory storage build/Release/storage
 
 ## 许可
 项目包含的 `webview.h` 遵循 MIT 许可，其余代码请根据仓库实际许可使用。
+
