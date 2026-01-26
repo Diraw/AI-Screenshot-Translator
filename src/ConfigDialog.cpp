@@ -15,6 +15,174 @@
 #include <QLabel>
 #include <QPointer>
 #include <QScreen>
+#include <QRegularExpression>
+
+static bool tryParseColorText(QString text, QColor &out)
+{
+    text = text.trimmed();
+    if (text.isEmpty())
+        return false;
+
+    // Hex formats: #RGB, #RRGGBB, #RRGGBBAA (CSS style)
+    if (text.startsWith('#'))
+    {
+        QString hex = text.mid(1).trimmed();
+        if (hex.size() == 3)
+        {
+            auto h = [&](int i)
+            { return QString(hex[i]) + QString(hex[i]); };
+            bool okR = false, okG = false, okB = false;
+            int r = h(0).toInt(&okR, 16);
+            int g = h(1).toInt(&okG, 16);
+            int b = h(2).toInt(&okB, 16);
+            if (!okR || !okG || !okB)
+                return false;
+            out = QColor(r, g, b);
+            return out.isValid();
+        }
+        if (hex.size() == 6 || hex.size() == 8)
+        {
+            bool ok = false;
+            int r = hex.mid(0, 2).toInt(&ok, 16);
+            if (!ok)
+                return false;
+            int g = hex.mid(2, 2).toInt(&ok, 16);
+            if (!ok)
+                return false;
+            int b = hex.mid(4, 2).toInt(&ok, 16);
+            if (!ok)
+                return false;
+            int a = 255;
+            if (hex.size() == 8)
+            {
+                a = hex.mid(6, 2).toInt(&ok, 16);
+                if (!ok)
+                    return false;
+            }
+            out = QColor(r, g, b, a);
+            return out.isValid();
+        }
+        return false;
+    }
+
+    // rgb(...) / rgba(...)
+    {
+        static const QRegularExpression reRgb(
+            R"(^\s*rgba?\s*\(\s*([^\)]*)\s*\)\s*$)",
+            QRegularExpression::CaseInsensitiveOption);
+        QRegularExpressionMatch m = reRgb.match(text);
+        if (m.hasMatch())
+        {
+            const QString inside = m.captured(1);
+            QStringList parts = inside.split(',', Qt::SkipEmptyParts);
+            for (auto &p : parts)
+                p = p.trimmed();
+
+            if (parts.size() < 3)
+                return false;
+            bool okR = false, okG = false, okB = false;
+            int r = parts[0].toInt(&okR);
+            int g = parts[1].toInt(&okG);
+            int b = parts[2].toInt(&okB);
+            if (!okR || !okG || !okB)
+                return false;
+
+            int a = 255;
+            if (parts.size() >= 4)
+            {
+                bool okAInt = false;
+                int aInt = parts[3].toInt(&okAInt);
+                if (okAInt)
+                {
+                    a = qBound(0, aInt, 255);
+                }
+                else
+                {
+                    bool okAF = false;
+                    double af = parts[3].toDouble(&okAF);
+                    if (!okAF)
+                        return false;
+                    if (af <= 1.0)
+                        a = qBound(0, (int)qRound(af * 255.0), 255);
+                    else
+                        a = qBound(0, (int)qRound(af), 255);
+                }
+            }
+            out = QColor(qBound(0, r, 255), qBound(0, g, 255), qBound(0, b, 255), a);
+            return out.isValid();
+        }
+    }
+
+    // "r,g,b" or "r,g,b,a" or "r,g,b,aF"
+    if (text.contains(','))
+    {
+        QStringList parts = text.split(',', Qt::SkipEmptyParts);
+        for (auto &p : parts)
+            p = p.trimmed();
+
+        if (parts.size() < 3)
+            return false;
+        bool okR = false, okG = false, okB = false;
+        int r = parts[0].toInt(&okR);
+        int g = parts[1].toInt(&okG);
+        int b = parts[2].toInt(&okB);
+        if (!okR || !okG || !okB)
+            return false;
+
+        int a = 255;
+        if (parts.size() >= 4)
+        {
+            bool okAInt = false;
+            int aInt = parts[3].toInt(&okAInt);
+            if (okAInt)
+            {
+                a = qBound(0, aInt, 255);
+            }
+            else
+            {
+                bool okAF = false;
+                double af = parts[3].toDouble(&okAF);
+                if (!okAF)
+                    return false;
+                if (af <= 1.0)
+                    a = qBound(0, (int)qRound(af * 255.0), 255);
+                else
+                    a = qBound(0, (int)qRound(af), 255);
+            }
+        }
+        out = QColor(qBound(0, r, 255), qBound(0, g, 255), qBound(0, b, 255), a);
+        return out.isValid();
+    }
+
+    // Named colors fallback
+    QColor c;
+    c.setNamedColor(text);
+    if (!c.isValid())
+        return false;
+    out = c;
+    return true;
+}
+
+static void updateColorPreviewLabel(QLabel *label, const QString &text)
+{
+    if (!label)
+        return;
+    QColor c;
+    if (!tryParseColorText(text, c))
+    {
+        label->setToolTip(QString());
+        label->setStyleSheet("QLabel{background: transparent; border: 1px solid rgba(127,127,127,120); border-radius: 3px;}");
+        return;
+    }
+
+    label->setToolTip(QString("rgba(%1,%2,%3,%4)").arg(c.red()).arg(c.green()).arg(c.blue()).arg(c.alpha()));
+    label->setStyleSheet(QString(
+                             "QLabel{background-color: rgba(%1,%2,%3,%4); border: 1px solid rgba(127,127,127,160); border-radius: 3px;}")
+                             .arg(c.red())
+                             .arg(c.green())
+                             .arg(c.blue())
+                             .arg(c.alpha()));
+}
 
 ConfigDialog::ConfigDialog(ConfigManager *configManager, QWidget *parent)
     : QDialog(parent), m_configManager(configManager)
@@ -174,8 +342,15 @@ ConfigDialog::ConfigDialog(ConfigManager *configManager, QWidget *parent)
     m_useBorderCheck = new QCheckBox(this);
     m_lblCardBorderColor = new QLabel(this);
 
+    m_cardBorderColorPreview = new QLabel(this);
+    m_cardBorderColorPreview->setFixedSize(18, 18);
+    updateColorPreviewLabel(m_cardBorderColorPreview, m_cardBorderColorEdit->text());
+    connect(m_cardBorderColorEdit, &QLineEdit::textChanged, this, [this](const QString &t)
+            { updateColorPreviewLabel(m_cardBorderColorPreview, t); });
+
     QHBoxLayout *borderColorLayout = new QHBoxLayout();
     borderColorLayout->addWidget(m_cardBorderColorEdit);
+    borderColorLayout->addWidget(m_cardBorderColorPreview);
     borderColorLayout->addWidget(m_useBorderCheck);
 
     cardLayout->addRow(m_lblCardBorderColor, borderColorLayout);
@@ -253,11 +428,33 @@ ConfigDialog::ConfigDialog(ConfigManager *configManager, QWidget *parent)
 
     m_highlightMarkColorEdit = new QLineEdit(this);
     m_highlightMarkColorEdit->setPlaceholderText("#ffeb3b80 或 rgba(255,235,59,0.5) 或 255,235,59,0.5");
-    editLayout->addRow("Highlight Color:", m_highlightMarkColorEdit);
+    m_highlightMarkColorPreview = new QLabel(this);
+    m_highlightMarkColorPreview->setFixedSize(18, 18);
+    updateColorPreviewLabel(m_highlightMarkColorPreview, m_highlightMarkColorEdit->text());
+    connect(m_highlightMarkColorEdit, &QLineEdit::textChanged, this, [this](const QString &t)
+            { updateColorPreviewLabel(m_highlightMarkColorPreview, t); });
+    QHBoxLayout *hl1 = new QHBoxLayout();
+    hl1->setContentsMargins(0, 0, 0, 0);
+    hl1->addWidget(m_highlightMarkColorEdit);
+    hl1->addWidget(m_highlightMarkColorPreview);
+    QWidget *hl1w = new QWidget(this);
+    hl1w->setLayout(hl1);
+    editLayout->addRow("Highlight Color:", hl1w);
 
     m_highlightMarkColorDarkEdit = new QLineEdit(this);
     m_highlightMarkColorDarkEdit->setPlaceholderText("#d4af3780 或 rgba(212,175,55,0.5) 或 212,175,55,0.5");
-    editLayout->addRow("Highlight Color (Dark):", m_highlightMarkColorDarkEdit);
+    m_highlightMarkColorDarkPreview = new QLabel(this);
+    m_highlightMarkColorDarkPreview->setFixedSize(18, 18);
+    updateColorPreviewLabel(m_highlightMarkColorDarkPreview, m_highlightMarkColorDarkEdit->text());
+    connect(m_highlightMarkColorDarkEdit, &QLineEdit::textChanged, this, [this](const QString &t)
+            { updateColorPreviewLabel(m_highlightMarkColorDarkPreview, t); });
+    QHBoxLayout *hl2 = new QHBoxLayout();
+    hl2->setContentsMargins(0, 0, 0, 0);
+    hl2->addWidget(m_highlightMarkColorDarkEdit);
+    hl2->addWidget(m_highlightMarkColorDarkPreview);
+    QWidget *hl2w = new QWidget(this);
+    hl2w->setLayout(hl2);
+    editLayout->addRow("Highlight Color (Dark):", hl2w);
 
     archiveMainLayout->addWidget(grpEdit);
     archiveMainLayout->addStretch();

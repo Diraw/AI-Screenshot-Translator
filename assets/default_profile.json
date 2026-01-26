@@ -1,0 +1,50 @@
+{
+  "api": {
+    "provider": "openai",
+    "api_key": "",
+    "base_url": "",
+    "model": "",
+    "prompt_text": "# Role\n你是一个专业的学术翻译专家，擅长中英文互译，并能精确处理数学、物理等领域的 LaTeX 公式。\n\n# Task\n请将图片中的英文内容翻译为中文。\n\n# Requirements\n1. **仅返回翻译后的中文文本**。严禁包含任何开场白、解释语（如\"好的\"、\"这是翻译内容\"）或结束语。\n2. **数学公式处理**：原文中所有的数学变量、常数、公式和方程必须使用 LaTeX 格式输出（例如使用 $x$ 或 $$E=mc^2$$）。\n3. **术语准确**：保持专业领域的术语翻译严谨、自然。\n4. **格式对齐**：保持原有的段落结构。\n\n# Content",
+    "proxy": "",
+    "use_proxy": false
+  },
+  "app_settings": {
+    "language": "zh",
+    "zoom_sensitivity": 500.0,
+
+    "screenshot_hotkey": "ctrl+alt+s",
+    "summary_hotkey": "alt+s",
+    "settings_hotkey": "",
+
+    "target_screen_index": -1,
+
+    "edit_hotkey": "e",
+    "view_toggle_hotkey": "r",
+    "screenshot_toggle_hotkey": "s",
+    "selection_toggle_hotkey": "ctrl+s",
+
+    "bold_hotkey": "ctrl+b",
+    "underline_hotkey": "ctrl+u",
+    "highlight_hotkey": "ctrl+h",
+
+    "highlight_mark_color": "#ffeb3b",
+    "highlight_mark_color_dark": "#d4af37",
+
+    "initial_font_size": 16,
+    "card_border_color": "100,100,100",
+    "use_card_border": false,
+
+    "show_preview_card": false,
+    "show_result_window": true,
+
+    "debug_mode": false,
+    "storage_path": "",
+
+    "default_result_window_locked": false,
+    "lock_behavior": 0,
+
+    "prev_result_shortcut": "z",
+    "next_result_shortcut": "x",
+    "tag_hotkey": "t"
+  }
+}
