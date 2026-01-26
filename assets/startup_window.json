@@ -1,0 +1,24 @@
+{
+  "windowTitle": "AI Screenshot Translator",
+  "title": "AI Screenshot Translator",
+  "version": "1.0.0",
+  "versionFormat": "版本：{version}",
+  "copyright": "Copyright © 2026 Diraw",
+  "hotkeysText": "提示：\n• 截图快捷键：{shot}\n• 打开归档窗口：{view}\n",
+  "hint": "点击空白处 或 按任意键 关闭",
+  "buttons": {
+    "check": "检查更新",
+    "open": "打开发布页"
+  },
+  "update": {
+    "statusNotChecked": "更新：未检查",
+    "statusChecking": "更新：检查中...",
+    "statusNetworkError": "更新：检查失败（网络错误）",
+    "statusParseError": "更新：检查失败（解析错误）",
+    "statusNoVersion": "更新：未获取到版本信息",
+    "statusLatest": "更新：已是最新（{latest}）",
+    "statusNew": "更新：发现新版本（{latest}）"
+  },
+  "repoApiLatest": "https://api.github.com/repos/Diraw/AI-Screenshot-Translator/releases/latest",
+  "repoUrl": "https://github.com/Diraw/AI-Screenshot-Translator/releases"
+}

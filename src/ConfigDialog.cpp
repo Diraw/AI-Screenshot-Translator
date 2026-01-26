@@ -229,6 +229,9 @@ ConfigDialog::ConfigDialog(ConfigManager *configManager, QWidget *parent)
     m_screenshotToggleHotkeyEdit = new QLineEdit(this);
     viewLayout->addRow("Summary Screenshot Toggle:", m_screenshotToggleHotkeyEdit);
 
+    m_selectionToggleHotkeyEdit = new QLineEdit(this);
+    viewLayout->addRow(TranslationManager::instance().tr("lbl_selection_toggle_hotkey"), m_selectionToggleHotkeyEdit);
+
     archiveMainLayout->addWidget(grpView);
 
     // Group: Edit Mode

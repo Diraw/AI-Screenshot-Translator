@@ -15,6 +15,8 @@
 
 #include "TranslationManager.h"
 
+#include "StartupWindow.h"
+
 #ifdef _WIN32
 #include "WinKeyForwarder.h"
 #endif
@@ -40,6 +42,12 @@ App::App(QObject *parent)
     AppConfig cfg = m_configManager.getConfig();
     g_enableLogging = cfg.debugMode;
     TranslationManager::instance().setLanguage(cfg.language);
+
+    // Startup window (shows on every launch)
+    {
+        StartupWindow w(cfg);
+        w.exec();
+    }
 
     m_preferredLockState = cfg.defaultResultWindowLocked;
 

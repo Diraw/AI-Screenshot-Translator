@@ -27,7 +27,7 @@ void App::showSummary()
                 m_configManager.setConfig(cfg);
                 m_configManager.saveConfig();
                 m_summaryWindow->captureScrollPosition();
-                QSettings settings("YourCompany", "AIScreenshotTranslator");
+                QSettings settings(ConfigManager::settingsIniPath(), QSettings::IniFormat);
                 settings.setValue("summaryWindow/scrollY", m_summaryWindow->getLastScrollY());
                 m_summaryWindow->hide();
             }

@@ -46,6 +46,7 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}
 [UninstallDelete]
 ; 卸载时清理用户数据目录
 Type: filesandordirs; Name: "{userappdata}\AI_Screenshot_Translator-Cpp"
+Type: filesandordirs; Name: "{userappdata}\AI-Screenshot-Translator"
 Type: filesandordirs; Name: "{app}\storage"
 Type: filesandordirs; Name: "{app}\wkf.log"
 Type: filesandordirs; Name: "{app}\debug.log"

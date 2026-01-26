@@ -9,7 +9,7 @@
 
 void SummaryWindow::saveState()
 {
-    QSettings settings("YourCompany", "AIScreenshotTranslator");
+    QSettings settings(ConfigManager::settingsIniPath(), QSettings::IniFormat);
     settings.setValue("summaryWindow/geometry", saveGeometry());
     settings.setValue("summaryWindow/zoom", m_currentZoom);
     captureScrollPosition();
@@ -27,7 +27,7 @@ void SummaryWindow::saveState()
 
 void SummaryWindow::restoreState()
 {
-    QSettings settings("YourCompany", "AIScreenshotTranslator");
+    QSettings settings(ConfigManager::settingsIniPath(), QSettings::IniFormat);
 
     // Restore geometry
     QByteArray geom = settings.value("summaryWindow/geometry").toByteArray();

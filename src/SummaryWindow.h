@@ -90,11 +90,14 @@ private:
     QString m_editKey = "e";
     QString m_viewKey = "r";
     QString m_screenshotKey = "s";
+    QString m_selectionToggleKey = "ctrl+s";
 
     QString m_boldKey = "ctrl+b";
     QString m_underlineKey = "ctrl+u";
     QString m_highlightKey = "ctrl+h";
     QList<QShortcut *> m_shortcuts;
+
+    QShortcut *m_selectionToggleShortcut = nullptr;
 
     void initHtml();
 

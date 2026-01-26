@@ -22,6 +22,7 @@ void ConfigDialog::loadFromConfig()
     m_editHotkeyEdit->setText(cfg.editHotkey);
     m_viewToggleHotkeyEdit->setText(cfg.viewToggleHotkey);
     m_screenshotToggleHotkeyEdit->setText(cfg.screenshotToggleHotkey);
+    m_selectionToggleHotkeyEdit->setText(cfg.selectionToggleHotkey);
     m_boldHotkeyEdit->setText(cfg.boldHotkey);
     m_underlineHotkeyEdit->setText(cfg.underlineHotkey);
     m_highlightHotkeyEdit->setText(cfg.highlightHotkey);
@@ -102,6 +103,7 @@ void ConfigDialog::save()
     cfg.editHotkey = m_editHotkeyEdit->text();
     cfg.viewToggleHotkey = m_viewToggleHotkeyEdit->text();
     cfg.screenshotToggleHotkey = m_screenshotToggleHotkeyEdit->text();
+    cfg.selectionToggleHotkey = m_selectionToggleHotkeyEdit->text().trimmed();
     cfg.boldHotkey = m_boldHotkeyEdit->text();
     cfg.underlineHotkey = m_underlineHotkeyEdit->text().trimmed();
     cfg.highlightHotkey = m_highlightHotkeyEdit->text().trimmed();
