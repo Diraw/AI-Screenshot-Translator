@@ -9,12 +9,20 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <functional>
 
-class TagDialog : public QDialog {
+class QEvent;
+class QKeyEvent;
+
+class TagDialog : public QDialog
+{
     Q_OBJECT
 public:
-    explicit TagDialog(const QStringList& allTags, const QStringList& currentTags, QWidget *parent = nullptr);
-    
+    explicit TagDialog(const QStringList &allTags,
+                       const QStringList &currentTags,
+                       QWidget *parent = nullptr,
+                       std::function<bool()> escapeInterceptor = {});
+
     QStringList getSelectedTags() const;
 
 signals:
@@ -24,14 +32,20 @@ private slots:
     void onOkClicked();
     void onCancelClicked();
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
+
 private:
     QListWidget *m_tagList;
     QLineEdit *m_newTagInput;
     QPushButton *m_okButton;
     QPushButton *m_cancelButton;
-    
+
     QStringList m_allTags;
     QStringList m_currentTags;
+
+    std::function<bool()> m_escapeInterceptor;
 };
 
 #endif // TAGDIALOG_H

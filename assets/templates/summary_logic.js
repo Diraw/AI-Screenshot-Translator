@@ -185,6 +185,14 @@ function handleKey(e) {
    var k = keyLower;
    log(`KEY_VIEW=${KEY_VIEW} KEY_SHOT=${KEY_SHOT} k=${k} isEditing=${isEditing}`);
 
+   // Ctrl+S toggles selection mode (only when not editing).
+   // Keep plain 's' for KEY_SHOT (screenshot/restore).
+   if (!isEditing && e.ctrlKey && !e.altKey && !e.shiftKey && k === 's') {
+       if (window.cmd_toggleSelectionMode) window.cmd_toggleSelectionMode();
+       e.preventDefault();
+       return;
+   }
+
    if (matchHotkey(e, KEY_EDIT)) {
        e.preventDefault(); toggleEdit(entry); return; 
    }
@@ -205,6 +213,16 @@ function handleKey(e) {
       return; 
     }
     if (!isEditing) {
+        // Esc exits RAW mode back to VIEW (when currently in RAW)
+        if (e.key === 'Escape') {
+            var id0 = entry.getAttribute('data-id');
+            var raw0 = document.getElementById('raw_' + id0);
+            if (raw0 && raw0.style.display !== 'none') {
+                e.preventDefault();
+                toggleView(id0);
+                return;
+            }
+        }
         if (matchHotkey(e, KEY_VIEW)) { toggleView(entry.getAttribute('data-id')); e.preventDefault(); return; }
         if (matchHotkey(e, KEY_SHOT)) { 
             // Call native webview binding

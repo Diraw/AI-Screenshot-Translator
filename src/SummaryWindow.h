@@ -8,7 +8,6 @@
 #include <memory>
 #include <QToolBar>
 #include <QDateEdit>
-#include <QComboBox>
 #include <QPushButton>
 #include <QShortcut>
 
@@ -76,7 +75,7 @@ private:
     QWidget *m_actionsGroup = nullptr;
     QDateEdit *m_fromDateEdit = nullptr;
     QDateEdit *m_toDateEdit = nullptr;
-    QComboBox *m_tagFilterCombo = nullptr;
+    QPushButton *m_tagFilterBtn = nullptr;
     QPushButton *m_clearFilterBtn = nullptr;
     QStringList m_selectedTags;
     HistoryManager *m_historyManager = nullptr;

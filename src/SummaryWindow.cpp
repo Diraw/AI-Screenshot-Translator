@@ -76,6 +76,48 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent)
             {
         if (m_webView) m_webView->openDevTools(); });
 
+    // Local shortcuts for archive window UX
+    // - Ctrl+S toggles batch selection mode (keep 's' for screenshot card)
+    // - Esc exits RAW (if active), selection mode, or clears active filters
+    QShortcut *selectionShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+S")), this);
+    selectionShortcut->setContext(Qt::WindowShortcut);
+    connect(selectionShortcut, &QShortcut::activated, this, [this]()
+            {
+        if (m_selectionModeBtn) m_selectionModeBtn->setChecked(!m_selectionModeBtn->isChecked()); });
+
+    QShortcut *escapeShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), this);
+    escapeShortcut->setContext(Qt::WindowShortcut);
+    connect(escapeShortcut, &QShortcut::activated, this, [this]()
+            {
+        // 1) Exit RAW mode back to VIEW (if currently in RAW)
+        if (m_webView)
+        {
+            const QString js = "(()=>{try{var e=currentEntry&&currentEntry(); if(!e) return; var id=e.getAttribute('data-id'); var raw=document.getElementById('raw_'+id); if(raw && raw.style.display!=='none' && !e.classList.contains('mode-edit')){ toggleView(id); }}catch(_e){}})();";
+            m_webView->eval(js.toStdString());
+        }
+
+        // 2) Exit selection mode
+        if (m_selectionModeBtn && m_selectionModeBtn->isChecked())
+        {
+            m_selectionModeBtn->setChecked(false);
+            return;
+        }
+
+        // 3) Clear active filters (date and/or tags)
+        const QDate defaultFrom = QDate::currentDate().addMonths(-1);
+        const QDate defaultTo = QDate::currentDate();
+        const bool dateActive = (m_fromDateEdit && m_fromDateEdit->date() != defaultFrom) || (m_toDateEdit && m_toDateEdit->date() != defaultTo);
+        const bool tagsActive = !m_selectedTags.isEmpty();
+        if (dateActive || tagsActive)
+        {
+            if (m_fromDateEdit) m_fromDateEdit->setDate(defaultFrom);
+            if (m_toDateEdit) m_toDateEdit->setDate(defaultTo);
+            m_selectedTags.clear();
+            if (m_tagFilterBtn) m_tagFilterBtn->setText(TranslationManager::instance().tr("filter_all_tags"));
+            applyFilters();
+            return;
+        } });
+
     // Bind 'cmd_restore'
     m_webView->bind("cmd_restore", [this](std::string seq, std::string req, void *arg)
                     {
@@ -135,6 +177,10 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent)
     m_webView->bind("cmd_exitSelectionMode", [this](std::string, std::string, void *)
                     {
         if (m_selectionModeBtn) m_selectionModeBtn->setChecked(false); });
+
+    m_webView->bind("cmd_toggleSelectionMode", [this](std::string, std::string, void *)
+                    {
+        if (m_selectionModeBtn) m_selectionModeBtn->setChecked(!m_selectionModeBtn->isChecked()); });
 
     // Bind DevTools opener for JS-triggered hotkey inside WebView
     m_webView->bind("cmd_openDevTools", [this](std::string, std::string, void *)
@@ -217,7 +263,13 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent)
         if (ids.isEmpty() || !m_historyManager) return;
 
         QStringList allTags = m_historyManager->getAllTags();
-        TagDialog *dialog = new TagDialog(allTags, QStringList(), this);
+        TagDialog *dialog = new TagDialog(allTags, QStringList(), this, [this]() -> bool {
+            if (m_selectionModeBtn && m_selectionModeBtn->isChecked()) {
+                m_selectionModeBtn->setChecked(false);
+                return true;
+            }
+            return false;
+        });
         connect(dialog, &TagDialog::tagsUpdated, this, [this, ids](const QStringList& tags) {
             qDebug() << "Batch add tags - user selected tags:" << tags;
             if (m_historyManager->addTagsToEntries(ids, tags)) {
@@ -240,7 +292,13 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent)
         if (ids.isEmpty() || !m_historyManager) return;
 
         QStringList allTags = m_historyManager->getAllTags();
-        TagDialog *dialog = new TagDialog(allTags, QStringList(), this);
+        TagDialog *dialog = new TagDialog(allTags, QStringList(), this, [this]() -> bool {
+            if (m_selectionModeBtn && m_selectionModeBtn->isChecked()) {
+                m_selectionModeBtn->setChecked(false);
+                return true;
+            }
+            return false;
+        });
         connect(dialog, &TagDialog::tagsUpdated, this, [this, ids](const QStringList& tags) {
             qDebug() << "Batch remove tags - user selected tags:" << tags;
             if (m_historyManager->removeTagsFromEntries(ids, tags)) {
