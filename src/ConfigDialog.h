@@ -83,6 +83,8 @@ private:
 
     QLineEdit *m_highlightMarkColorEdit;
     QLineEdit *m_highlightMarkColorDarkEdit;
+    QLabel *m_highlightMarkColorPreview;
+    QLabel *m_highlightMarkColorDarkPreview;
 
     QTabWidget *m_tabWidget;
     // Tabs
@@ -101,6 +103,7 @@ private:
 
     QLineEdit *m_cardBorderColorEdit;
     QLabel *m_lblCardBorderColor;
+    QLabel *m_cardBorderColorPreview;
     QCheckBox *m_useBorderCheck;
     QSpinBox *m_initialFontSizeSpin;
     QLabel *m_lblInitialFontSize;

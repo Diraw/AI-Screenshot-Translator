@@ -3,5 +3,6 @@
     <file>assets/icon.ico</file>
     <file>assets/qss/archive_toolbar_dark.qss</file>
     <file>assets/qss/archive_toolbar_light.qss</file>
+    <file>assets/default_profile.json</file>
 </qresource>
 </RCC>
