@@ -47,31 +47,180 @@ static QString normalizeTagToVersion(QString tag)
     return tag;
 }
 
-static QList<int> parseVersionParts(QString version)
+struct SemVerId
 {
-    version = normalizeTagToVersion(version);
-    // Keep only digits and dots (e.g. "1.2.3-beta" -> "1.2.3")
-    version.replace(QRegularExpression("[^0-9\\.]"), "");
-    QStringList parts = version.split('.', Qt::SkipEmptyParts);
-    QList<int> nums;
-    for (const QString &p : parts)
-        nums.append(p.toInt());
-    while (nums.size() < 3)
-        nums.append(0);
-    return nums;
+    bool isNumeric = false;
+    int num = 0;
+    QString str;
+};
+
+static int stageRank(const QString &s)
+{
+    // Lower means older.
+    // This matches typical SemVer expectations and the user's requested ordering.
+    const QString t = s.toLower();
+    if (t == "alpha")
+        return 0;
+    if (t == "beta")
+        return 1;
+    if (t == "rc")
+        return 2;
+    return -1;
+}
+
+static void appendPrereleaseToken(QString token, QList<SemVerId> &out)
+{
+    token = token.trimmed();
+    if (token.isEmpty())
+        return;
+
+    // Split on '.' first (SemVer style), then further split alpha1/beta2 patterns.
+    const QStringList pieces = token.split('.', Qt::SkipEmptyParts);
+    for (QString p : pieces)
+    {
+        p = p.trimmed();
+        if (p.isEmpty())
+            continue;
+
+        bool okNum = false;
+        const int asNum = p.toInt(&okNum);
+        if (okNum)
+        {
+            SemVerId id;
+            id.isNumeric = true;
+            id.num = asNum;
+            out.append(id);
+            continue;
+        }
+
+        static const QRegularExpression reAlphaNum(QStringLiteral(R"(^\s*([A-Za-z]+)(\d+)\s*$)"));
+        const QRegularExpressionMatch m = reAlphaNum.match(p);
+        if (m.hasMatch())
+        {
+            SemVerId a;
+            a.isNumeric = false;
+            a.str = m.captured(1).toLower();
+            out.append(a);
+
+            SemVerId n;
+            n.isNumeric = true;
+            n.num = m.captured(2).toInt();
+            out.append(n);
+            continue;
+        }
+
+        SemVerId id;
+        id.isNumeric = false;
+        id.str = p.toLower();
+        out.append(id);
+    }
+}
+
+struct SemVer
+{
+    int major = 0;
+    int minor = 0;
+    int patch = 0;
+    QList<SemVerId> pre; // empty means stable
+};
+
+static SemVer parseSemVer(QString v)
+{
+    v = normalizeTagToVersion(v);
+    // Drop build metadata: 1.2.3+build.5
+    const int plusIdx = v.indexOf('+');
+    if (plusIdx >= 0)
+        v = v.left(plusIdx);
+
+    QString core = v;
+    QString pre;
+    const int dashIdx = v.indexOf('-');
+    if (dashIdx >= 0)
+    {
+        core = v.left(dashIdx);
+        pre = v.mid(dashIdx + 1);
+    }
+
+    SemVer out;
+    core = core.trimmed();
+    const QStringList coreParts = core.split('.', Qt::SkipEmptyParts);
+    if (coreParts.size() >= 1)
+        out.major = coreParts[0].toInt();
+    if (coreParts.size() >= 2)
+        out.minor = coreParts[1].toInt();
+    if (coreParts.size() >= 3)
+        out.patch = coreParts[2].toInt();
+
+    pre = pre.trimmed();
+    if (!pre.isEmpty())
+        appendPrereleaseToken(pre, out.pre);
+    return out;
+}
+
+static int compareSemVerId(const SemVerId &a, const SemVerId &b)
+{
+    if (a.isNumeric && b.isNumeric)
+    {
+        if (a.num < b.num)
+            return -1;
+        if (a.num > b.num)
+            return 1;
+        return 0;
+    }
+    if (a.isNumeric != b.isNumeric)
+    {
+        // SemVer: numeric identifiers have lower precedence than non-numeric.
+        return a.isNumeric ? -1 : 1;
+    }
+
+    const int ra = stageRank(a.str);
+    const int rb = stageRank(b.str);
+    if (ra >= 0 && rb >= 0 && ra != rb)
+        return (ra < rb) ? -1 : 1;
+
+    const int cmp = QString::compare(a.str, b.str, Qt::CaseInsensitive);
+    if (cmp < 0)
+        return -1;
+    if (cmp > 0)
+        return 1;
+    return 0;
 }
 
 static int compareVersions(const QString &a, const QString &b)
 {
-    const QList<int> va = parseVersionParts(a);
-    const QList<int> vb = parseVersionParts(b);
-    for (int i = 0; i < qMin(va.size(), vb.size()); ++i)
+    const SemVer va = parseSemVer(a);
+    const SemVer vb = parseSemVer(b);
+
+    if (va.major != vb.major)
+        return (va.major < vb.major) ? -1 : 1;
+    if (va.minor != vb.minor)
+        return (va.minor < vb.minor) ? -1 : 1;
+    if (va.patch != vb.patch)
+        return (va.patch < vb.patch) ? -1 : 1;
+
+    const bool aStable = va.pre.isEmpty();
+    const bool bStable = vb.pre.isEmpty();
+    if (aStable != bStable)
     {
-        if (va[i] < vb[i])
-            return -1;
-        if (va[i] > vb[i])
-            return 1;
+        // Stable releases are newer than any pre-release of same core.
+        return aStable ? 1 : -1;
     }
+    if (aStable && bStable)
+        return 0;
+
+    const int n = qMin(va.pre.size(), vb.pre.size());
+    for (int i = 0; i < n; ++i)
+    {
+        const int cmp = compareSemVerId(va.pre[i], vb.pre[i]);
+        if (cmp != 0)
+            return cmp;
+    }
+
+    // If all shared identifiers are equal, the shorter pre-release has lower precedence.
+    if (va.pre.size() < vb.pre.size())
+        return -1;
+    if (va.pre.size() > vb.pre.size())
+        return 1;
     return 0;
 }
 
