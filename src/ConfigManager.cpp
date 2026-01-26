@@ -2,6 +2,60 @@
 #include <QDebug>
 #include <QCoreApplication>
 
+#include <QJsonParseError>
+
+static QString findDefaultProfileTemplatePath()
+{
+    const QString baseDir = QCoreApplication::applicationDirPath();
+    const QStringList candidates = {
+        QDir::cleanPath(baseDir + "/assets/default_profile.json"),
+        QDir::cleanPath(baseDir + "/../assets/default_profile.json"),
+        QDir::cleanPath(baseDir + "/../../assets/default_profile.json"),
+    };
+    for (const auto &p : candidates)
+    {
+        if (QFile::exists(p))
+            return p;
+    }
+
+    // Resource fallback (embedded via assets.qrc)
+    if (QFile::exists(QStringLiteral(":/assets/default_profile.json")))
+        return QStringLiteral(":/assets/default_profile.json");
+
+    return QString();
+}
+
+static bool tryLoadDefaultProfileTemplate(QJsonObject &outRoot)
+{
+    const QString path = findDefaultProfileTemplatePath();
+    if (path.isEmpty())
+    {
+        qWarning() << "[ConfigManager] default_profile.json not found. Looked in:"
+                   << "<exe>/assets, <exe>/../assets, <exe>/../../assets, :/assets/default_profile.json";
+        return false;
+    }
+
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly))
+        return false;
+    const QByteArray data = f.readAll();
+    f.close();
+
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(data, &err);
+    if (doc.isNull() || !doc.isObject() || err.error != QJsonParseError::NoError)
+    {
+        qWarning() << "[ConfigManager] default_profile.json parse failed:" << path
+                   << "error=" << err.errorString() << "offset=" << err.offset;
+        return false;
+    }
+
+    qInfo() << "[ConfigManager] Loaded default profile template:" << path
+            << "source=" << (path.startsWith(":/") ? "resource" : "disk");
+    outRoot = doc.object();
+    return true;
+}
+
 static const QString kAppDataFolderName = QStringLiteral("AI-Screenshot-Translator");
 
 QString ConfigManager::appDataDirPath()
@@ -62,6 +116,16 @@ ConfigManager::ConfigManager()
             m_currentProfileName = "Default";
             if (!loadProfile("Default"))
             {
+                // Create Default using the template (if provided in assets/)
+                QJsonObject root;
+                if (tryLoadDefaultProfileTemplate(root))
+                {
+                    m_config = AppConfig();
+                    parseJson(root);
+
+                    qInfo() << "[ConfigManager] default_profile.json prompt_prefix="
+                            << m_config.promptText.left(80).replace("\n", "\\n");
+                }
                 saveConfig(); // Creates Default
             }
         }
@@ -101,8 +165,24 @@ bool ConfigManager::createProfile(const QString &name)
         return false; // Already exists
 
     // Create with current/default settings
-    AppConfig defaultCfg;
-    m_config = defaultCfg;
+    if (name == "Default")
+    {
+        QJsonObject root;
+        if (tryLoadDefaultProfileTemplate(root))
+        {
+            m_config = AppConfig();
+            parseJson(root);
+        }
+        else
+        {
+            m_config = AppConfig();
+        }
+    }
+    else
+    {
+        AppConfig defaultCfg;
+        m_config = defaultCfg;
+    }
     m_currentProfileName = name;
     saveConfig();
     saveMeta();
