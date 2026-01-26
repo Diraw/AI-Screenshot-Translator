@@ -2,10 +2,41 @@
 #include <QDebug>
 #include <QCoreApplication>
 
+static const QString kAppDataFolderName = QStringLiteral("AI-Screenshot-Translator");
+
+QString ConfigManager::appDataDirPath()
+{
+    // Force Roaming on Windows: %APPDATA% (C:\Users\<u>\AppData\Roaming)
+    QString base;
+#ifdef _WIN32
+    base = qEnvironmentVariable("APPDATA");
+#endif
+    if (base.isEmpty())
+        base = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
+    if (base.isEmpty())
+        base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+
+    const QString dirPath = QDir::cleanPath(base + "/" + kAppDataFolderName);
+    QDir dir(dirPath);
+    if (!dir.exists())
+        dir.mkpath(".");
+    return dirPath;
+}
+
+QString ConfigManager::settingsJsonPath()
+{
+    return QDir::cleanPath(appDataDirPath() + "/settings.json");
+}
+
+QString ConfigManager::settingsIniPath()
+{
+    return QDir::cleanPath(appDataDirPath() + "/app.ini");
+}
+
 ConfigManager::ConfigManager()
 {
     // AppData storage
-    m_appDataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    m_appDataDir = appDataDirPath();
     m_profilesDir = m_appDataDir + "/profiles";
 
     QDir dir(m_profilesDir);
@@ -236,7 +267,7 @@ QString ConfigManager::configFilePath() const
 
 void ConfigManager::loadMeta()
 {
-    QFile file(m_appDataDir + "/settings.json");
+    QFile file(settingsJsonPath());
     if (file.open(QIODevice::ReadOnly))
     {
         QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
@@ -246,7 +277,7 @@ void ConfigManager::loadMeta()
 
 void ConfigManager::saveMeta()
 {
-    QFile file(m_appDataDir + "/settings.json");
+    QFile file(settingsJsonPath());
     if (file.open(QIODevice::WriteOnly))
     {
         QJsonObject root;
@@ -297,6 +328,7 @@ void ConfigManager::parseJson(const QJsonObject &root)
         m_config.editHotkey = app["edit_hotkey"].toString("e");
         m_config.viewToggleHotkey = app["view_toggle_hotkey"].toString("r");
         m_config.screenshotToggleHotkey = app["screenshot_toggle_hotkey"].toString("s");
+        m_config.selectionToggleHotkey = app["selection_toggle_hotkey"].toString("ctrl+s");
 
         m_config.boldHotkey = app["bold_hotkey"].toString("ctrl+b");
         m_config.underlineHotkey = app["underline_hotkey"].toString("ctrl+u");
@@ -369,6 +401,7 @@ QJsonObject ConfigManager::toJson() const
     app["edit_hotkey"] = m_config.editHotkey;
     app["view_toggle_hotkey"] = m_config.viewToggleHotkey;
     app["screenshot_toggle_hotkey"] = m_config.screenshotToggleHotkey;
+    app["selection_toggle_hotkey"] = m_config.selectionToggleHotkey;
 
     app["bold_hotkey"] = m_config.boldHotkey;
     app["underline_hotkey"] = m_config.underlineHotkey;

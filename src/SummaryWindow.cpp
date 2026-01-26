@@ -39,6 +39,19 @@ void SummaryWindow::setConfig(const AppConfig &config)
 {
     m_config = config;
 
+    auto normalizeHotkey = [](QString key)
+    {
+        key = key.trimmed().toLower();
+        key.replace(" ", "");
+        return key;
+    };
+
+    m_selectionToggleKey = normalizeHotkey(m_config.selectionToggleHotkey);
+    if (m_selectionToggleKey.isEmpty())
+        m_selectionToggleKey = QStringLiteral("ctrl+s");
+    if (m_selectionToggleShortcut)
+        m_selectionToggleShortcut->setKey(QKeySequence(m_selectionToggleKey));
+
     if (m_webView)
     {
         const QString mark = ColorUtils::normalizeCssColor(m_config.highlightMarkColor, "#ffeb3b");
@@ -79,9 +92,9 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent)
     // Local shortcuts for archive window UX
     // - Ctrl+S toggles batch selection mode (keep 's' for screenshot card)
     // - Esc exits RAW (if active), selection mode, or clears active filters
-    QShortcut *selectionShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+S")), this);
-    selectionShortcut->setContext(Qt::WindowShortcut);
-    connect(selectionShortcut, &QShortcut::activated, this, [this]()
+    m_selectionToggleShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+S")), this);
+    m_selectionToggleShortcut->setContext(Qt::WindowShortcut);
+    connect(m_selectionToggleShortcut, &QShortcut::activated, this, [this]()
             {
         if (m_selectionModeBtn) m_selectionModeBtn->setChecked(!m_selectionModeBtn->isChecked()); });
 

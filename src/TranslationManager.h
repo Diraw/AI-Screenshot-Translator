@@ -105,6 +105,7 @@ private:
         m_translations["en"]["lbl_edit_hotkey"] = "Summary Edit Toggle:";
         m_translations["en"]["lbl_view_hotkey"] = "Summary View Toggle:";
         m_translations["en"]["lbl_shot_toggle_hotkey"] = "Summary Screenshot Toggle:";
+        m_translations["en"]["lbl_selection_toggle_hotkey"] = "Batch Selection Toggle:";
         m_translations["en"]["lbl_bold"] = "Bold Shortcut:";
         m_translations["en"]["lbl_underline"] = "Underline Shortcut:";
         m_translations["en"]["lbl_highlight"] = "Highlight Shortcut:";
@@ -222,11 +223,12 @@ private:
         m_translations["zh"]["lbl_edit_hotkey"] = "编辑模式切换:";
         m_translations["zh"]["lbl_view_hotkey"] = "原始视图切换:";
         m_translations["zh"]["lbl_shot_toggle_hotkey"] = "截图卡片切换:";
+        m_translations["zh"]["lbl_selection_toggle_hotkey"] = "批量选择切换:";
         m_translations["zh"]["lbl_bold"] = "加粗快捷键:";
         m_translations["zh"]["lbl_underline"] = "下划线快捷键:";
         m_translations["zh"]["lbl_highlight"] = "高亮快捷键:";
-        m_translations["zh"]["lbl_highlight_color"] = "高亮颜色:";
-        m_translations["zh"]["lbl_highlight_color_dark"] = "高亮颜色(暗色):";
+        m_translations["zh"]["lbl_highlight_color"] = "高亮颜色(浅色):";
+        m_translations["zh"]["lbl_highlight_color_dark"] = "高亮颜色(深色):";
         m_translations["zh"]["lbl_border_color"] = "卡片边框颜色:";
         m_translations["zh"]["lbl_font_size"] = "初始字体大小:";
         m_translations["zh"]["lbl_zoom_sens"] = "缩放灵敏度:";

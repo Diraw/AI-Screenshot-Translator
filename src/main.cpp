@@ -11,6 +11,14 @@
 #include <QDateTime>
 #include "ConfigManager.h"
 
+#ifndef APP_NAME
+#define APP_NAME "AI Screenshot Translator"
+#endif
+
+#ifndef APP_VERSION
+#define APP_VERSION "0.0.0"
+#endif
+
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -86,6 +94,9 @@ int main(int argc, char *argv[])
     qDebug() << "Application starting...";
 
     QApplication a(argc, argv);
+
+    QCoreApplication::setApplicationName(QString::fromUtf8(APP_NAME));
+    QCoreApplication::setApplicationVersion(QString::fromUtf8(APP_VERSION));
 
     // Ensure we don't quit when the last window closes (because we live in the tray)
     a.setQuitOnLastWindowClosed(false);

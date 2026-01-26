@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(AI-Screenshot-Translator-Cpp VERSION 0.1 LANGUAGES CXX)
+project(AI-Screenshot-Translator-Cpp VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -57,6 +57,8 @@ set(PROJECT_SOURCES
     src/SummaryWindow.h
     src/TagDialog.h
     src/TagDialog.cpp
+    src/StartupWindow.h
+    src/StartupWindow.cpp
     src/HistoryManager.cpp
     src/HistoryManager_Paths.cpp
     src/HistoryManager_Entries.cpp
@@ -80,6 +82,13 @@ if(WIN32)
 endif()
 
 add_executable(AI-Screenshot-Translator-Cpp ${PROJECT_SOURCES})
+
+target_compile_definitions(AI-Screenshot-Translator-Cpp PRIVATE
+    APP_NAME="AI Screenshot Translator"
+    APP_VERSION="${PROJECT_VERSION}"
+    APP_COPYRIGHT="Copyright © 2026 Diraw"
+    APP_REPO_URL="https://github.com/Diraw/AI-Screenshot-Translator"
+)
 
 target_link_libraries(AI-Screenshot-Translator-Cpp PRIVATE
     Qt6::Widgets

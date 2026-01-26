@@ -34,6 +34,8 @@ struct AppConfig
     QString editHotkey = "e";
     QString viewToggleHotkey = "r";
     QString screenshotToggleHotkey = "s";
+    // Batch selection mode toggle inside SummaryWindow (HTML + Qt fallback)
+    QString selectionToggleHotkey = "ctrl+s";
 
     // Formatting Shortcuts
     QString boldHotkey = "ctrl+b";
@@ -77,6 +79,10 @@ struct AppConfig
 class ConfigManager
 {
 public:
+    static QString appDataDirPath();
+    static QString settingsJsonPath();
+    static QString settingsIniPath();
+
     ConfigManager();
     ~ConfigManager() = default;
 

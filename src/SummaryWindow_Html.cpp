@@ -287,6 +287,7 @@ window.addEventListener('scroll', function() {
     html += QString("var KEY_EDIT = '%1';\n").arg(m_editKey);
     html += QString("var KEY_VIEW = '%1';\n").arg(m_viewKey);
     html += QString("var KEY_SHOT = '%1';\n").arg(m_screenshotKey);
+    html += QString("var KEY_SELECT = '%1';\n").arg(m_selectionToggleKey);
     html += QString("var KEY_BOLD = '%1';\n").arg(m_boldKey);
     html += QString("var KEY_UNDERLINE = '%1';\n").arg(m_underlineKey);
     html += QString("var KEY_HIGHLIGHT = '%1';\n").arg(m_highlightKey);

@@ -185,9 +185,9 @@ function handleKey(e) {
    var k = keyLower;
    log(`KEY_VIEW=${KEY_VIEW} KEY_SHOT=${KEY_SHOT} k=${k} isEditing=${isEditing}`);
 
-   // Ctrl+S toggles selection mode (only when not editing).
-   // Keep plain 's' for KEY_SHOT (screenshot/restore).
-   if (!isEditing && e.ctrlKey && !e.altKey && !e.shiftKey && k === 's') {
+   // Batch selection mode toggle (only when not editing).
+   // Default is Ctrl+S, but it's configurable via KEY_SELECT.
+   if (!isEditing && matchHotkey(e, (typeof KEY_SELECT !== 'undefined') ? KEY_SELECT : 'ctrl+s')) {
        if (window.cmd_toggleSelectionMode) window.cmd_toggleSelectionMode();
        e.preventDefault();
        return;

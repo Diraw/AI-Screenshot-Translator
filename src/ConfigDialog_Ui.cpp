@@ -112,6 +112,7 @@ void ConfigDialog::retranslateUi()
         {
             updateLabel(layout, 0, "lbl_view_hotkey");
             updateLabel(layout, 1, "lbl_shot_toggle_hotkey");
+            updateLabel(layout, 2, "lbl_selection_toggle_hotkey");
         }
     }
 
