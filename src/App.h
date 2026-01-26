@@ -77,6 +77,7 @@ private:
 
     // Dynamic State
     bool m_preferredLockState = true;
+    bool m_forceConfigDialogForegroundOnce = false;
 
     QTimer m_themeTimer;
     bool m_lastTopBarDark = false;

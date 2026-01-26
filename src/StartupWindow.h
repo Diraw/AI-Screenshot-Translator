@@ -21,7 +21,7 @@ public:
     explicit StartupWindow(const AppConfig &cfg, QWidget *parent = nullptr);
 
 private slots:
-    void startUpdateCheck();
+    void startUpdateCheck(bool forceNetwork = false);
     void onUpdateReplyFinished();
     void openReleasesPage();
 
@@ -33,6 +33,9 @@ private:
     void closeIfNonInteractive(QObject *eventTarget);
     void setUpdateStatus(const QString &text);
     void updateHintColor();
+
+    bool applyCachedUpdateStatusIfFresh();
+    void saveUpdateCache(const QString &status, const QString &latestVer = QString(), const QString &latestUrl = QString());
 
     void loadUiConfig();
     QString formatText(QString text) const;

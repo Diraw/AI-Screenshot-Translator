@@ -16,7 +16,10 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPushButton>
+#include <QTimer>
 #include <QRegularExpression>
+#include <QSettings>
+#include <QDateTime>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -151,7 +154,8 @@ StartupWindow::StartupWindow(const AppConfig &cfg, QWidget *parent)
     updateRow->addWidget(m_updateStatusLabel);
 
     m_checkUpdateBtn = new QPushButton(formatText(uiString("buttons.check", QStringLiteral("检查更新"))), this);
-    connect(m_checkUpdateBtn, &QPushButton::clicked, this, &StartupWindow::startUpdateCheck);
+    connect(m_checkUpdateBtn, &QPushButton::clicked, this, [this]()
+            { startUpdateCheck(true); });
     updateRow->addWidget(m_checkUpdateBtn);
 
     m_openReleasesBtn = new QPushButton(formatText(uiString("buttons.open", QStringLiteral("打开发布页"))), this);
@@ -188,6 +192,87 @@ StartupWindow::StartupWindow(const AppConfig &cfg, QWidget *parent)
 
     // Set application version for other parts of the app
     QCoreApplication::setApplicationVersion(m_currentVersion.isEmpty() ? QString::fromUtf8(APP_VERSION) : m_currentVersion);
+
+    // Auto-check updates on every launch, but use 1-day cache unless forced by user.
+    QTimer::singleShot(0, this, [this]()
+                       { startUpdateCheck(false); });
+}
+
+bool StartupWindow::applyCachedUpdateStatusIfFresh()
+{
+    // Cache policy: 1 day
+    static const qint64 kMaxAgeMs = 24LL * 60LL * 60LL * 1000LL;
+
+    QSettings settings(ConfigManager::settingsIniPath(), QSettings::IniFormat);
+    settings.beginGroup(QStringLiteral("updateCache"));
+    const qint64 checkedAtMs = settings.value(QStringLiteral("checkedAtMs"), 0).toLongLong();
+    const QString status = settings.value(QStringLiteral("status"), QString()).toString();
+    const QString latestVer = settings.value(QStringLiteral("latestVer"), QString()).toString();
+    const QString latestUrl = settings.value(QStringLiteral("latestUrl"), QString()).toString();
+    settings.endGroup();
+
+    if (checkedAtMs <= 0)
+        return false;
+    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    if (nowMs - checkedAtMs > kMaxAgeMs)
+        return false;
+    if (status.isEmpty())
+        return false;
+
+    m_latestUrl = latestUrl;
+
+    if (status == QStringLiteral("ok"))
+    {
+        if (latestVer.isEmpty())
+        {
+            setUpdateStatus(formatText(m_updateNoVersion));
+            return true;
+        }
+
+        const QString current = m_currentVersion.isEmpty() ? QString::fromUtf8(APP_VERSION) : m_currentVersion;
+        const int cmp = compareVersions(current, latestVer);
+        if (cmp >= 0)
+        {
+            QString s = m_updateLatestTpl;
+            s.replace("{latest}", latestVer);
+            setUpdateStatus(formatText(s));
+        }
+        else
+        {
+            QString s = m_updateNewTpl;
+            s.replace("{latest}", latestVer);
+            setUpdateStatus(formatText(s));
+        }
+        return true;
+    }
+    if (status == QStringLiteral("neterr"))
+    {
+        setUpdateStatus(formatText(m_updateNetworkError));
+        return true;
+    }
+    if (status == QStringLiteral("parseerr"))
+    {
+        setUpdateStatus(formatText(m_updateParseError));
+        return true;
+    }
+    if (status == QStringLiteral("noversion"))
+    {
+        setUpdateStatus(formatText(m_updateNoVersion));
+        return true;
+    }
+
+    return false;
+}
+
+void StartupWindow::saveUpdateCache(const QString &status, const QString &latestVer, const QString &latestUrl)
+{
+    QSettings settings(ConfigManager::settingsIniPath(), QSettings::IniFormat);
+    settings.beginGroup(QStringLiteral("updateCache"));
+    settings.setValue(QStringLiteral("checkedAtMs"), QDateTime::currentMSecsSinceEpoch());
+    settings.setValue(QStringLiteral("status"), status);
+    settings.setValue(QStringLiteral("latestVer"), latestVer);
+    settings.setValue(QStringLiteral("latestUrl"), latestUrl);
+    settings.endGroup();
 }
 
 void StartupWindow::updateHintColor()
@@ -280,10 +365,17 @@ void StartupWindow::setUpdateStatus(const QString &text)
         m_updateStatusLabel->setText(text);
 }
 
-void StartupWindow::startUpdateCheck()
+void StartupWindow::startUpdateCheck(bool forceNetwork)
 {
     if (!m_checkUpdateBtn)
         return;
+
+    // Auto-check uses cache for 1 day; manual click bypasses cache.
+    if (!forceNetwork)
+    {
+        if (applyCachedUpdateStatusIfFresh())
+            return;
+    }
 
     if (!m_nam)
         m_nam = new QNetworkAccessManager(this);
@@ -326,6 +418,7 @@ void StartupWindow::onUpdateReplyFinished()
     if (err != QNetworkReply::NoError)
     {
         setUpdateStatus(formatText(m_updateNetworkError));
+        saveUpdateCache(QStringLiteral("neterr"));
         return;
     }
 
@@ -334,6 +427,7 @@ void StartupWindow::onUpdateReplyFinished()
     if (jerr.error != QJsonParseError::NoError || !doc.isObject())
     {
         setUpdateStatus(formatText(m_updateParseError));
+        saveUpdateCache(QStringLiteral("parseerr"));
         return;
     }
 
@@ -350,6 +444,7 @@ void StartupWindow::onUpdateReplyFinished()
     if (latestVer.isEmpty())
     {
         setUpdateStatus(formatText(m_updateNoVersion));
+        saveUpdateCache(QStringLiteral("noversion"));
         return;
     }
 
@@ -366,6 +461,8 @@ void StartupWindow::onUpdateReplyFinished()
         s.replace("{latest}", latestVer);
         setUpdateStatus(formatText(s));
     }
+
+    saveUpdateCache(QStringLiteral("ok"), latestVer, m_latestUrl);
 }
 
 void StartupWindow::openReleasesPage()

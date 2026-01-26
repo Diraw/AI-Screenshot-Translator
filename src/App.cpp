@@ -114,6 +114,7 @@ App::App(QObject *parent)
 
     if (m_configManager.getConfig().apiKey.isEmpty())
     {
+        m_forceConfigDialogForegroundOnce = true;
         QTimer::singleShot(100, this, &App::showConfig);
     }
 

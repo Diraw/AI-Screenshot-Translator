@@ -68,6 +68,29 @@ QString App::updateConfig(const AppConfig &cfg)
 
 void App::showConfig()
 {
+    auto forceToFront = [](QWidget *w)
+    {
+        if (!w)
+            return;
+        w->show();
+        w->setWindowState((w->windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
+        w->raise();
+        w->activateWindow();
+
+        // Some Windows configurations ignore immediate activateWindow() due to focus stealing prevention.
+        // A queued retry usually succeeds.
+        QTimer::singleShot(0, w, [w]()
+                           {
+            if (!w) return;
+            w->raise();
+            w->activateWindow(); });
+        QTimer::singleShot(150, w, [w]()
+                           {
+            if (!w) return;
+            w->raise();
+            w->activateWindow(); });
+    };
+
     if (m_activeConfigDialog)
     {
         // Toggle: if visible, hide; if hidden, show
@@ -100,10 +123,7 @@ void App::showConfig()
             {
                 m_activeConfigDialog->restoreGeometry(cfg.configWindowGeometry);
             }
-            m_activeConfigDialog->show();
-            m_activeConfigDialog->setWindowState((m_activeConfigDialog->windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
-            m_activeConfigDialog->raise();
-            m_activeConfigDialog->activateWindow();
+            forceToFront(m_activeConfigDialog);
 
             // Re-enable updates in next event loop
             QTimer::singleShot(0, m_activeConfigDialog, [dlg = m_activeConfigDialog]()
@@ -119,6 +139,14 @@ void App::showConfig()
     ConfigDialog *dlg = new ConfigDialog(&m_configManager);
     dlg->setAttribute(Qt::WA_DeleteOnClose, false); // Don't delete on close, allow toggle
     m_activeConfigDialog = dlg;
+
+    // If this is the first-run auto-open, temporarily force it on top so it's not hidden behind other windows.
+    const bool forceOnce = m_forceConfigDialogForegroundOnce;
+    m_forceConfigDialogForegroundOnce = false;
+    if (forceOnce)
+    {
+        dlg->setWindowFlag(Qt::WindowStaysOnTopHint, true);
+    }
 
     // Restore saved geometry
     AppConfig cfg = m_configManager.getConfig();
@@ -140,8 +168,17 @@ void App::showConfig()
         m_configManager.setConfig(cfg);
         m_configManager.saveConfig(); });
 
-    dlg->show();
-    dlg->setWindowState((dlg->windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
-    dlg->raise();
-    dlg->activateWindow();
+    forceToFront(dlg);
+
+    if (forceOnce)
+    {
+        // Remove the always-on-top flag after the user sees it, to avoid interfering with normal workflow.
+        QTimer::singleShot(1200, dlg, [dlg]()
+                           {
+            if (!dlg) return;
+            dlg->setWindowFlag(Qt::WindowStaysOnTopHint, false);
+            dlg->show();
+            dlg->raise();
+            dlg->activateWindow(); });
+    }
 }
