@@ -147,6 +147,10 @@ html, body {
   color: #111111;
 }
 
+/* Avoid horizontal overflow artifacts (RAW/EDIT right edge) */
+html, body { overflow-x: hidden; }
+*, *::before, *::after { box-sizing: border-box; }
+
 :root {
             --mark-bg: __MARK_BG__;
             --mark-bg-dark: __MARK_BG_DARK__;
@@ -170,7 +174,7 @@ body { font-family: sans-serif; padding: 8px; }
 .entry.mode-edit { outline: 1px solid #777; }
 .entry-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .selection-checkbox { margin-right: 6px; }
-.raw-text { width: 100%; min-height: 80px; white-space: pre-wrap; background: #ffffff; color: #111111; border: 1px solid #ccc; border-radius: 4px; padding: 8px; }
+.raw-text { width: 100%; max-width: 100%; min-height: 80px; white-space: pre-wrap; background: #ffffff; color: #111111; border: 1px solid #ccc; border-radius: 4px; padding: 8px; overflow-wrap: anywhere; }
 .rendered-html { color: #111111; }
 html.dark-mode, body.dark-mode { background: #1e1e1e !important; color: #e0e0e0 !important; }
 body.dark-mode .entry { background: #2a2a2a !important; color: #e0e0e0 !important; border-color: #444 !important; }

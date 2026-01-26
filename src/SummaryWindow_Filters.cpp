@@ -4,8 +4,8 @@
 #include "HistoryManager.h"
 #include "ThemeUtils.h"
 #include "TranslationManager.h"
+#include "TagDialog.h"
 
-#include <QComboBox>
 #include <QDate>
 #include <QDateEdit>
 #include <QFile>
@@ -71,14 +71,13 @@ void SummaryWindow::setupFilterUI()
     tagLabel->setProperty("role", "caption");
     filtersLayout->addWidget(tagLabel);
 
-    m_tagFilterCombo = new QComboBox(this);
-    m_tagFilterCombo->setObjectName("tagFilterCombo");
-    m_tagFilterCombo->setEditable(false);
-    m_tagFilterCombo->addItem(TranslationManager::instance().tr("filter_all_tags"), "");
-    m_tagFilterCombo->setFixedHeight(controlHeight);
-    m_tagFilterCombo->setFixedWidth(96);
-    m_tagFilterCombo->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    filtersLayout->addWidget(m_tagFilterCombo);
+    m_tagFilterBtn = new QPushButton(TranslationManager::instance().tr("filter_all_tags"), this);
+    m_tagFilterBtn->setObjectName("tagFilterButton");
+    m_tagFilterBtn->setProperty("variant", "ghost");
+    m_tagFilterBtn->setFixedHeight(controlHeight);
+    m_tagFilterBtn->setFixedWidth(160);
+    m_tagFilterBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    filtersLayout->addWidget(m_tagFilterBtn);
 
     m_clearFilterBtn = new QPushButton(TranslationManager::instance().tr("filter_clear"), this);
     m_clearFilterBtn->setObjectName("clearFilterBtn");
@@ -157,12 +156,41 @@ void SummaryWindow::setupFilterUI()
 
     connect(m_fromDateEdit, &QDateEdit::dateChanged, this, &SummaryWindow::applyFilters);
     connect(m_toDateEdit, &QDateEdit::dateChanged, this, &SummaryWindow::applyFilters);
-    connect(m_tagFilterCombo, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, &SummaryWindow::applyFilters);
+
+    connect(m_tagFilterBtn, &QPushButton::clicked, this, [this]()
+            {
+        if (!m_historyManager) return;
+        QStringList allTags = m_historyManager->getAllTags();
+        TagDialog *dialog = new TagDialog(allTags, m_selectedTags, this, [this]() -> bool {
+            if (m_selectionModeBtn && m_selectionModeBtn->isChecked()) {
+                m_selectionModeBtn->setChecked(false);
+                return true;
+            }
+            return false;
+        });
+        connect(dialog, &TagDialog::tagsUpdated, this, [this](const QStringList &tags) {
+            m_selectedTags = tags;
+            if (m_tagFilterBtn) {
+                if (m_selectedTags.isEmpty()) {
+                    m_tagFilterBtn->setText(TranslationManager::instance().tr("filter_all_tags"));
+                } else {
+                    QString text = m_selectedTags.join(", ");
+                    // Keep button compact
+                    if (text.size() > 28) text = text.left(28) + "...";
+                    m_tagFilterBtn->setText(text);
+                }
+            }
+            applyFilters();
+        });
+        dialog->exec();
+        dialog->deleteLater(); });
+
     connect(m_clearFilterBtn, &QPushButton::clicked, this, [this]()
             {
         m_fromDateEdit->setDate(QDate::currentDate().addMonths(-1));
         m_toDateEdit->setDate(QDate::currentDate());
-        m_tagFilterCombo->setCurrentIndex(0);
+        m_selectedTags.clear();
+        if (m_tagFilterBtn) m_tagFilterBtn->setText(TranslationManager::instance().tr("filter_all_tags"));
         applyFilters(); });
 }
 
@@ -174,19 +202,20 @@ void SummaryWindow::setHistoryManager(HistoryManager *historyManager)
 
 void SummaryWindow::loadAvailableTags()
 {
-    if (!m_historyManager || !m_tagFilterCombo)
+    if (!m_historyManager)
         return;
-
-    QStringList allTags = m_historyManager->getAllTags();
-
-    while (m_tagFilterCombo->count() > 1)
+    // Tag list is fetched on-demand for the dialog; keep selected button text up-to-date.
+    if (m_tagFilterBtn)
     {
-        m_tagFilterCombo->removeItem(1);
-    }
-
-    for (const QString &tag : allTags)
-    {
-        m_tagFilterCombo->addItem(tag, tag);
+        if (m_selectedTags.isEmpty())
+            m_tagFilterBtn->setText(TranslationManager::instance().tr("filter_all_tags"));
+        else
+        {
+            QString text = m_selectedTags.join(", ");
+            if (text.size() > 28)
+                text = text.left(28) + "...";
+            m_tagFilterBtn->setText(text);
+        }
     }
 }
 
@@ -202,7 +231,7 @@ QList<TranslationEntry> SummaryWindow::getFilteredEntries() const
 
     QDate fromDate = m_fromDateEdit ? m_fromDateEdit->date() : QDate();
     QDate toDate = m_toDateEdit ? m_toDateEdit->date() : QDate();
-    QString selectedTag = m_tagFilterCombo ? m_tagFilterCombo->currentData().toString() : "";
+    const QStringList selectedTags = m_selectedTags;
 
     for (const TranslationEntry &entry : m_entries)
     {
@@ -212,8 +241,20 @@ QList<TranslationEntry> SummaryWindow::getFilteredEntries() const
         if (m_toDateEdit && entryDate > toDate)
             continue;
 
-        if (!selectedTag.isEmpty() && !entry.tags.contains(selectedTag))
-            continue;
+        if (!selectedTags.isEmpty())
+        {
+            bool anyMatch = false;
+            for (const QString &t : selectedTags)
+            {
+                if (entry.tags.contains(t))
+                {
+                    anyMatch = true;
+                    break;
+                }
+            }
+            if (!anyMatch)
+                continue;
+        }
 
         filtered.append(entry);
     }
