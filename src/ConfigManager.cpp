@@ -345,6 +345,11 @@ QString ConfigManager::configFilePath() const
     return m_profilesDir + "/" + m_currentProfileName + ".json";
 }
 
+QString ConfigManager::profilesDirPath() const
+{
+    return QDir::cleanPath(m_profilesDir);
+}
+
 void ConfigManager::loadMeta()
 {
     QFile file(settingsJsonPath());

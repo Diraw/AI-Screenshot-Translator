@@ -515,6 +515,8 @@ ConfigDialog::ConfigDialog(ConfigManager *configManager, QWidget *parent)
     updateProfileList();
     loadFromConfig(); // Uses m_configManager -> AppConfig
 
+    setupProfilesWatcher();
+
     retranslateUi();
 }
 

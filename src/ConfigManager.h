@@ -102,7 +102,8 @@ public:
     AppConfig getConfig() const;
     void setConfig(const AppConfig &config);
 
-    QString configFilePath() const; // Current profile path
+    QString configFilePath() const;  // Current profile path
+    QString profilesDirPath() const; // Profiles directory path
 
 private:
     QString m_appDataDir;

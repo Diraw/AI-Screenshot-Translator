@@ -22,6 +22,9 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 
+class QFileSystemWatcher;
+class QTimer;
+
 // ...
 
 class ConfigDialog : public QDialog
@@ -42,6 +45,11 @@ private slots:
     void copyProfile();
     void importProfile();
     void exportProfile();
+
+    // Live refresh when profiles/*.json changes on disk
+    void onProfilesDirChanged(const QString &path);
+    void onProfileFileChanged(const QString &path);
+    void onProfilesWatcherTimeout();
 
 signals:
     void saved();
@@ -116,6 +124,14 @@ private:
 
     void loadFromConfig();
     void updateProfileList();
+
+    void setupProfilesWatcher();
+    void refreshProfilesWatcherPaths();
+
+    QFileSystemWatcher *m_profilesWatcher = nullptr;
+    QTimer *m_profilesWatchTimer = nullptr;
+    bool m_profilesDirDirty = false;
+    QString m_profilesChangedFile;
 
     // Localization
     QComboBox *m_languageCombo;
