@@ -160,16 +160,7 @@ html, body { overflow-x: hidden; }
 mark { background: var(--mark-bg); color: var(--mark-fg); }
 body.dark-mode mark { background: var(--mark-bg-dark); color: var(--mark-fg); }
 body { font-family: sans-serif; padding: 8px; }
-#status-indicator {
-  position: fixed;
-  top: 8px;
-  right: 12px;
-  font-size: 12px;
-  background: rgba(0,0,0,0.05);
-  padding: 4px 8px;
-  border-radius: 4px;
-  z-index: 9999;
-}
+__STATUS_INDICATOR_CSS__
 .entry { margin-bottom: 12px; padding: 8px; background: #f7f7f7; color: #111111; border: 1px solid #ddd; border-radius: 4px; }
 .entry.mode-edit { outline: 1px solid #777; }
 .entry-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
@@ -238,6 +229,7 @@ window.addEventListener('scroll', function() {
     QString cssKatex = loadAsset("libs/katex.min.css");
     QString jsKatex = loadAsset("libs/katex.min.js");
     QString jsKatexAuto = loadAsset("libs/auto-render.min.js");
+    QString statusIndicatorCss = loadAsset("templates/status_indicator.css");
 
     auto embedFonts = [](QString css) -> QString
     {
@@ -275,6 +267,7 @@ window.addEventListener('scroll', function() {
     html = html.replace("<script src='%4'></script>", "<script>\n" + jsKatexAuto + "\n</script>");
     html = html.replace("__IS_DARK__", isDark ? "true" : "false");
     html = html.replace("__HTML_CLASS__", isDark ? "dark-mode" : "");
+    html = html.replace("__STATUS_INDICATOR_CSS__", statusIndicatorCss.isEmpty() ? "" : statusIndicatorCss);
 
     const QString mark = ColorUtils::normalizeCssColor(m_config.highlightMarkColor, "#ffeb3b");
     const QString markDark = ColorUtils::normalizeCssColor(m_config.highlightMarkColorDark, "#d4af37");

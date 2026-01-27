@@ -13,7 +13,7 @@ QWidget#archiveActionsGroup {
 
 QToolBar#archiveFilterToolbar QLabel[role="caption"] {
   color: #64748b;
-  padding: 0 1px;
+  padding: 2px 2px;
 }
 
 QWidget#archiveFiltersGroup QDateEdit,

@@ -1,0 +1,19 @@
+/* Shared status indicator style (Archive + ResultWindow visual parity) */
+#status-indicator {
+  position: fixed;
+  top: 8px;
+  right: 12px;
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 4px 8px;
+  border-radius: 4px;
+  z-index: 9999;
+  color: inherit;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+body.dark-mode #status-indicator {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}

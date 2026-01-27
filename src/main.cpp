@@ -62,15 +62,12 @@ void customMessageHandler(QtMsgType type, const QMessageLogContext &context, con
         return;
 
     static bool logCleared = false;
-    if (!logCleared)
-    {
-        QFile::remove("debug.log"); // ensure fresh file the moment we start logging
-        logCleared = true;
-    }
-
     QFile outFile("debug.log");
-    if (outFile.open(QIODevice::WriteOnly | QIODevice::Append))
+    const QIODevice::OpenMode mode = QIODevice::WriteOnly | (logCleared ? QIODevice::Append : QIODevice::Truncate);
+    if (outFile.open(mode))
     {
+        if (!logCleared)
+            logCleared = true;
         QTextStream ts(&outFile);
         ts << QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss.zzz ") << text << Qt::endl;
     }
@@ -87,7 +84,9 @@ int main(int argc, char *argv[])
     bool enableFileLog = g_enableLogging || forceDebug;
     if (enableFileLog)
     {
-        QFile::remove("debug.log"); // Clear previous log on startup when debug is enabled
+        // Clear previous logs on startup when file logging is enabled.
+        QFile::remove("debug.log");
+        QFile::remove("wkf.log");
     }
 
     qInstallMessageHandler(customMessageHandler);

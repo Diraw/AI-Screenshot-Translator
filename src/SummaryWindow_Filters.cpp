@@ -15,6 +15,7 @@
 #include <QPushButton>
 #include <QToolBar>
 #include <QVBoxLayout>
+#include <QFontMetrics>
 
 #include <algorithm>
 
@@ -29,8 +30,9 @@ void SummaryWindow::setupFilterUI()
     m_filterToolbar->setContextMenuPolicy(Qt::PreventContextMenu);
     m_filterToolbar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
-    const int controlHeight = 22;
-    const int dateWidth = 128;
+    // Avoid glyph clipping on high-DPI / larger system fonts.
+    const int controlHeight = qMax(30, QFontMetrics(m_filterToolbar->font()).lineSpacing() + 12);
+    const int dateWidth = 115;
 
     // Left group: filters
     m_filtersGroup = new QWidget(this);
@@ -38,11 +40,14 @@ void SummaryWindow::setupFilterUI()
     // Keep filters compact so the right-side batch actions don't get pushed into the overflow.
     m_filtersGroup->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     QHBoxLayout *filtersLayout = new QHBoxLayout(m_filtersGroup);
-    filtersLayout->setContentsMargins(3, 0, 3, 0);
+    filtersLayout->setContentsMargins(3, 2, 3, 2);
     filtersLayout->setSpacing(3);
+    filtersLayout->setAlignment(Qt::AlignVCenter);
 
     QLabel *fromLabel = new QLabel(TranslationManager::instance().tr("filter_from_date") + ":", this);
     fromLabel->setProperty("role", "caption");
+    fromLabel->setAlignment(Qt::AlignVCenter);
+    fromLabel->setMinimumHeight(controlHeight);
     filtersLayout->addWidget(fromLabel);
 
     m_fromDateEdit = new QDateEdit(this);
@@ -50,12 +55,14 @@ void SummaryWindow::setupFilterUI()
     m_fromDateEdit->setCalendarPopup(true);
     m_fromDateEdit->setDate(QDate::currentDate().addMonths(-1));
     m_fromDateEdit->setDisplayFormat("yyyy-MM-dd");
-    m_fromDateEdit->setFixedHeight(controlHeight);
+    m_fromDateEdit->setMinimumHeight(controlHeight);
     m_fromDateEdit->setFixedWidth(dateWidth);
     filtersLayout->addWidget(m_fromDateEdit);
 
     QLabel *toLabel = new QLabel(TranslationManager::instance().tr("filter_to_date") + ":", this);
     toLabel->setProperty("role", "caption");
+    toLabel->setAlignment(Qt::AlignVCenter);
+    toLabel->setMinimumHeight(controlHeight);
     filtersLayout->addWidget(toLabel);
 
     m_toDateEdit = new QDateEdit(this);
@@ -63,26 +70,24 @@ void SummaryWindow::setupFilterUI()
     m_toDateEdit->setCalendarPopup(true);
     m_toDateEdit->setDate(QDate::currentDate());
     m_toDateEdit->setDisplayFormat("yyyy-MM-dd");
-    m_toDateEdit->setFixedHeight(controlHeight);
+    m_toDateEdit->setMinimumHeight(controlHeight);
     m_toDateEdit->setFixedWidth(dateWidth);
     filtersLayout->addWidget(m_toDateEdit);
-
-    QLabel *tagLabel = new QLabel(TranslationManager::instance().tr("filter_tags") + ":", this);
-    tagLabel->setProperty("role", "caption");
-    filtersLayout->addWidget(tagLabel);
 
     m_tagFilterBtn = new QPushButton(TranslationManager::instance().tr("filter_all_tags"), this);
     m_tagFilterBtn->setObjectName("tagFilterButton");
     m_tagFilterBtn->setProperty("variant", "ghost");
-    m_tagFilterBtn->setFixedHeight(controlHeight);
-    m_tagFilterBtn->setFixedWidth(160);
+    m_tagFilterBtn->setMinimumHeight(controlHeight);
+    m_tagFilterBtn->setFixedWidth(100);
     m_tagFilterBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     filtersLayout->addWidget(m_tagFilterBtn);
 
     m_clearFilterBtn = new QPushButton(TranslationManager::instance().tr("filter_clear"), this);
     m_clearFilterBtn->setObjectName("clearFilterBtn");
     m_clearFilterBtn->setProperty("variant", "ghost");
-    m_clearFilterBtn->setFixedHeight(controlHeight);
+    m_clearFilterBtn->setMinimumHeight(controlHeight);
+    m_clearFilterBtn->setFixedWidth(100);
+    m_clearFilterBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     filtersLayout->addWidget(m_clearFilterBtn);
 
     m_filterToolbar->addWidget(m_filtersGroup);
@@ -97,21 +102,22 @@ void SummaryWindow::setupFilterUI()
     m_actionsGroup->setObjectName("archiveActionsGroup");
     m_actionsGroup->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     QHBoxLayout *actionsLayout = new QHBoxLayout(m_actionsGroup);
-    actionsLayout->setContentsMargins(3, 0, 3, 0);
+    actionsLayout->setContentsMargins(3, 2, 3, 2);
     actionsLayout->setSpacing(2);
+    actionsLayout->setAlignment(Qt::AlignVCenter);
 
     m_selectionModeBtn = new QPushButton(TranslationManager::instance().tr("btn_selection_mode"), this);
     m_selectionModeBtn->setObjectName("selectionModeBtn");
     m_selectionModeBtn->setCheckable(true);
     m_selectionModeBtn->setProperty("variant", "toggle");
-    m_selectionModeBtn->setFixedHeight(controlHeight);
+    m_selectionModeBtn->setMinimumHeight(controlHeight);
     connect(m_selectionModeBtn, &QPushButton::toggled, this, &SummaryWindow::toggleSelectionMode);
     actionsLayout->addWidget(m_selectionModeBtn);
 
     m_selectAllBtn = new QPushButton(TranslationManager::instance().tr("btn_select_all"), this);
     m_selectAllBtn->setObjectName("selectAllBtn");
     m_selectAllBtn->setProperty("variant", "ghost");
-    m_selectAllBtn->setFixedHeight(controlHeight);
+    m_selectAllBtn->setMinimumHeight(controlHeight);
     connect(m_selectAllBtn, &QPushButton::clicked, this, &SummaryWindow::onBatchSelectAll);
     actionsLayout->addWidget(m_selectAllBtn);
     m_selectAllBtn->setVisible(false);
@@ -119,7 +125,7 @@ void SummaryWindow::setupFilterUI()
     m_batchDeleteBtn = new QPushButton(TranslationManager::instance().tr("btn_batch_delete"), this);
     m_batchDeleteBtn->setObjectName("batchDeleteBtn");
     m_batchDeleteBtn->setProperty("variant", "danger");
-    m_batchDeleteBtn->setFixedHeight(controlHeight);
+    m_batchDeleteBtn->setMinimumHeight(controlHeight);
     connect(m_batchDeleteBtn, &QPushButton::clicked, this, &SummaryWindow::onBatchDelete);
     actionsLayout->addWidget(m_batchDeleteBtn);
     m_batchDeleteBtn->setVisible(false);
@@ -127,7 +133,7 @@ void SummaryWindow::setupFilterUI()
     m_batchAddTagBtn = new QPushButton(TranslationManager::instance().tr("btn_batch_add_tag"), this);
     m_batchAddTagBtn->setObjectName("batchAddTagBtn");
     m_batchAddTagBtn->setProperty("variant", "ghost");
-    m_batchAddTagBtn->setFixedHeight(controlHeight);
+    m_batchAddTagBtn->setMinimumHeight(controlHeight);
     connect(m_batchAddTagBtn, &QPushButton::clicked, this, &SummaryWindow::onBatchAddTags);
     actionsLayout->addWidget(m_batchAddTagBtn);
     m_batchAddTagBtn->setVisible(false);
@@ -135,7 +141,7 @@ void SummaryWindow::setupFilterUI()
     m_batchRemoveTagBtn = new QPushButton(TranslationManager::instance().tr("btn_batch_remove_tag"), this);
     m_batchRemoveTagBtn->setObjectName("batchRemoveTagBtn");
     m_batchRemoveTagBtn->setProperty("variant", "ghost");
-    m_batchRemoveTagBtn->setFixedHeight(controlHeight);
+    m_batchRemoveTagBtn->setMinimumHeight(controlHeight);
     connect(m_batchRemoveTagBtn, &QPushButton::clicked, this, &SummaryWindow::onBatchRemoveTags);
     actionsLayout->addWidget(m_batchRemoveTagBtn);
     m_batchRemoveTagBtn->setVisible(false);
