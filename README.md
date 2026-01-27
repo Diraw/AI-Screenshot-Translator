@@ -58,6 +58,22 @@
 - 设置中开启 “Enable Debug Mode” 后，会记录日志到工作目录 `debug.log`，App 启动/异常/网络错误会写入。
 - WebView 模板和资源已本地打包，无需联网；网络请求仅用于调用选定的 AI Provider。
 
+## 可选：使用 Umami 统计（DAU/MAU/使用时长）
+程序支持在启动 **5 秒后** 异步上报 Umami 事件（不会阻塞 UI）。你可以在仓库根目录放一个 `.env`（不要提交到 GitHub）：
+
+```dotenv
+# Umami 网站 ID（必填）
+website_uuid=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+# Umami 服务地址（可选，默认 https://umami.diraw.top）
+umami_host=https://umami.example.com
+
+# 客户端固定 ID（可选；不填则会在 %AppData% 下自动生成并持久化）
+client_uuid=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+```
+
+上报事件包括：`session_start`、`heartbeat`（每 60 秒）、`session_end`，并发送一次 pageview 以便在 Umami 中直接看到会话/访客指标。
+
 ## 打包到 Release 目录（收敛依赖）
 构建后可将运行所需依赖统一放到 `build/Release/`：
 ```powershell

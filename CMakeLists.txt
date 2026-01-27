@@ -67,6 +67,12 @@ set(PROJECT_SOURCES
     src/HistoryManager.h
     src/EmbedWebView.cpp
     src/EmbedWebView_Actions.cpp
+    src/DotEnv.cpp
+    src/DotEnv.h
+    src/UmamiClient.cpp
+    src/UmamiClient.h
+    src/AnalyticsManager.cpp
+    src/AnalyticsManager.h
     assets.qrc
 )
 
