@@ -7,6 +7,60 @@
 #include <QRegularExpression>
 #include <QColor>
 
+namespace
+{
+    class BorderLabel final : public QLabel
+    {
+    public:
+        explicit BorderLabel(QWidget *parent = nullptr)
+            : QLabel(parent)
+        {
+            setAttribute(Qt::WA_TranslucentBackground);
+        }
+
+        void setBorderEnabled(bool enabled)
+        {
+            if (m_borderEnabled == enabled)
+                return;
+            m_borderEnabled = enabled;
+            update();
+        }
+
+        void setBorderColor(const QColor &color)
+        {
+            if (m_borderColor == color)
+                return;
+            m_borderColor = color;
+            update();
+        }
+
+    protected:
+        void paintEvent(QPaintEvent *event) override
+        {
+            QLabel::paintEvent(event);
+
+            if (!m_borderEnabled)
+                return;
+
+            // Draw overlay border without affecting contents rect.
+            QPainter painter(this);
+            painter.setRenderHint(QPainter::Antialiasing, false);
+
+            const int borderW = 2;
+            QColor c = m_borderColor;
+            if (!c.isValid())
+                c = QColor(100, 100, 100, 255);
+
+            painter.fillRect(QRect(0, 0, width(), borderW), c);  // top
+            painter.fillRect(QRect(0, 0, borderW, height()), c); // left
+        }
+
+    private:
+        bool m_borderEnabled{false};
+        QColor m_borderColor;
+    };
+} // namespace
+
 // Constants for window chrome/frame overhead
 static const int EXTRA_W = 0;
 static const int EXTRA_H = 22; // 0 margins + 2 spacing + 20 button height
@@ -27,7 +81,7 @@ PreviewCard::PreviewCard(const QPixmap &pixmap, QWidget *parent)
         m_baseSize = QSize(1, 1);
 
     // 2. Image Label (Absolute Positioning)
-    m_imageLabel = new QLabel(this);
+    m_imageLabel = new BorderLabel(this);
     m_imageLabel->setScaledContents(false);
     m_imageLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     // Transparent background to avoid white borders
@@ -194,23 +248,11 @@ void PreviewCard::setUseBorder(bool use)
     m_useBorder = use;
     if (m_imageLabel)
     {
-        if (use)
-        {
-            // L-shaped border using stylesheet (top and left only)
-            QString colorStr = QString("%1,%2,%3,%4")
-                                   .arg(m_borderColor.red())
-                                   .arg(m_borderColor.green())
-                                   .arg(m_borderColor.blue())
-                                   .arg(m_borderColor.alpha());
-            m_imageLabel->setStyleSheet(
-                QString("QLabel { background: transparent; border-top: 2px solid rgba(%1); border-left: 2px solid rgba(%1); }")
-                    .arg(colorStr));
-        }
-        else
-        {
-            // No border
-            m_imageLabel->setStyleSheet("QLabel { background: transparent; border: none; }");
-        }
+        // Keep the label borderless; draw the border as an overlay to avoid shrinking the contents rect.
+        m_imageLabel->setStyleSheet("QLabel { background: transparent; border: none; }");
+        auto *bl = static_cast<BorderLabel *>(m_imageLabel);
+        bl->setBorderColor(m_borderColor);
+        bl->setBorderEnabled(use);
     }
     update();
 }
