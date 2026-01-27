@@ -23,6 +23,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QColor>
+#include <QApplication>
 
 #include <algorithm>
 
@@ -72,6 +73,7 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent)
 
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(2);
 
     // Create container for webview
     m_webContainer = new QWidget(this);
@@ -128,6 +130,18 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent)
             m_selectedTags.clear();
             if (m_tagFilterBtn) m_tagFilterBtn->setText(TranslationManager::instance().tr("filter_all_tags"));
             applyFilters();
+            return;
+        }
+
+        // 4) Clear focus from the toolbar (e.g. date edits) and return focus to the web view
+        QWidget *fw = QApplication::focusWidget();
+        if (fw && m_filterToolbar && m_filterToolbar->isAncestorOf(fw))
+        {
+            fw->clearFocus();
+            if (m_webView)
+                m_webView->focusNative();
+            else
+                setFocus(Qt::OtherFocusReason);
             return;
         } });
 
@@ -186,6 +200,19 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent)
         QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req));
         if (doc.isArray() && !doc.array().isEmpty()) {
             m_lastScrollY = doc.array().at(0).toDouble();
+        } });
+
+    // Content-area click helper: WebView notifies us to clear toolbar focus (if any)
+    m_webView->bind("cmd_clearToolbarFocus", [this](std::string, std::string, void *)
+                    {
+        QWidget *fw = QApplication::focusWidget();
+        if (fw && m_filterToolbar && m_filterToolbar->isAncestorOf(fw))
+        {
+            fw->clearFocus();
+            if (m_webView)
+                m_webView->focusNative();
+            else
+                setFocus(Qt::OtherFocusReason);
         } });
     m_webView->bind("cmd_exitSelectionMode", [this](std::string, std::string, void *)
                     {
@@ -364,6 +391,70 @@ void SummaryWindow::resizeEvent(QResizeEvent *event)
 
 bool SummaryWindow::eventFilter(QObject *watched, QEvent *event)
 {
+    if (event->type() == QEvent::KeyPress)
+    {
+        auto *ke = static_cast<QKeyEvent *>(event);
+
+        // Some widgets (notably QDateEdit) consume Esc, preventing QShortcut from firing.
+        // Use an application-level filter to ensure Esc can always clear toolbar focus.
+        if (ke->key() == Qt::Key_Escape)
+        {
+            QWidget *fw = QApplication::focusWidget();
+            if (fw && m_filterToolbar && m_filterToolbar->isAncestorOf(fw))
+            {
+                fw->clearFocus();
+                if (m_webView)
+                    m_webView->focusNative();
+                else
+                    setFocus(Qt::OtherFocusReason);
+                return true;
+            }
+        }
+    }
+
+    if (event->type() == QEvent::MouseButtonPress)
+    {
+        QWidget *fw = QApplication::focusWidget();
+        if (fw && m_filterToolbar && m_filterToolbar->isAncestorOf(fw))
+        {
+            auto *target = qobject_cast<QWidget *>(watched);
+            auto *me = static_cast<QMouseEvent *>(event);
+
+            // Clicked a Qt widget outside the toolbar: clear toolbar focus.
+            if (target && !m_filterToolbar->isAncestorOf(target))
+            {
+                fw->clearFocus();
+                if (m_webView)
+                    m_webView->focusNative();
+                else
+                    setFocus(Qt::OtherFocusReason);
+            }
+            // Clicked inside the toolbar: clear focus only when clicking on non-interactive/blank area.
+            else if (target == m_filterToolbar)
+            {
+                const QPoint p = me->position().toPoint();
+                QWidget *child = m_filterToolbar->childAt(p);
+                if (!child || child->focusPolicy() == Qt::NoFocus)
+                {
+                    fw->clearFocus();
+                    if (m_webView)
+                        m_webView->focusNative();
+                    else
+                        setFocus(Qt::OtherFocusReason);
+                }
+            }
+            else if (target && target->focusPolicy() == Qt::NoFocus)
+            {
+                // e.g. clicking group background / spacer
+                fw->clearFocus();
+                if (m_webView)
+                    m_webView->focusNative();
+                else
+                    setFocus(Qt::OtherFocusReason);
+            }
+        }
+    }
+
     if (event->type() == QEvent::KeyPress)
     {
         QKeyEvent *ke = static_cast<QKeyEvent *>(event);

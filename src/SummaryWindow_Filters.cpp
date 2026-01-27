@@ -8,6 +8,8 @@
 
 #include <QDate>
 #include <QDateEdit>
+#include <QApplication>
+#include <QMouseEvent>
 #include <QFile>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -18,6 +20,31 @@
 #include <QFontMetrics>
 
 #include <algorithm>
+#include <functional>
+
+namespace
+{
+    class ClickToClearFocusWidget final : public QWidget
+    {
+    public:
+        explicit ClickToClearFocusWidget(std::function<void()> onClick, QWidget *parent = nullptr)
+            : QWidget(parent), m_onClick(std::move(onClick))
+        {
+            setFocusPolicy(Qt::NoFocus);
+        }
+
+    protected:
+        void mousePressEvent(QMouseEvent *event) override
+        {
+            if (m_onClick)
+                m_onClick();
+            event->accept();
+        }
+
+    private:
+        std::function<void()> m_onClick;
+    };
+}
 
 void SummaryWindow::setupFilterUI()
 {
@@ -30,9 +57,20 @@ void SummaryWindow::setupFilterUI()
     m_filterToolbar->setContextMenuPolicy(Qt::PreventContextMenu);
     m_filterToolbar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
-    // Avoid glyph clipping on high-DPI / larger system fonts.
-    const int controlHeight = qMax(30, QFontMetrics(m_filterToolbar->font()).lineSpacing() + 12);
-    const int dateWidth = 115;
+    const auto clearToolbarFocus = [this]()
+    {
+        QWidget *fw = QApplication::focusWidget();
+        if (fw && m_filterToolbar && m_filterToolbar->isAncestorOf(fw))
+            fw->clearFocus();
+        if (m_webView)
+            m_webView->focusNative();
+        else
+            setFocus(Qt::OtherFocusReason);
+    };
+
+    // Avoid glyph clipping on high-DPI / larger system fonts (but keep the toolbar compact).
+    const int controlHeight = qMax(26, QFontMetrics(m_filterToolbar->font()).lineSpacing() + 8);
+    const int dateWidth = 117;
 
     // Left group: filters
     m_filtersGroup = new QWidget(this);
@@ -40,8 +78,8 @@ void SummaryWindow::setupFilterUI()
     // Keep filters compact so the right-side batch actions don't get pushed into the overflow.
     m_filtersGroup->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     QHBoxLayout *filtersLayout = new QHBoxLayout(m_filtersGroup);
-    filtersLayout->setContentsMargins(3, 2, 3, 2);
-    filtersLayout->setSpacing(3);
+    filtersLayout->setContentsMargins(3, 0, 3, 0);
+    filtersLayout->setSpacing(2);
     filtersLayout->setAlignment(Qt::AlignVCenter);
 
     QLabel *fromLabel = new QLabel(TranslationManager::instance().tr("filter_from_date") + ":", this);
@@ -57,6 +95,7 @@ void SummaryWindow::setupFilterUI()
     m_fromDateEdit->setDisplayFormat("yyyy-MM-dd");
     m_fromDateEdit->setMinimumHeight(controlHeight);
     m_fromDateEdit->setFixedWidth(dateWidth);
+    m_fromDateEdit->setFocusPolicy(Qt::ClickFocus);
     filtersLayout->addWidget(m_fromDateEdit);
 
     QLabel *toLabel = new QLabel(TranslationManager::instance().tr("filter_to_date") + ":", this);
@@ -72,6 +111,7 @@ void SummaryWindow::setupFilterUI()
     m_toDateEdit->setDisplayFormat("yyyy-MM-dd");
     m_toDateEdit->setMinimumHeight(controlHeight);
     m_toDateEdit->setFixedWidth(dateWidth);
+    m_toDateEdit->setFocusPolicy(Qt::ClickFocus);
     filtersLayout->addWidget(m_toDateEdit);
 
     m_tagFilterBtn = new QPushButton(TranslationManager::instance().tr("filter_all_tags"), this);
@@ -93,7 +133,7 @@ void SummaryWindow::setupFilterUI()
     m_filterToolbar->addWidget(m_filtersGroup);
 
     // Push batch actions to the right
-    QWidget *spacer = new QWidget(this);
+    QWidget *spacer = new ClickToClearFocusWidget(clearToolbarFocus, this);
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     m_filterToolbar->addWidget(spacer);
 
@@ -102,7 +142,7 @@ void SummaryWindow::setupFilterUI()
     m_actionsGroup->setObjectName("archiveActionsGroup");
     m_actionsGroup->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     QHBoxLayout *actionsLayout = new QHBoxLayout(m_actionsGroup);
-    actionsLayout->setContentsMargins(3, 2, 3, 2);
+    actionsLayout->setContentsMargins(3, 0, 3, 0);
     actionsLayout->setSpacing(2);
     actionsLayout->setAlignment(Qt::AlignVCenter);
 
@@ -159,6 +199,9 @@ void SummaryWindow::setupFilterUI()
     {
         mainLayout->insertWidget(0, m_filterToolbar);
     }
+
+    // Prefer the web view as the default focus target.
+    clearToolbarFocus();
 
     connect(m_fromDateEdit, &QDateEdit::dateChanged, this, &SummaryWindow::applyFilters);
     connect(m_toDateEdit, &QDateEdit::dateChanged, this, &SummaryWindow::applyFilters);

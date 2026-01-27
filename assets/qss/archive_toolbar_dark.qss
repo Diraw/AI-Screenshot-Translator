@@ -1,7 +1,7 @@
 QToolBar#archiveFilterToolbar {
   background: #1f1f1f;
   border: none;
-  padding: 1px 3px;
+  padding: 0px 2px;
 }
 
 QWidget#archiveFiltersGroup,
@@ -13,7 +13,7 @@ QWidget#archiveActionsGroup {
 
 QToolBar#archiveFilterToolbar QLabel[role="caption"] {
   color: #9a9a9a;
-  padding: 2px 2px;
+  padding: 1px 2px;
 }
 
 QWidget#archiveFiltersGroup QDateEdit,
@@ -22,8 +22,8 @@ QWidget#archiveFiltersGroup QComboBox {
   background: transparent;
   border: 1px solid transparent;
   border-radius: 0px;
-  padding: 1px 6px;
-  min-height: 20px;
+  padding: 0px 6px;
+  min-height: 18px;
 }
 
 QWidget#archiveFiltersGroup QDateEdit:hover,
@@ -49,8 +49,8 @@ QToolBar#archiveFilterToolbar QPushButton {
   background: transparent;
   border: 1px solid transparent;
   border-radius: 0px;
-  padding: 1px 8px;
-  min-height: 20px;
+  padding: 0px 8px;
+  min-height: 18px;
 }
 
 QToolBar#archiveFilterToolbar QPushButton:hover {
