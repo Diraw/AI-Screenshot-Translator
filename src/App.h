@@ -19,6 +19,7 @@ extern bool g_enableLogging;
 #include "ConfigDialog.h"
 #include "SummaryWindow.h"
 #include "HistoryManager.h"
+#include "AnalyticsManager.h"
 
 class App : public QObject
 {
@@ -81,6 +82,8 @@ private:
 
     QTimer m_themeTimer;
     bool m_lastTopBarDark = false;
+
+    AnalyticsManager *m_analytics = nullptr;
 };
 
 #endif // APP_H

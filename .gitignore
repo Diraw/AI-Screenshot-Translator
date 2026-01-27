@@ -16,6 +16,7 @@
 *.exp
 *.idb
 *.tmp
+*.env
 
 # webview2_pkg
 webview2_pkg/**
@@ -53,6 +54,9 @@ Makefile
 # Logs and runtime outputs
 debug.log
 *.log
+
+# Local secrets/config (do not commit)
+.env
 
 # Local storage/runtime data
 /storage/

@@ -122,6 +122,14 @@ App::App(QObject *parent)
     m_lastTopBarDark = ThemeUtils::isSystemDark();
     connect(&m_themeTimer, &QTimer::timeout, this, &App::checkForThemeChange);
     m_themeTimer.start(2000);
+
+    // Analytics (Umami): start 5s after launch to avoid startup stalls
+    m_analytics = new AnalyticsManager(this);
+    m_analytics->startDelayed(5000);
+    connect(qApp, &QCoreApplication::aboutToQuit, this, [this]()
+            {
+        if (m_analytics)
+            m_analytics->stop(); });
 }
 
 App::~App()
