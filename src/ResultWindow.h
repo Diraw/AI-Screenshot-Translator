@@ -11,6 +11,7 @@
 #include <QLabel>
 #include <QList>
 #include <QElapsedTimer>
+#include <QWidget>
 #include "TranslationManager.h" // For TranslationEntry struct if defined there, otherwise minimal struct needed here or forward decl
 // Actually TranslationEntry is in HistoryManager.h usually, let's check or define a local struct/use shared.
 // Based on App.cpp, TranslationManager seems to handle strings. HistoryManager handles persistence.
@@ -75,6 +76,7 @@ private slots:
     void openTagDialog();
 
 private:
+    void updateToolbarBalance();
     std::unique_ptr<EmbedWebView> m_webView;
     QWidget *m_webContainer;
 
@@ -86,6 +88,7 @@ private:
     QAction *m_nextAction = nullptr;
     QLabel *m_pageLabel = nullptr;
     QLabel *m_statusLabel = nullptr; // New status label
+    QWidget *m_balanceSpacer = nullptr;
 
     // State
     bool m_isLocked = false;

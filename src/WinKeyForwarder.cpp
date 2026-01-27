@@ -4,10 +4,14 @@
 
 #include <QApplication>
 #include <QMetaObject>
+#include <QtGlobal>
 #include <cstdio>
 #include <windows.h>
 
 #include "ResultWindow.h"
+
+// From main.cpp
+extern bool g_enableLogging;
 
 void WinKeyForwarder::trace(const char *msg)
 {
@@ -17,9 +21,17 @@ void WinKeyForwarder::trace(const char *msg)
     OutputDebugStringA(msg);
     OutputDebugStringA("\n");
 
+    // Keep writing wkf.log for hard traces, but when app file logging is enabled
+    // (debug mode or env override), truncate it once per process so each run starts fresh.
+    static bool wkfLogTruncatedThisRun = false;
+    const bool allowFreshRun = g_enableLogging || qEnvironmentVariableIsSet("FORCE_DEBUG_LOG");
+    const char *openMode = (allowFreshRun && !wkfLogTruncatedThisRun) ? "w" : "a";
+
     FILE *f = nullptr;
-    if (fopen_s(&f, "wkf.log", "a") == 0 && f)
+    if (fopen_s(&f, "wkf.log", openMode) == 0 && f)
     {
+        if (allowFreshRun && !wkfLogTruncatedThisRun)
+            wkfLogTruncatedThisRun = true;
         fprintf(f, "%s\n", msg);
         fclose(f);
     }

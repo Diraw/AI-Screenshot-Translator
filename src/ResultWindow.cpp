@@ -72,6 +72,11 @@ ResultWindow::ResultWindow(QWidget *parent) : QWidget(parent)
   m_lockAction->setToolTip(tr("Lock Window"));
   connect(m_lockAction, &QAction::triggered, this, &ResultWindow::toggleLock);
 
+  // Balance spacer (keeps center paging truly centered even when right-side MODE width changes)
+  m_balanceSpacer = new QWidget();
+  m_balanceSpacer->setFixedWidth(0);
+  m_toolBar->addWidget(m_balanceSpacer);
+
   QWidget *leftSpacer = new QWidget();
   leftSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
   m_toolBar->addWidget(leftSpacer);
@@ -93,7 +98,13 @@ ResultWindow::ResultWindow(QWidget *parent) : QWidget(parent)
 
   // 3. Mode (Right)
   m_statusLabel = new QLabel("MODE: VIEW", this);
+  m_statusLabel->setObjectName("statusIndicator");
+  m_statusLabel->setAlignment(Qt::AlignCenter);
+  m_statusLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  m_statusLabel->setFixedHeight(26);
   m_toolBar->addWidget(m_statusLabel);
+
+  updateToolbarBalance();
 
   // --- JS BINDINGS ---
   m_webView->bind("log", [this](std::string seq, std::string req, void *arg)
@@ -125,7 +136,10 @@ ResultWindow::ResultWindow(QWidget *parent) : QWidget(parent)
         QString mode = doc.isArray() ? doc.array().at(0).toString() : QString::fromUtf8(req.c_str());
         QString labelText = "MODE: " + mode.toUpper();
         QMetaObject::invokeMethod(this, [this, labelText, mode](){ 
-            if (m_statusLabel) m_statusLabel->setText(labelText);
+            if (m_statusLabel) {
+              m_statusLabel->setText(labelText);
+              updateToolbarBalance();
+            }
             if (mode == "view" || mode == "view_done") {
               requestFocusToWeb(false);
             }
@@ -166,6 +180,22 @@ ResultWindow::ResultWindow(QWidget *parent) : QWidget(parent)
   // Register this window for native key forwarding (WebView2 often consumes WM_KEYDOWN).
   WinKeyForwarder::instance().registerResultWindow(this);
 #endif
+}
+
+void ResultWindow::updateToolbarBalance()
+{
+  if (!m_toolBar || !m_balanceSpacer || !m_statusLabel || !m_lockAction)
+    return;
+
+  QWidget *lockWidget = m_toolBar->widgetForAction(m_lockAction);
+  const int leftW = lockWidget ? lockWidget->sizeHint().width() : 0;
+
+  m_statusLabel->ensurePolished();
+  const int rightW = m_statusLabel->sizeHint().width();
+
+  const int balance = qMax(0, rightW - leftW);
+  if (m_balanceSpacer->width() != balance)
+    m_balanceSpacer->setFixedWidth(balance);
 }
 
 void ResultWindow::triggerScreenshotFromNative()
