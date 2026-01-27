@@ -3,6 +3,7 @@
 /build*/
 /bin/
 /lib/
+/setup/
 *.obj
 *.o
 *.lo

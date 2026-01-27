@@ -1,6 +1,6 @@
 #define MyAppName "AI Screenshot Translator"
 #define MyAppExeName "AI-Screenshot-Translator-Cpp.exe"
-#define MySourcePath "C:\Users\craft\Desktop\temp"
+#define MySourcePath "{#SourcePath}\build\Release\"
 
 [Setup]
 ; 程序基本信息
@@ -10,8 +10,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 SetupIconFile={#MySourcePath}\assets\icon.ico
 UninstallDisplayName={#MyAppName}
-; 生成的安装包放在桌面上
-OutputDir=setup
+OutputDir={#SourcePath}\setup
 OutputBaseFilename=AI_Translator_Setup
 Compression=lzma2/max
 SolidCompression=yes
@@ -33,7 +32,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "{#MySourcePath}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#MySourcePath}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "{#MyAppExeName}"
+Source: "{#MySourcePath}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "{#MyAppExeName},storage\,*.log"
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
