@@ -80,8 +80,12 @@ client_uuid=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 # 1) 构建
 cmake --build build --config Release
 
-# 2) 部署 Qt 运行时（将 QTDIR 替换为你的 Qt 安装路径）
-& "$Env:QTDIR\bin\windeployqt.exe" --release build\Release\AI-Screenshot-Translator-Cpp.exe
+# 2) 部署 Qt 运行时（将 QTDIR 替换为你的 Qt 安装路径；--compiler-runtime 会把 MSVC 运行库也拷进来）
+& "$Env:QTDIR\bin\windeployqt.exe" --release --compiler-runtime --no-translations build\Release\AI-Screenshot-Translator-Cpp.exe
+
+# 如果看到 windeployqt 提示找不到 Visual Studio（如 VCINSTALLDIR 未设置），请在
+# “x64 Native Tools Command Prompt/Developer PowerShell for VS 2022” 中运行上述命令，
+# 这样才能把 MSVC 运行库 DLL 一并复制到 Release 目录。
 
 # 3) 复制资产与 WebView2 Loader
 cmake -E copy_directory assets build/Release/assets
