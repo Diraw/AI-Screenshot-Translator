@@ -18,6 +18,16 @@ void WinKeyForwarder::trace(const char *msg)
     if (!msg)
         return;
 
+    // Timestamp prefix (local time)
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    char ts[64];
+    sprintf_s(ts, sizeof(ts), "%04u-%02u-%02u %02u:%02u:%02u.%03u ",
+              (unsigned)st.wYear, (unsigned)st.wMonth, (unsigned)st.wDay,
+              (unsigned)st.wHour, (unsigned)st.wMinute, (unsigned)st.wSecond,
+              (unsigned)st.wMilliseconds);
+
+    OutputDebugStringA(ts);
     OutputDebugStringA(msg);
     OutputDebugStringA("\n");
 
@@ -32,7 +42,7 @@ void WinKeyForwarder::trace(const char *msg)
     {
         if (allowFreshRun && !wkfLogTruncatedThisRun)
             wkfLogTruncatedThisRun = true;
-        fprintf(f, "%s\n", msg);
+        fprintf(f, "%s%s\n", ts, msg);
         fclose(f);
     }
 }

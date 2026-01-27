@@ -11,6 +11,15 @@ QString App::reloadHotkeys()
     m_screenshotHotkey.registerHotkey(cfg.screenshotHotkey);
     m_summaryHotkey.registerHotkey(cfg.summaryHotkey);
     m_settingsHotkey.registerHotkey(cfg.settingsHotkey);
+
+    if (cfg.enableQuitHotkey && !cfg.quitHotkey.trimmed().isEmpty())
+    {
+        m_quitHotkey.registerHotkey(cfg.quitHotkey);
+    }
+    else
+    {
+        m_quitHotkey.unregisterHotkey();
+    }
     return ""; // Return empty string on success
 }
 

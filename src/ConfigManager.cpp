@@ -408,6 +408,9 @@ void ConfigManager::parseJson(const QJsonObject &root)
             sumKey = "alt+s";
         m_config.summaryHotkey = app["summary_hotkey"].toString("alt+s");
         m_config.settingsHotkey = app["settings_hotkey"].toString("");
+
+        m_config.enableQuitHotkey = app["enable_quit_hotkey"].toBool(false);
+        m_config.quitHotkey = app["quit_hotkey"].toString("alt+q");
         m_config.targetScreenIndex = app["target_screen_index"].toInt(-1);
 
         m_config.editHotkey = app["edit_hotkey"].toString("e");
@@ -482,6 +485,9 @@ QJsonObject ConfigManager::toJson() const
     app["screenshot_hotkey"] = m_config.screenshotHotkey;
     app["summary_hotkey"] = m_config.summaryHotkey;
     app["settings_hotkey"] = m_config.settingsHotkey;
+
+    app["enable_quit_hotkey"] = m_config.enableQuitHotkey;
+    app["quit_hotkey"] = m_config.quitHotkey;
     app["target_screen_index"] = m_config.targetScreenIndex;
     app["edit_hotkey"] = m_config.editHotkey;
     app["view_toggle_hotkey"] = m_config.viewToggleHotkey;

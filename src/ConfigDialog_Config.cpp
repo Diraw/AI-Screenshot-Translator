@@ -30,6 +30,9 @@ void ConfigDialog::loadFromConfig()
     m_highlightMarkColorDarkEdit->setText(cfg.highlightMarkColorDark);
 
     m_debugModeCheck->setChecked(cfg.debugMode);
+    m_enableQuitHotkeyCheck->setChecked(cfg.enableQuitHotkey);
+    m_quitHotkeyEdit->setText(cfg.quitHotkey);
+    m_quitHotkeyEdit->setEnabled(cfg.enableQuitHotkey);
     m_storagePathEdit->setText(cfg.storagePath);
     m_showPreviewCheck->setChecked(cfg.showPreviewCard);
     m_showResultCheck->setChecked(cfg.showResultWindow);
@@ -112,6 +115,11 @@ void ConfigDialog::save()
 
     // Other Tab
     cfg.settingsHotkey = m_settingsHotkeyEdit->text();
+
+    cfg.enableQuitHotkey = m_enableQuitHotkeyCheck->isChecked();
+    cfg.quitHotkey = m_quitHotkeyEdit->text().trimmed();
+    if (cfg.quitHotkey.isEmpty())
+        cfg.quitHotkey = "alt+q";
 
     cfg.debugMode = m_debugModeCheck->isChecked();
     cfg.storagePath = m_storagePathEdit->text(); // Ensure persistence
