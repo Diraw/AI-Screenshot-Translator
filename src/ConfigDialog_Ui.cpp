@@ -183,6 +183,10 @@ void ConfigDialog::retranslateUi()
     {
         grpAdvanced->setTitle(tm.tr("grp_advanced"));
         m_debugModeCheck->setText(tm.tr("chk_debug"));
+        if (m_enableQuitHotkeyCheck)
+            m_enableQuitHotkeyCheck->setText(tm.tr("chk_quit_hotkey"));
+        if (m_quitHotkeyLabel)
+            m_quitHotkeyLabel->setText(tm.tr("lbl_quit_hotkey"));
     }
 
     m_newProfileBtn->setText(tm.tr("btn_new"));

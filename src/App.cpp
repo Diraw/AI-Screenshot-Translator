@@ -25,7 +25,8 @@ App::App(QObject *parent)
     : QObject(parent), m_configManager(),
       m_screenshotHotkey(100, this),
       m_summaryHotkey(101, this),
-      m_settingsHotkey(102, this)
+      m_settingsHotkey(102, this),
+      m_quitHotkey(103, this)
 {
 #ifdef _WIN32
     // WebView2 often consumes WM_KEYDOWN in its child HWND, bypassing Qt shortcuts.
@@ -111,6 +112,7 @@ App::App(QObject *parent)
     connect(&m_screenshotHotkey, &GlobalHotkey::activated, this, &App::onScreenshotRequested);
     connect(&m_summaryHotkey, &GlobalHotkey::activated, this, &App::showSummary);
     connect(&m_settingsHotkey, &GlobalHotkey::activated, this, &App::showConfig);
+    connect(&m_quitHotkey, &GlobalHotkey::activated, this, &App::quitApp);
 
     if (m_configManager.getConfig().apiKey.isEmpty())
     {

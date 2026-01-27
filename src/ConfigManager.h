@@ -73,6 +73,10 @@ struct AppConfig
     QString nextResultShortcut = "x";
     QString tagHotkey = "t"; // New: Tag Dialog Hotkey
 
+    // Quit Hotkey
+    bool enableQuitHotkey = false;
+    QString quitHotkey = "alt+q";
+
     // CDN Settings Removed (User requested local bundling)
 };
 
@@ -96,7 +100,6 @@ public:
     bool importProfile(const QString &path);
     bool exportProfile(const QString &name, const QString &destPath);
     QString currentProfileName() const;
-
     void saveConfig(); // Saves to current profile
 
     AppConfig getConfig() const;

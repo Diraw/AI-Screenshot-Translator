@@ -55,6 +55,7 @@ private:
     GlobalHotkey m_screenshotHotkey;
     GlobalHotkey m_summaryHotkey;
     GlobalHotkey m_settingsHotkey;
+    GlobalHotkey m_quitHotkey;
     ApiClient *m_apiClient;
     SummaryWindow *m_summaryWindow;
     QPointer<ConfigDialog> m_activeConfigDialog; // Track active settings dialog for toggle // New member
@@ -75,6 +76,7 @@ private:
     QString reloadHotkeys();
     void showResult(const QString &entryId);
     QString updateConfig(const AppConfig &cfg);
+    // New hotkey configuration
 
     // Dynamic State
     bool m_preferredLockState = true;
