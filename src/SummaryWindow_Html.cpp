@@ -211,6 +211,12 @@ window.addEventListener('scroll', function() {
   lastScrollReport = now;
   window.cmd_scroll(window.scrollY);
 }, { passive: true });
+
+// When the user clicks inside the content area, clear focus from the Qt toolbar (if any).
+// This is needed because the WebView is a native window and Qt won't receive those mouse events.
+document.addEventListener('mousedown', function() {
+    try { if (window.cmd_clearToolbarFocus) window.cmd_clearToolbarFocus(); } catch(e) {}
+}, true);
 </script>
 )RAW_HTML";
 
