@@ -1,6 +1,5 @@
 #define MyAppName "AI Screenshot Translator"
 #define MyAppExeName "AI-Screenshot-Translator-Cpp.exe"
-#define MySourcePath "{#SourcePath}\build\Release\"
 
 [Setup]
 ; 程序基本信息
@@ -8,7 +7,7 @@ AppName={#MyAppName}
 AppVersion=1.0.0
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
-SetupIconFile={#MySourcePath}\assets\icon.ico
+SetupIconFile={#SourcePath}\assets\icon.ico
 UninstallDisplayName={#MyAppName}
 OutputDir={#SourcePath}\setup
 OutputBaseFilename=AI_Translator_Setup
@@ -31,8 +30,8 @@ AppId={{c0b26d24-9393-41f3-815b-a13b15fe8f3e}}
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "{#MySourcePath}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#MySourcePath}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "{#MyAppExeName},storage\,*.log"
+Source: "{#SourcePath}\build\Release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourcePath}\build\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "{#MyAppExeName},storage\,*.log"
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

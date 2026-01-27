@@ -146,7 +146,7 @@ private:
         m_translations["zh"]["tray_screenshot"] = "截图";
         m_translations["zh"]["tray_summary"] = "归档";
         m_translations["zh"]["tray_settings"] = "设置";
-        m_translations["zh"]["tray_quit"] = "退出快捷键";
+        m_translations["zh"]["tray_quit"] = "退出";
 
         m_translations["zh"]["grp_profiles"] = "配置方案";
         m_translations["zh"]["btn_new"] = "新建";
@@ -198,7 +198,7 @@ private:
         m_translations["zh"]["chk_debug"] = "开启 Debug 模式";
         m_translations["zh"]["grp_advanced"] = "高级设置";
         m_translations["zh"]["chk_quit_hotkey"] = "启用快捷键";
-        m_translations["zh"]["lbl_quit_hotkey"] = "退出:";
+        m_translations["zh"]["lbl_quit_hotkey"] = "退出快捷键:";
 
         m_translations["zh"]["tab_general"] = "常规";
         m_translations["zh"]["tab_advanced"] = "高级";

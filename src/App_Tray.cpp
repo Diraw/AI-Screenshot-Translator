@@ -3,6 +3,7 @@
 #include <QApplication>
 #include <QCoreApplication>
 #include <QIcon>
+#include <QTimer>
 
 #include "TranslationManager.h"
 
@@ -24,6 +25,9 @@ void App::setupTray()
     m_trayMenu = new QMenu();
     TranslationManager &tm = TranslationManager::instance();
 
+    m_trayMenuOpen = false;
+    m_pendingTrayScreenshot = false;
+
     m_trayMenu->addAction(tm.tr("tray_screenshot"), this, &App::onScreenshotRequested);
     m_trayMenu->addAction(tm.tr("tray_summary"), this, &App::showSummary);
     m_trayMenu->addAction(tm.tr("tray_settings"), this, &App::showConfig);
@@ -33,11 +37,32 @@ void App::setupTray()
     m_trayIcon->setContextMenu(m_trayMenu);
     m_trayIcon->show();
 
+    connect(m_trayMenu, &QMenu::aboutToShow, this, [this]()
+            {
+                m_trayMenuOpen = true;
+                m_pendingTrayScreenshot = false; });
+    connect(m_trayMenu, &QMenu::aboutToHide, this, [this]()
+            { m_trayMenuOpen = false; });
+
     connect(m_trayIcon, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason)
             {
         if (reason == QSystemTrayIcon::Trigger) {
-            onScreenshotRequested();
+            // On Windows, right-click/context menu can occasionally emit Trigger.
+            // Delay starting screenshot; cancel if the context menu opens.
+            m_pendingTrayScreenshot = true;
+            QTimer::singleShot(120, this, [this]()
+                               {
+                                   if (!m_pendingTrayScreenshot)
+                                       return;
+                                   m_pendingTrayScreenshot = false;
+                                   if (m_trayMenuOpen)
+                                       return;
+                                   onScreenshotRequested();
+                               });
         } else if (reason == QSystemTrayIcon::DoubleClick) {
+            m_pendingTrayScreenshot = false;
             showSummary();
+        } else if (reason == QSystemTrayIcon::Context) {
+            m_pendingTrayScreenshot = false;
         } });
 }
