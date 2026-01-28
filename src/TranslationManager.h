@@ -221,6 +221,16 @@ private:
         m_translations["zh"]["chk_preview"] = "截图后显示截图卡片";
         m_translations["zh"]["chk_result"] = "截图后显示翻译结果";
 
+        m_translations["zh"]["btn_test_connection"] = "测试";
+        m_translations["zh"]["test_title"] = "连通性测试";
+        m_translations["zh"]["test_err_baseurl_empty"] = "API 基础 URL 不能为空。";
+        m_translations["zh"]["test_err_baseurl_invalid"] = "API 基础 URL 无效。";
+        m_translations["zh"]["test_err_proxy_invalid"] = "代理地址无效。";
+        m_translations["zh"]["test_err_proxy_unreachable"] = "代理不可达：%1";
+        m_translations["zh"]["test_ok"] = "API 可连通：%1";
+        m_translations["zh"]["test_auth_failed"] = "API 可连通，但鉴权失败（HTTP %1）。请检查 API Key。";
+        m_translations["zh"]["test_failed"] = "测试失败（HTTP %1）：%2\n\n响应片段：\n%3";
+
         m_translations["zh"]["lbl_shot_hotkey"] = "截图快捷键:";
         m_translations["zh"]["lbl_sum_hotkey"] = "摘要窗口快捷键:";
         m_translations["zh"]["lbl_set_hotkey"] = "设置快捷键:";
@@ -244,6 +254,16 @@ private:
         m_translations["en"]["tab_translation"] = "Translation Window";
         m_translations["en"]["tab_archive"] = "Archive Window";
         m_translations["en"]["tab_other"] = "Other";
+
+        m_translations["en"]["btn_test_connection"] = "Test";
+        m_translations["en"]["test_title"] = "Connectivity Test";
+        m_translations["en"]["test_err_baseurl_empty"] = "Base URL cannot be empty.";
+        m_translations["en"]["test_err_baseurl_invalid"] = "Base URL is invalid.";
+        m_translations["en"]["test_err_proxy_invalid"] = "Proxy URL is invalid.";
+        m_translations["en"]["test_err_proxy_unreachable"] = "Proxy unreachable: %1";
+        m_translations["en"]["test_ok"] = "API reachable: %1";
+        m_translations["en"]["test_auth_failed"] = "API reachable but authentication failed (HTTP %1). Please check API key.";
+        m_translations["en"]["test_failed"] = "Test failed (HTTP %1): %2\n\nResponse preview:\n%3";
 
         m_translations["zh"]["tab_translation"] = "翻译窗口";
         m_translations["zh"]["tab_archive"] = "归档窗口";

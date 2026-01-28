@@ -54,6 +54,9 @@ void ConfigDialog::retranslateUi()
         m_useProxyCheck->setToolTip(tm.tr("tip_proxy_toggle"));
         updateLabel(gLayout, 8, "lbl_storage");
 
+        if (m_testConnectionBtn)
+            m_testConnectionBtn->setText(tm.tr("btn_test_connection"));
+
         m_showPreviewCheck->setText(tm.tr("chk_preview"));
         m_showResultCheck->setText(tm.tr("chk_result"));
 

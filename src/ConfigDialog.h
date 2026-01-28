@@ -15,6 +15,7 @@
 #include <QFormLayout>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QPointer>
 
 #include "ConfigManager.h"
 
@@ -38,6 +39,7 @@ public:
 
 private slots:
     void save();
+    void onTestConnection();
     void onProfileChanged(const QString &name);
     void newProfile();
     void deleteProfile();
@@ -70,12 +72,17 @@ private:
     QLineEdit *m_apiKeyEdit;
     QLineEdit *m_baseUrlEdit;
     QLineEdit *m_modelNameEdit;
+    QPushButton *m_testConnectionBtn = nullptr;
     QTextEdit *m_promptEdit;
     QComboBox *m_apiProviderCombo;
     QLineEdit *m_proxyUrlEdit;
     QCheckBox *m_useProxyCheck;
     QLabel *m_proxyLabel;
     QSpinBox *m_targetScreenSpin;
+
+    // Test connectivity helpers
+    QNetworkAccessManager *m_testNam = nullptr;
+    QPointer<QNetworkReply> m_testReply;
 
     QLineEdit *m_hotkeyEdit;
     QLineEdit *m_summaryHotkeyEdit;

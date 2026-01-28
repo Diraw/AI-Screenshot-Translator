@@ -16,6 +16,10 @@
 #include <QPointer>
 #include <QScreen>
 #include <QRegularExpression>
+#include <QNetworkRequest>
+#include <QNetworkProxy>
+#include <QTcpSocket>
+#include <QUrl>
 
 static bool tryParseColorText(QString text, QColor &out)
 {
@@ -189,6 +193,8 @@ ConfigDialog::ConfigDialog(ConfigManager *configManager, QWidget *parent)
 {
     setWindowTitle("Settings");
 
+    m_testNam = new QNetworkAccessManager(this);
+
     // Initial Theme Update
     updateTheme(ThemeUtils::isSystemDark());
     // resize(500, 700); // Removed fixed size to let layout decide
@@ -284,7 +290,18 @@ ConfigDialog::ConfigDialog(ConfigManager *configManager, QWidget *parent)
     layout->addRow("Base URL:", m_baseUrlEdit);
 
     m_modelNameEdit = new QLineEdit(this);
-    layout->addRow("Model:", m_modelNameEdit);
+    m_testConnectionBtn = new QPushButton("Test", this);
+    m_testConnectionBtn->setObjectName("btnTestConnection");
+    connect(m_testConnectionBtn, &QPushButton::clicked, this, &ConfigDialog::onTestConnection);
+
+    QHBoxLayout *modelRowLayout = new QHBoxLayout();
+    modelRowLayout->setContentsMargins(0, 0, 0, 0);
+    modelRowLayout->setSpacing(8);
+    modelRowLayout->addWidget(m_modelNameEdit, 1);
+    modelRowLayout->addWidget(m_testConnectionBtn, 0);
+    QWidget *modelRowWidget = new QWidget(this);
+    modelRowWidget->setLayout(modelRowLayout);
+    layout->addRow("Model:", modelRowWidget);
 
     m_promptEdit = new QTextEdit(this);
     m_promptEdit->setMaximumHeight(60);
@@ -537,6 +554,163 @@ ConfigDialog::ConfigDialog(ConfigManager *configManager, QWidget *parent)
     setupProfilesWatcher();
 
     retranslateUi();
+}
+
+static bool tryBuildProxyFromUrl(const QString &proxyUrl, QNetworkProxy &outProxy, QString &outErr)
+{
+    const QUrl url = QUrl::fromUserInput(proxyUrl);
+    if (!url.isValid() || url.host().isEmpty())
+    {
+        outErr = QObject::tr("Invalid proxy URL.");
+        return false;
+    }
+
+    QNetworkProxy proxy;
+    const QString scheme = url.scheme().toLower();
+    if (scheme == "socks5" || scheme == "socks")
+        proxy.setType(QNetworkProxy::Socks5Proxy);
+    else
+        proxy.setType(QNetworkProxy::HttpProxy);
+
+    proxy.setHostName(url.host());
+    proxy.setPort(url.port(8080));
+    if (!url.userName().isEmpty())
+        proxy.setUser(url.userName());
+    if (!url.password().isEmpty())
+        proxy.setPassword(url.password());
+
+    outProxy = proxy;
+    return true;
+}
+
+static QUrl buildModelsUrl(const QString &baseUrl)
+{
+    QUrl base = QUrl::fromUserInput(baseUrl);
+    QString s = base.toString();
+    if (!s.endsWith('/'))
+        s += '/';
+    base = QUrl(s);
+    return base.resolved(QUrl("models"));
+}
+
+void ConfigDialog::onTestConnection()
+{
+    TranslationManager &tm = TranslationManager::instance();
+
+    if (!m_testNam)
+        m_testNam = new QNetworkAccessManager(this);
+
+    if (m_testReply)
+    {
+        m_testReply->abort();
+        m_testReply->deleteLater();
+        m_testReply = nullptr;
+    }
+
+    const QString baseUrl = m_baseUrlEdit ? m_baseUrlEdit->text().trimmed() : QString();
+    const QString apiKey = m_apiKeyEdit ? m_apiKeyEdit->text().trimmed() : QString();
+    const bool useProxy = m_useProxyCheck ? m_useProxyCheck->isChecked() : false;
+    const QString proxyUrl = m_proxyUrlEdit ? m_proxyUrlEdit->text().trimmed() : QString();
+
+    if (baseUrl.isEmpty())
+    {
+        QMessageBox::warning(this, tm.tr("test_title"), tm.tr("test_err_baseurl_empty"));
+        return;
+    }
+
+    const QUrl modelsUrl = buildModelsUrl(baseUrl);
+    if (!modelsUrl.isValid() || modelsUrl.scheme().isEmpty() || modelsUrl.host().isEmpty())
+    {
+        QMessageBox::warning(this, tm.tr("test_title"), tm.tr("test_err_baseurl_invalid"));
+        return;
+    }
+
+    if (m_testConnectionBtn)
+        m_testConnectionBtn->setEnabled(false);
+
+    // Configure proxy (and optionally pre-check proxy TCP connectivity)
+    if (useProxy && !proxyUrl.isEmpty())
+    {
+        QNetworkProxy proxy;
+        QString proxyErr;
+        if (!tryBuildProxyFromUrl(proxyUrl, proxy, proxyErr))
+        {
+            if (m_testConnectionBtn)
+                m_testConnectionBtn->setEnabled(true);
+            QMessageBox::warning(this, tm.tr("test_title"), tm.tr("test_err_proxy_invalid"));
+            return;
+        }
+
+        // Quick TCP reachability check for proxy host:port
+        QTcpSocket sock;
+        sock.connectToHost(proxy.hostName(), proxy.port());
+        if (!sock.waitForConnected(2500))
+        {
+            if (m_testConnectionBtn)
+                m_testConnectionBtn->setEnabled(true);
+            QMessageBox::warning(this, tm.tr("test_title"), tm.tr("test_err_proxy_unreachable").arg(sock.errorString()));
+            return;
+        }
+        sock.disconnectFromHost();
+
+        m_testNam->setProxy(proxy);
+    }
+    else
+    {
+        m_testNam->setProxy(QNetworkProxy::DefaultProxy);
+    }
+
+    // Send a lightweight OpenAI-compatible request: GET /models
+    QNetworkRequest req(modelsUrl);
+    req.setRawHeader("Accept", "application/json");
+    if (!apiKey.isEmpty())
+        req.setRawHeader("Authorization", QByteArray("Bearer ") + apiKey.toUtf8());
+
+    m_testReply = m_testNam->get(req);
+
+    QTimer *timeoutTimer = new QTimer(this);
+    timeoutTimer->setSingleShot(true);
+    timeoutTimer->setInterval(8000);
+    connect(timeoutTimer, &QTimer::timeout, this, [this]()
+            {
+                if (m_testReply)
+                    m_testReply->abort(); });
+    timeoutTimer->start();
+
+    connect(m_testReply, &QNetworkReply::finished, this, [this, timeoutTimer]()
+            {
+                TranslationManager &tm = TranslationManager::instance();
+                timeoutTimer->stop();
+                timeoutTimer->deleteLater();
+
+                QPointer<QNetworkReply> reply = m_testReply;
+                m_testReply = nullptr;
+
+                if (m_testConnectionBtn)
+                    m_testConnectionBtn->setEnabled(true);
+
+                if (!reply)
+                    return;
+
+                const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+                const QByteArray body = reply->readAll();
+
+                if (reply->error() == QNetworkReply::NoError && status >= 200 && status < 300)
+                {
+                    QMessageBox::information(this, tm.tr("test_title"), tm.tr("test_ok").arg(reply->url().toString()));
+                }
+                else if (status == 401 || status == 403)
+                {
+                    QMessageBox::warning(this, tm.tr("test_title"), tm.tr("test_auth_failed").arg(status));
+                }
+                else
+                {
+                    const QString err = reply->errorString();
+                    QString bodyPreview = QString::fromUtf8(body.left(800));
+                    QMessageBox::warning(this, tm.tr("test_title"), tm.tr("test_failed").arg(status).arg(err).arg(bodyPreview));
+                }
+
+                reply->deleteLater(); });
 }
 
 ConfigDialog::~ConfigDialog() = default;
