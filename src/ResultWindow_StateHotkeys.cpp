@@ -125,6 +125,7 @@ void ResultWindow::updateNavigation()
     m_prevAction->setEnabled(m_currentIndex > 0);
     m_nextAction->setEnabled(m_currentIndex < m_history.size() - 1);
     m_pageLabel->setText(QString(" %1 / %2 ").arg(m_currentIndex + 1).arg(m_history.size()));
+    updateToolbarResponsive();
 }
 
 void ResultWindow::setHistoryManager(HistoryManager *h)

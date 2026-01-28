@@ -33,7 +33,21 @@ function render(md) {
   var h = marked.parse(prot.text);
   prot.blocks.forEach(function(b, i){ h = h.split('MATHPH'+i).join(b); });
   var d = document.getElementById('content');
-  if (d) { d.innerHTML = h; if(window.hljs) hljs.highlightAll(); if(window.renderMathInElement) renderMathInElement(d, {delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false}); }
+  if (d) {
+    d.innerHTML = h;
+    if (window.hljs) hljs.highlightAll();
+    if (window.renderMathInElement) {
+      renderMathInElement(d, {
+        delimiters: [
+          {left:'$$', right:'$$', display:true},
+          {left:'$', right:'$', display:false},
+          {left:'\\(', right:'\\)', display:false},
+          {left:'\\[', right:'\\]', display:true}
+        ],
+        throwOnError: false
+      });
+    }
+  }
 }
 window.updateContentFromNative = function(m) { CUR_MD = m; if(!EDIT) render(m); };
 window.toggleSource = function() {

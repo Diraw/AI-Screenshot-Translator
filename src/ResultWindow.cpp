@@ -27,6 +27,8 @@
 #include <QByteArray>
 #include <QUuid>
 #include <QBuffer>
+#include <QToolButton>
+#include <QFontMetrics>
 
 #include <string>
 #include <functional>
@@ -62,49 +64,121 @@ ResultWindow::ResultWindow(QWidget *parent) : QWidget(parent)
           {
         if (m_webView) m_webView->openDevTools(); });
 
-  m_toolBar = new QToolBar(this);
-  m_toolBar->setMovable(false);
-  m_toolBar->setFloatable(false);
+  m_toolBar = new QWidget(this);
+  m_toolBar->setObjectName("resultToolBar");
+  m_toolBar->setAttribute(Qt::WA_StyledBackground, true);
 
-  // 1. Lock (Left)
-  m_lockAction = m_toolBar->addAction("🔓");
+  // --- Toolbar layout: fixed Left / centered Paging / fixed Right ---
+  // Goal: < 1/1 > position must never shift with MODE text width changes.
+  auto makeToolButton = [](QAction *a) -> QToolButton *
+  {
+    QToolButton *b = new QToolButton();
+    b->setDefaultAction(a);
+    b->setAutoRaise(true);
+    b->setFocusPolicy(Qt::NoFocus);
+    return b;
+  };
+
+  // Actions (kept as QAction so other code can enable/disable them)
+  m_lockAction = new QAction("🔓", this);
   m_lockAction->setCheckable(true);
   m_lockAction->setToolTip(tr("Lock Window"));
   connect(m_lockAction, &QAction::triggered, this, &ResultWindow::toggleLock);
 
-  // Balance spacer (keeps center paging truly centered even when right-side MODE width changes)
-  m_balanceSpacer = new QWidget();
-  m_balanceSpacer->setFixedWidth(0);
-  m_toolBar->addWidget(m_balanceSpacer);
-
-  QWidget *leftSpacer = new QWidget();
-  leftSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-  m_toolBar->addWidget(leftSpacer);
-
-  // 2. Paging (Center)
-  m_prevAction = m_toolBar->addAction("<");
+  m_prevAction = new QAction("<", this);
   connect(m_prevAction, &QAction::triggered, this, &ResultWindow::showPrevious);
+
+  m_nextAction = new QAction(">", this);
+  connect(m_nextAction, &QAction::triggered, this, &ResultWindow::showNext);
+
+  // Create widgets
+  m_lockBtn = makeToolButton(m_lockAction);
+  m_prevBtn = makeToolButton(m_prevAction);
+  m_nextBtn = makeToolButton(m_nextAction);
 
   m_pageLabel = new QLabel(" 1 / 1 ", this);
   m_pageLabel->setAlignment(Qt::AlignCenter);
-  m_toolBar->addWidget(m_pageLabel);
+  {
+    const QFontMetrics fm(m_pageLabel->font());
+    m_pageMinW = fm.horizontalAdvance(" 1 / 1 ");
+    m_pageCompactW = fm.horizontalAdvance("1/1");
+    m_pageMaxW = fm.horizontalAdvance(" 888 / 888 ");
+    m_pageLabel->setMinimumWidth(0);
+    m_pageLabel->setMaximumWidth(m_pageMaxW);
+    m_pageLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+  }
 
-  m_nextAction = m_toolBar->addAction(">");
-  connect(m_nextAction, &QAction::triggered, this, &ResultWindow::showNext);
-
-  QWidget *rightSpacer = new QWidget();
-  rightSpacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-  m_toolBar->addWidget(rightSpacer);
-
-  // 3. Mode (Right)
   m_statusLabel = new QLabel("MODE: VIEW", this);
   m_statusLabel->setObjectName("statusIndicator");
   m_statusLabel->setAlignment(Qt::AlignCenter);
-  m_statusLabel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
   m_statusLabel->setFixedHeight(26);
-  m_toolBar->addWidget(m_statusLabel);
+  {
+    const QFontMetrics fm(m_statusLabel->font());
+    m_statusMinW = fm.horizontalAdvance("EDIT") + 18;
+    const QStringList candidates = {"MODE: VIEW", "MODE: EDIT", "MODE: RAW", "MODE: VIEW_DONE", "MODE: SOURCE"};
+    int maxW = 0;
+    for (const QString &s : candidates)
+      maxW = qMax(maxW, fm.horizontalAdvance(s));
+    m_statusMaxW = maxW + 18;
+    m_statusLabel->setMinimumWidth(0);
+    m_statusLabel->setMaximumWidth(m_statusMaxW);
+    m_statusLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+  }
 
-  updateToolbarBalance();
+  m_statusMode = "view";
+
+  m_leftBlock = new QWidget(this);
+  {
+    QHBoxLayout *l = new QHBoxLayout(m_leftBlock);
+    l->setContentsMargins(0, 0, 0, 0);
+    l->setSpacing(0);
+    l->addStretch();
+    l->addWidget(m_lockBtn);
+    l->addStretch();
+    m_leftBlock->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+  }
+
+  m_pagingGroup = new QWidget(this);
+  {
+    QHBoxLayout *p = new QHBoxLayout(m_pagingGroup);
+    p->setContentsMargins(0, 0, 0, 0);
+    p->setSpacing(6);
+    p->addWidget(m_prevBtn);
+    p->addWidget(m_pageLabel);
+    p->addWidget(m_nextBtn);
+    m_pagingGroup->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+  }
+
+  m_centerBlock = new QWidget(this);
+  {
+    QHBoxLayout *c = new QHBoxLayout(m_centerBlock);
+    c->setContentsMargins(0, 0, 0, 0);
+    c->setSpacing(0);
+    c->addStretch();
+    c->addWidget(m_pagingGroup);
+    c->addStretch();
+    m_centerBlock->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+  }
+
+  m_rightBlock = new QWidget(this);
+  {
+    QHBoxLayout *r = new QHBoxLayout(m_rightBlock);
+    r->setContentsMargins(0, 0, 0, 0);
+    r->setSpacing(0);
+    r->addWidget(m_statusLabel, 0, Qt::AlignCenter);
+    m_rightBlock->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+  }
+
+  {
+    QHBoxLayout *bar = new QHBoxLayout(m_toolBar);
+    bar->setContentsMargins(0, 0, 0, 0);
+    bar->setSpacing(0);
+    bar->addWidget(m_leftBlock);
+    bar->addWidget(m_centerBlock);
+    bar->addWidget(m_rightBlock);
+  }
+
+  updateToolbarResponsive();
 
   // --- JS BINDINGS ---
   m_webView->bind("log", [this](std::string seq, std::string req, void *arg)
@@ -134,12 +208,10 @@ ResultWindow::ResultWindow(QWidget *parent) : QWidget(parent)
                   {
         QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(req));
         QString mode = doc.isArray() ? doc.array().at(0).toString() : QString::fromUtf8(req.c_str());
-        QString labelText = "MODE: " + mode.toUpper();
-        QMetaObject::invokeMethod(this, [this, labelText, mode](){ 
-            if (m_statusLabel) {
-              m_statusLabel->setText(labelText);
-              updateToolbarBalance();
-            }
+        QMetaObject::invokeMethod(this, [this, mode](){ 
+            m_statusMode = mode;
+            applyStatusLabelText();
+            updateToolbarResponsive();
             if (mode == "view" || mode == "view_done") {
               requestFocusToWeb(false);
             }
@@ -182,49 +254,9 @@ ResultWindow::ResultWindow(QWidget *parent) : QWidget(parent)
 #endif
 }
 
-void ResultWindow::freezeToolbarLayoutOnce()
-{
-  if (m_toolbarLayoutFrozen)
-    return;
-  if (!m_toolBar || !m_balanceSpacer || !m_statusLabel || !m_lockAction)
-    return;
-
-  m_toolBar->ensurePolished();
-  m_statusLabel->ensurePolished();
-
-  QWidget *lockWidget = m_toolBar->widgetForAction(m_lockAction);
-  const int leftW = lockWidget ? lockWidget->sizeHint().width() : 0;
-  const int rightW = m_statusLabel->sizeHint().width();
-
-  // Freeze widths so paging never shifts after first appearance.
-  if (lockWidget && lockWidget->width() != leftW)
-    lockWidget->setFixedWidth(leftW);
-  if (m_statusLabel->width() != rightW)
-    m_statusLabel->setFixedWidth(rightW);
-
-  const int balance = qMax(0, rightW - leftW);
-  if (m_balanceSpacer->width() != balance)
-    m_balanceSpacer->setFixedWidth(balance);
-
-  m_toolbarLayoutFrozen = true;
-}
-
 void ResultWindow::updateToolbarBalance()
 {
-  if (m_toolbarLayoutFrozen)
-    return;
-  if (!m_toolBar || !m_balanceSpacer || !m_statusLabel || !m_lockAction)
-    return;
-
-  QWidget *lockWidget = m_toolBar->widgetForAction(m_lockAction);
-  const int leftW = lockWidget ? lockWidget->sizeHint().width() : 0;
-
-  m_statusLabel->ensurePolished();
-  const int rightW = m_statusLabel->sizeHint().width();
-
-  const int balance = qMax(0, rightW - leftW);
-  if (m_balanceSpacer->width() != balance)
-    m_balanceSpacer->setFixedWidth(balance);
+  // No-op: toolbar layout is stable via fixed Left/Center/Right blocks.
 }
 
 void ResultWindow::triggerScreenshotFromNative()
@@ -297,6 +329,7 @@ void ResultWindow::resizeEvent(QResizeEvent *event)
   {
     m_toolBar->setGeometry(0, 0, width(), 46);
     m_toolBar->raise();
+    updateToolbarResponsive();
   }
   QSizeGrip *grip = findChild<QSizeGrip *>();
   if (grip)
@@ -306,14 +339,107 @@ void ResultWindow::resizeEvent(QResizeEvent *event)
   }
   QWidget::resizeEvent(event);
 }
+
+void ResultWindow::applyStatusLabelText()
+{
+  if (!m_statusLabel)
+    return;
+  const QString mode = m_statusMode.isEmpty() ? QStringLiteral("view") : m_statusMode;
+  const QString up = mode.toUpper();
+
+  const QFontMetrics fm(m_statusLabel->font());
+  const int avail = qMax(0, m_statusLabel->maximumWidth());
+  const QString full = QStringLiteral("MODE: ") + up;
+  const QString shortText = up;
+  const QString tiny = up.isEmpty() ? QString() : up.left(1);
+
+  auto fits = [&](const QString &s) -> bool
+  {
+    // Leave some padding for the pill style.
+    return (fm.horizontalAdvance(s) + 12) <= avail;
+  };
+
+  if (fits(full))
+    m_statusLabel->setText(full);
+  else if (fits(shortText))
+    m_statusLabel->setText(shortText);
+  else
+    m_statusLabel->setText(tiny);
+}
+
+void ResultWindow::updateToolbarResponsive()
+{
+  if (!m_toolBar || !m_leftBlock || !m_rightBlock || !m_pagingGroup || !m_statusLabel || !m_lockBtn || !m_prevBtn || !m_nextBtn)
+    return;
+
+  const int toolbarW = m_toolBar->width();
+  if (toolbarW <= 0)
+    return;
+
+  // Minimum usable widths
+  const int lockW = m_lockBtn->sizeHint().width();
+  const int minSideW = qMax(lockW + 10, 28);
+
+  const int prevW = m_prevBtn->sizeHint().width();
+  const int nextW = m_nextBtn->sizeHint().width();
+  const int spacing = 6;
+
+  // Decide page label display mode: full / compact / hidden.
+  const int minCenterFull = prevW + nextW + m_pageMinW + spacing * 2;
+  const int minCenterCompact = prevW + nextW + m_pageCompactW + spacing * 2;
+  const int minCenterNoLabel = prevW + nextW + spacing;
+
+  enum PageMode
+  {
+    PageHidden,
+    PageCompact,
+    PageFull
+  };
+
+  PageMode pageMode = PageHidden;
+  if (toolbarW >= (minSideW * 2 + minCenterFull + 6))
+    pageMode = PageFull;
+  else if (toolbarW >= (minSideW * 2 + minCenterCompact + 6))
+    pageMode = PageCompact;
+
+  if (m_pageLabel)
+  {
+    m_pageLabel->setVisible(pageMode != PageHidden);
+    if (pageMode == PageFull)
+      m_pageLabel->setMaximumWidth(m_pageMaxW);
+    else if (pageMode == PageCompact)
+      m_pageLabel->setMaximumWidth(m_pageCompactW + 6);
+  }
+
+  // Keep text in sync with current navigation state.
+  if (m_pageLabel && pageMode != PageHidden)
+  {
+    const int cur = qMax(0, m_currentIndex) + 1;
+    const int total = qMax(1, m_history.size());
+    if (pageMode == PageFull)
+      m_pageLabel->setText(QString(" %1 / %2 ").arg(cur).arg(total));
+    else
+      m_pageLabel->setText(QString("%1/%2").arg(cur).arg(total));
+  }
+
+  const int centerMin = (pageMode == PageFull) ? minCenterFull : ((pageMode == PageCompact) ? minCenterCompact : minCenterNoLabel);
+  const int sideMaxBySpace = (toolbarW - centerMin) / 2;
+
+  // Cap side width by our preferred max (MODE max), but allow shrinking when narrow.
+  const int preferredSideW = qMax(minSideW, m_statusMaxW);
+  const int sideW = qMax(minSideW, qMin(preferredSideW, qMax(0, sideMaxBySpace)));
+
+  m_leftBlock->setFixedWidth(sideW);
+  m_rightBlock->setFixedWidth(sideW);
+  m_statusLabel->setMaximumWidth(sideW);
+  m_statusLabel->setMinimumWidth(qMin(sideW, m_statusMinW));
+
+  // Re-apply text after width changes.
+  applyStatusLabelText();
+}
 void ResultWindow::showEvent(QShowEvent *event)
 {
   QWidget::showEvent(event);
-
-  // Freeze toolbar geometry based on the very first on-screen layout.
-  // This prevents the < 1/1 > area from shifting when MODE text changes (e.g. 'r' toggles).
-  QTimer::singleShot(0, this, [this]()
-                     { freezeToolbarLayoutOnce(); });
 
   if (m_isFirstLoad)
   {

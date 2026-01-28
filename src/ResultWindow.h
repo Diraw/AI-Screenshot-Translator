@@ -6,7 +6,7 @@
 #include <QStringList>
 #include <memory>
 #include <QJsonArray>
-#include <QToolBar>
+#include <QToolButton>
 #include <QAction>
 #include <QLabel>
 #include <QList>
@@ -76,20 +76,34 @@ private slots:
     void openTagDialog();
 
 private:
-    void freezeToolbarLayoutOnce();
     void updateToolbarBalance();
+    void updateToolbarResponsive();
+    void applyStatusLabelText();
     std::unique_ptr<EmbedWebView> m_webView;
     QWidget *m_webContainer;
 
     // UI Elements
     // UI Elements
-    QToolBar *m_toolBar = nullptr;
+    QWidget *m_toolBar = nullptr;
     QAction *m_lockAction = nullptr;
     QAction *m_prevAction = nullptr;
     QAction *m_nextAction = nullptr;
+    QToolButton *m_lockBtn = nullptr;
+    QToolButton *m_prevBtn = nullptr;
+    QToolButton *m_nextBtn = nullptr;
+    QWidget *m_leftBlock = nullptr;
+    QWidget *m_centerBlock = nullptr;
+    QWidget *m_rightBlock = nullptr;
+    QWidget *m_pagingGroup = nullptr;
     QLabel *m_pageLabel = nullptr;
     QLabel *m_statusLabel = nullptr; // New status label
-    QWidget *m_balanceSpacer = nullptr;
+
+    int m_pageMinW = 0;
+    int m_pageCompactW = 0;
+    int m_pageMaxW = 0;
+    int m_statusMinW = 0;
+    int m_statusMaxW = 0;
+    QString m_statusMode; // e.g. "view", "edit", "raw"
 
     // State
     bool m_isLocked = false;
@@ -135,7 +149,6 @@ private:
     QList<QShortcut *> m_navShortcuts;
     void updateShortcuts();
     bool m_isFirstLoad = true;
-    bool m_toolbarLayoutFrozen = false;
     bool m_focusPending = false;
     QElapsedTimer m_lastFocus;
     void requestFocusToWeb(bool allowActivate = false);
