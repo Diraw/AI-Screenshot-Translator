@@ -33,6 +33,7 @@ private:
     void closeIfNonInteractive(QObject *eventTarget);
     void setUpdateStatus(const QString &text);
     void updateHintColor();
+    void updateUpdateHighlight(bool hasNewVersion);
 
     bool applyCachedUpdateStatusIfFresh();
     void saveUpdateCache(const QString &status, const QString &latestVer = QString(), const QString &latestUrl = QString());
@@ -73,6 +74,8 @@ private:
 
     QString m_latestTag;
     QString m_latestUrl;
+
+    bool m_hasNewVersion = false;
 };
 
 #endif // STARTUPWINDOW_H

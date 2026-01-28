@@ -375,6 +375,7 @@ bool StartupWindow::applyCachedUpdateStatusIfFresh()
         if (latestVer.isEmpty())
         {
             setUpdateStatus(formatText(m_updateNoVersion));
+            updateUpdateHighlight(false);
             return true;
         }
 
@@ -385,28 +386,33 @@ bool StartupWindow::applyCachedUpdateStatusIfFresh()
             QString s = m_updateLatestTpl;
             s.replace("{latest}", latestVer);
             setUpdateStatus(formatText(s));
+            updateUpdateHighlight(false);
         }
         else
         {
             QString s = m_updateNewTpl;
             s.replace("{latest}", latestVer);
             setUpdateStatus(formatText(s));
+            updateUpdateHighlight(true);
         }
         return true;
     }
     if (status == QStringLiteral("neterr"))
     {
         setUpdateStatus(formatText(m_updateNetworkError));
+        updateUpdateHighlight(false);
         return true;
     }
     if (status == QStringLiteral("parseerr"))
     {
         setUpdateStatus(formatText(m_updateParseError));
+        updateUpdateHighlight(false);
         return true;
     }
     if (status == QStringLiteral("noversion"))
     {
         setUpdateStatus(formatText(m_updateNoVersion));
+        updateUpdateHighlight(false);
         return true;
     }
 
@@ -444,6 +450,27 @@ void StartupWindow::updateHintColor()
     }
 
     m_updatingHintColor = false;
+}
+
+void StartupWindow::updateUpdateHighlight(bool hasNewVersion)
+{
+    m_hasNewVersion = hasNewVersion;
+
+    const QColor bg = palette().color(QPalette::Window);
+    const bool isDark = bg.lightness() < 128;
+    const QString red = isDark ? QStringLiteral("#FF6B6B") : QStringLiteral("#B24A4A");
+
+    if (m_updateStatusLabel)
+    {
+        if (m_hasNewVersion)
+            m_updateStatusLabel->setStyleSheet(QStringLiteral("color:%1;font-weight:bold;").arg(red));
+        else
+            m_updateStatusLabel->setStyleSheet(QString());
+    }
+
+    // Keep the releases button using the normal style.
+    if (m_openReleasesBtn)
+        m_openReleasesBtn->setStyleSheet(QString());
 }
 
 void StartupWindow::loadUiConfig()
@@ -537,6 +564,7 @@ void StartupWindow::startUpdateCheck(bool forceNetwork)
     }
 
     setUpdateStatus(formatText(m_updateChecking));
+    updateUpdateHighlight(false);
     m_checkUpdateBtn->setEnabled(false);
 
     // GitHub latest release API
@@ -567,6 +595,7 @@ void StartupWindow::onUpdateReplyFinished()
     if (err != QNetworkReply::NoError)
     {
         setUpdateStatus(formatText(m_updateNetworkError));
+        updateUpdateHighlight(false);
         saveUpdateCache(QStringLiteral("neterr"));
         return;
     }
@@ -576,6 +605,7 @@ void StartupWindow::onUpdateReplyFinished()
     if (jerr.error != QJsonParseError::NoError || !doc.isObject())
     {
         setUpdateStatus(formatText(m_updateParseError));
+        updateUpdateHighlight(false);
         saveUpdateCache(QStringLiteral("parseerr"));
         return;
     }
@@ -593,6 +623,7 @@ void StartupWindow::onUpdateReplyFinished()
     if (latestVer.isEmpty())
     {
         setUpdateStatus(formatText(m_updateNoVersion));
+        updateUpdateHighlight(false);
         saveUpdateCache(QStringLiteral("noversion"));
         return;
     }
@@ -603,12 +634,14 @@ void StartupWindow::onUpdateReplyFinished()
         QString s = m_updateLatestTpl;
         s.replace("{latest}", latestVer);
         setUpdateStatus(formatText(s));
+        updateUpdateHighlight(false);
     }
     else
     {
         QString s = m_updateNewTpl;
         s.replace("{latest}", latestVer);
         setUpdateStatus(formatText(s));
+        updateUpdateHighlight(true);
     }
 
     saveUpdateCache(QStringLiteral("ok"), latestVer, m_latestUrl);
