@@ -51,6 +51,7 @@ private:
         m_translations["en"]["tray_summary"] = "Archive";
         m_translations["en"]["tray_settings"] = "Settings";
         m_translations["en"]["tray_quit"] = "Quit";
+        m_translations["en"]["quit_toast"] = "Exiting...";
 
         m_translations["en"]["grp_profiles"] = "Profiles";
         m_translations["en"]["btn_new"] = "New";
@@ -147,6 +148,7 @@ private:
         m_translations["zh"]["tray_summary"] = "归档";
         m_translations["zh"]["tray_settings"] = "设置";
         m_translations["zh"]["tray_quit"] = "退出";
+        m_translations["zh"]["quit_toast"] = "正在退出…";
 
         m_translations["zh"]["grp_profiles"] = "配置方案";
         m_translations["zh"]["btn_new"] = "新建";
