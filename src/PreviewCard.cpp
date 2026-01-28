@@ -51,8 +51,26 @@ namespace
             if (!c.isValid())
                 c = QColor(100, 100, 100, 255);
 
-            painter.fillRect(QRect(0, 0, width(), borderW), c);  // top
-            painter.fillRect(QRect(0, 0, borderW, height()), c); // left
+            // When the screenshot is very small, the PreviewCard clamps the label to a minimum size.
+            // In that case, the pixmap is smaller than the label, and drawing the border using the
+            // label's full width/height makes the border "stick out" past the image.
+            // Fix: draw border only over the actually displayed pixmap rect (logical pixels).
+            QPixmap pm = pixmap(Qt::ReturnByValue);
+            int drawW = width();
+            int drawH = height();
+            if (!pm.isNull())
+            {
+                const qreal dpr = pm.devicePixelRatio();
+                const QSize logicalSize = (dpr > 0.0) ? QSize(qRound(pm.width() / dpr), qRound(pm.height() / dpr)) : pm.size();
+                drawW = qMin(drawW, logicalSize.width());
+                drawH = qMin(drawH, logicalSize.height());
+            }
+
+            if (drawW <= 0 || drawH <= 0)
+                return;
+
+            painter.fillRect(QRect(0, 0, drawW, borderW), c); // top
+            painter.fillRect(QRect(0, 0, borderW, drawH), c); // left
         }
 
     private:
