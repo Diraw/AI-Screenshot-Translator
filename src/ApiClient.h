@@ -8,58 +8,61 @@
 #include <QByteArray>
 #include <QSet>
 
-enum class ApiProvider {
+enum class ApiProvider
+{
     OpenAI,
     Gemini,
     Claude
 };
 
-class ApiClient : public QObject {
+class ApiClient : public QObject
+{
     Q_OBJECT
 public:
     explicit ApiClient(QObject *parent = nullptr);
     ~ApiClient();
 
     // Setup connection details
-    void configure(const QString& apiKey, const QString& baseUrl, const QString& modelName, 
-                   ApiProvider provider, bool useProxy, const QString& proxyUrl = QString());
+    void configure(const QString &apiKey, const QString &baseUrl, const QString &modelName,
+                   ApiProvider provider, bool useProxy, const QString &proxyUrl = QString(), const QString &endpointPath = QString());
 
     // Main action
-    void processImage(const QByteArray& base64Image, const QString& promptText, void* context = nullptr);
+    void processImage(const QByteArray &base64Image, const QString &promptText, void *context = nullptr);
 
 signals:
-    void success(const QString& text, const QString& originalBase64, const QString& originalPrompt, void* context);
-    void error(const QString& errorMessage, void* context);
+    void success(const QString &text, const QString &originalBase64, const QString &originalPrompt, void *context);
+    void error(const QString &errorMessage, void *context);
 
 private slots:
-    void onReplyFinished(QNetworkReply* reply);
+    void onReplyFinished(QNetworkReply *reply);
 
 private:
     QNetworkAccessManager *m_manager;
     QString m_apiKey;
     QString m_baseUrl;
+    QString m_endpointPath;
     QString m_modelName;
     ApiProvider m_provider = ApiProvider::OpenAI;
     bool m_useProxy = false;
     QString m_proxyUrl;
-    
+
     // Retry logic tracking (to prevent infinite loops)
     // We store the context in a set to track if a specific request has already retried
-    QSet<void*> m_retriedContexts;
-    
+    QSet<void *> m_retriedContexts;
+
     // Provider-specific request formatters
-    QByteArray formatOpenAIRequest(const QByteArray& base64Image, const QString& prompt);
-    QByteArray formatGeminiRequest(const QByteArray& base64Image, const QString& prompt);
-    QByteArray formatClaudeRequest(const QByteArray& base64Image, const QString& prompt);
-    
+    QByteArray formatOpenAIRequest(const QByteArray &base64Image, const QString &prompt);
+    QByteArray formatGeminiRequest(const QByteArray &base64Image, const QString &prompt);
+    QByteArray formatClaudeRequest(const QByteArray &base64Image, const QString &prompt);
+
     // Provider-specific response parsers
-    QString parseOpenAIResponse(const QJsonObject& root);
-    QString parseGeminiResponse(const QJsonObject& root);
-    QString parseClaudeResponse(const QJsonObject& root);
-    
+    QString parseOpenAIResponse(const QJsonObject &root);
+    QString parseGeminiResponse(const QJsonObject &root);
+    QString parseClaudeResponse(const QJsonObject &root);
+
     // Provider-specific endpoint and header helpers
     QString getEndpoint() const;
-    void setProviderHeaders(QNetworkRequest& request) const;
+    void setProviderHeaders(QNetworkRequest &request) const;
 };
 
 #endif // APICLIENT_H

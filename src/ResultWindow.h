@@ -76,6 +76,7 @@ private slots:
     void openTagDialog();
 
 private:
+    void freezeToolbarLayoutOnce();
     void updateToolbarBalance();
     std::unique_ptr<EmbedWebView> m_webView;
     QWidget *m_webContainer;
@@ -134,6 +135,7 @@ private:
     QList<QShortcut *> m_navShortcuts;
     void updateShortcuts();
     bool m_isFirstLoad = true;
+    bool m_toolbarLayoutFrozen = false;
     bool m_focusPending = false;
     QElapsedTimer m_lastFocus;
     void requestFocusToWeb(bool allowActivate = false);

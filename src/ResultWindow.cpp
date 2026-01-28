@@ -182,8 +182,37 @@ ResultWindow::ResultWindow(QWidget *parent) : QWidget(parent)
 #endif
 }
 
+void ResultWindow::freezeToolbarLayoutOnce()
+{
+  if (m_toolbarLayoutFrozen)
+    return;
+  if (!m_toolBar || !m_balanceSpacer || !m_statusLabel || !m_lockAction)
+    return;
+
+  m_toolBar->ensurePolished();
+  m_statusLabel->ensurePolished();
+
+  QWidget *lockWidget = m_toolBar->widgetForAction(m_lockAction);
+  const int leftW = lockWidget ? lockWidget->sizeHint().width() : 0;
+  const int rightW = m_statusLabel->sizeHint().width();
+
+  // Freeze widths so paging never shifts after first appearance.
+  if (lockWidget && lockWidget->width() != leftW)
+    lockWidget->setFixedWidth(leftW);
+  if (m_statusLabel->width() != rightW)
+    m_statusLabel->setFixedWidth(rightW);
+
+  const int balance = qMax(0, rightW - leftW);
+  if (m_balanceSpacer->width() != balance)
+    m_balanceSpacer->setFixedWidth(balance);
+
+  m_toolbarLayoutFrozen = true;
+}
+
 void ResultWindow::updateToolbarBalance()
 {
+  if (m_toolbarLayoutFrozen)
+    return;
   if (!m_toolBar || !m_balanceSpacer || !m_statusLabel || !m_lockAction)
     return;
 
@@ -280,6 +309,12 @@ void ResultWindow::resizeEvent(QResizeEvent *event)
 void ResultWindow::showEvent(QShowEvent *event)
 {
   QWidget::showEvent(event);
+
+  // Freeze toolbar geometry based on the very first on-screen layout.
+  // This prevents the < 1/1 > area from shifting when MODE text changes (e.g. 'r' toggles).
+  QTimer::singleShot(0, this, [this]()
+                     { freezeToolbarLayoutOnce(); });
+
   if (m_isFirstLoad)
   {
     m_isFirstLoad = false;

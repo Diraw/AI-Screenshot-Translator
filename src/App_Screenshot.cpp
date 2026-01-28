@@ -113,7 +113,7 @@ void App::onScreenshotCaptured(const QPixmap &pixmap, const QRect &rect)
         if (providerStr == "gemini") provider = ApiProvider::Gemini;
         else if (providerStr == "claude") provider = ApiProvider::Claude;
 
-        m_apiClient->configure(cfg.apiKey, cfg.baseUrl, cfg.modelName, provider, cfg.useProxy, cfg.proxyUrl);
+        m_apiClient->configure(cfg.apiKey, cfg.baseUrl, cfg.modelName, provider, cfg.useProxy, cfg.proxyUrl, cfg.endpointPath);
 
         // Store entryId in heap to pass as context
         QByteArray *contextData = new QByteArray(entryId.toUtf8());

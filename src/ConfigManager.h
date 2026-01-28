@@ -15,6 +15,7 @@ struct AppConfig
     // API Settings
     QString apiKey;
     QString baseUrl;
+    QString endpointPath; // e.g. /chat/completions or /v1/chat/completions
     QString modelName;
     QString promptText = "# Role\n你是一个专业的学术翻译专家，擅长中英文互译，并能精确处理数学、物理等领域的 LaTeX 公式。\n\n# Task\n请将图片中的英文内容翻译为中文。\n\n# Requirements\n1. **仅返回翻译后的中文文本**。严禁包含任何开场白、解释语（如\"好的\"、\"这是翻译内容\"）或结束语。\n2. **数学公式处理**：原文中所有的数学变量、常数、公式和方程必须使用 LaTeX 格式输出（例如使用 $x$ 或 $$E=mc^2$$）。\n3. **术语准确**：保持专业领域的术语翻译严谨、自然。\n4. **格式对齐**：保持原有的段落结构。\n\n# Content";
     QString proxyUrl;

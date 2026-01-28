@@ -8,6 +8,23 @@
 #include <QDebug>
 #include <QStringList>
 
+static QUrl joinBaseAndEndpoint(const QString &baseUrl, const QString &endpoint)
+{
+    QUrl base = QUrl::fromUserInput(baseUrl.trimmed());
+    QString baseStr = base.toString();
+    if (!baseStr.endsWith('/'))
+        baseStr += '/';
+    base = QUrl(baseStr);
+
+    QString ep = endpoint.trimmed();
+    if (ep.isEmpty())
+        return base;
+    while (ep.startsWith('/'))
+        ep.remove(0, 1);
+
+    return base.resolved(QUrl(ep));
+}
+
 ApiClient::ApiClient(QObject *parent) : QObject(parent)
 {
     m_manager = new QNetworkAccessManager(this);
@@ -19,10 +36,11 @@ ApiClient::~ApiClient()
 }
 
 void ApiClient::configure(const QString &apiKey, const QString &baseUrl, const QString &modelName,
-                          ApiProvider provider, bool useProxy, const QString &proxyUrl)
+                          ApiProvider provider, bool useProxy, const QString &proxyUrl, const QString &endpointPath)
 {
     m_apiKey = apiKey;
     m_baseUrl = baseUrl;
+    m_endpointPath = endpointPath;
     m_modelName = modelName;
     m_provider = provider;
     m_useProxy = useProxy;
@@ -76,7 +94,7 @@ void ApiClient::processImage(const QByteArray &base64Image, const QString &promp
     }
 
     QString endpoint = getEndpoint();
-    QUrl url(m_baseUrl + endpoint);
+    QUrl url = joinBaseAndEndpoint(m_baseUrl, endpoint);
 
     // For Gemini, add API key to URL parameter
     if (m_provider == ApiProvider::Gemini)
@@ -389,6 +407,11 @@ QString ApiClient::parseClaudeResponse(const QJsonObject &root)
 
 QString ApiClient::getEndpoint() const
 {
+    if (!m_endpointPath.trimmed().isEmpty())
+    {
+        return m_endpointPath;
+    }
+
     switch (m_provider)
     {
     case ApiProvider::OpenAI:

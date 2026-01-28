@@ -7,6 +7,8 @@ void ConfigDialog::loadFromConfig()
     AppConfig cfg = m_configManager->getConfig();
     m_apiKeyEdit->setText(cfg.apiKey);
     m_baseUrlEdit->setText(cfg.baseUrl);
+    if (m_endpointPathEdit)
+        m_endpointPathEdit->setText(cfg.endpointPath);
     m_modelNameEdit->setText(cfg.modelName);
     m_promptEdit->setPlainText(cfg.promptText);
     m_proxyUrlEdit->setText(cfg.proxyUrl);
@@ -71,6 +73,8 @@ void ConfigDialog::save()
     cfg.apiKey = m_apiKeyEdit->text();
     // ...
     cfg.baseUrl = m_baseUrlEdit->text();
+    if (m_endpointPathEdit)
+        cfg.endpointPath = m_endpointPathEdit->text();
     cfg.modelName = m_modelNameEdit->text();
     cfg.promptText = m_promptEdit->toPlainText();
     cfg.proxyUrl = m_proxyUrlEdit->text();

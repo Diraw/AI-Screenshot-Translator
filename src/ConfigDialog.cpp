@@ -20,6 +20,9 @@
 #include <QNetworkProxy>
 #include <QTcpSocket>
 #include <QUrl>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 static bool tryParseColorText(QString text, QColor &out)
 {
@@ -287,7 +290,19 @@ ConfigDialog::ConfigDialog(ConfigManager *configManager, QWidget *parent)
     layout->addRow("API Provider:", m_apiProviderCombo);
 
     m_baseUrlEdit = new QLineEdit(this);
-    layout->addRow("Base URL:", m_baseUrlEdit);
+    m_endpointPathEdit = new QLineEdit(this);
+    m_endpointPathEdit->setPlaceholderText(TranslationManager::instance().tr("endpoint_placeholder"));
+    m_endpointPathEdit->setText("/chat/completions");
+    m_endpointPathEdit->setMinimumWidth(160);
+
+    QHBoxLayout *baseRowLayout = new QHBoxLayout();
+    baseRowLayout->setContentsMargins(0, 0, 0, 0);
+    baseRowLayout->setSpacing(8);
+    baseRowLayout->addWidget(m_baseUrlEdit, 1);
+    baseRowLayout->addWidget(m_endpointPathEdit, 0);
+    QWidget *baseRowWidget = new QWidget(this);
+    baseRowWidget->setLayout(baseRowLayout);
+    layout->addRow("Base URL:", baseRowWidget);
 
     m_modelNameEdit = new QLineEdit(this);
     m_testConnectionBtn = new QPushButton("Test", this);
@@ -583,14 +598,20 @@ static bool tryBuildProxyFromUrl(const QString &proxyUrl, QNetworkProxy &outProx
     return true;
 }
 
-static QUrl buildModelsUrl(const QString &baseUrl)
+static QUrl joinBaseAndEndpointUi(const QString &baseUrl, const QString &endpoint)
 {
-    QUrl base = QUrl::fromUserInput(baseUrl);
+    QUrl base = QUrl::fromUserInput(baseUrl.trimmed());
     QString s = base.toString();
     if (!s.endsWith('/'))
         s += '/';
     base = QUrl(s);
-    return base.resolved(QUrl("models"));
+
+    QString ep = endpoint.trimmed();
+    if (ep.isEmpty())
+        return base;
+    while (ep.startsWith('/'))
+        ep.remove(0, 1);
+    return base.resolved(QUrl(ep));
 }
 
 void ConfigDialog::onTestConnection()
@@ -608,9 +629,11 @@ void ConfigDialog::onTestConnection()
     }
 
     const QString baseUrl = m_baseUrlEdit ? m_baseUrlEdit->text().trimmed() : QString();
+    const QString endpointPath = m_endpointPathEdit ? m_endpointPathEdit->text().trimmed() : QString();
     const QString apiKey = m_apiKeyEdit ? m_apiKeyEdit->text().trimmed() : QString();
     const bool useProxy = m_useProxyCheck ? m_useProxyCheck->isChecked() : false;
     const QString proxyUrl = m_proxyUrlEdit ? m_proxyUrlEdit->text().trimmed() : QString();
+    const QString providerStr = m_apiProviderCombo ? m_apiProviderCombo->currentData().toString().trimmed().toLower() : QString("openai");
 
     if (baseUrl.isEmpty())
     {
@@ -618,8 +641,8 @@ void ConfigDialog::onTestConnection()
         return;
     }
 
-    const QUrl modelsUrl = buildModelsUrl(baseUrl);
-    if (!modelsUrl.isValid() || modelsUrl.scheme().isEmpty() || modelsUrl.host().isEmpty())
+    const QUrl testUrl = joinBaseAndEndpointUi(baseUrl, endpointPath);
+    if (!testUrl.isValid() || testUrl.scheme().isEmpty() || testUrl.host().isEmpty())
     {
         QMessageBox::warning(this, tm.tr("test_title"), tm.tr("test_err_baseurl_invalid"));
         return;
@@ -660,13 +683,44 @@ void ConfigDialog::onTestConnection()
         m_testNam->setProxy(QNetworkProxy::DefaultProxy);
     }
 
-    // Send a lightweight OpenAI-compatible request: GET /models
-    QNetworkRequest req(modelsUrl);
+    QNetworkRequest req(testUrl);
     req.setRawHeader("Accept", "application/json");
-    if (!apiKey.isEmpty())
-        req.setRawHeader("Authorization", QByteArray("Bearer ") + apiKey.toUtf8());
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    req.setRawHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
-    m_testReply = m_testNam->get(req);
+    QByteArray payload;
+    if (providerStr == "openai")
+    {
+        const QString model = m_modelNameEdit ? m_modelNameEdit->text().trimmed() : QString();
+        if (model.isEmpty())
+        {
+            if (m_testConnectionBtn)
+                m_testConnectionBtn->setEnabled(true);
+            QMessageBox::warning(this, tm.tr("test_title"), tm.tr("test_err_model_empty"));
+            return;
+        }
+
+        if (!apiKey.isEmpty())
+            req.setRawHeader("Authorization", QByteArray("Bearer ") + apiKey.toUtf8());
+
+        QJsonObject msg;
+        msg["role"] = "user";
+        msg["content"] = "ping";
+        QJsonArray msgs;
+        msgs.append(msg);
+        QJsonObject root;
+        root["model"] = model;
+        root["messages"] = msgs;
+        root["max_tokens"] = 1;
+        payload = QJsonDocument(root).toJson(QJsonDocument::Compact);
+
+        m_testReply = m_testNam->post(req, payload);
+    }
+    else
+    {
+        // Fallback: use GET to validate reachability of the final URL (some endpoints may return 405/404).
+        m_testReply = m_testNam->get(req);
+    }
 
     QTimer *timeoutTimer = new QTimer(this);
     timeoutTimer->setSingleShot(true);
@@ -695,7 +749,8 @@ void ConfigDialog::onTestConnection()
                 const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
                 const QByteArray body = reply->readAll();
 
-                if (reply->error() == QNetworkReply::NoError && status >= 200 && status < 300)
+                const bool okHttp = (status >= 200 && status < 300) || status == 401 || status == 403 || status == 405;
+                if ((reply->error() == QNetworkReply::NoError || reply->error() == QNetworkReply::ContentOperationNotPermittedError) && okHttp)
                 {
                     QMessageBox::information(this, tm.tr("test_title"), tm.tr("test_ok").arg(reply->url().toString()));
                 }

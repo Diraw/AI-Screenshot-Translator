@@ -378,6 +378,7 @@ void ConfigManager::parseJson(const QJsonObject &root)
         QJsonObject api = root["api"].toObject();
         m_config.apiKey = api["api_key"].toString();
         m_config.baseUrl = api["base_url"].toString();
+        m_config.endpointPath = api["endpoint"].toString();
         m_config.modelName = api["model"].toString();
 
         // Use default prompt if empty or not present
@@ -394,6 +395,16 @@ void ConfigManager::parseJson(const QJsonObject &root)
         m_config.proxyUrl = api["proxy"].toString();
         m_config.useProxy = api["use_proxy"].toBool(false);
         m_config.apiProvider = api["provider"].toString("openai");
+
+        // Backward-compatible default endpoint (avoid duplicating /v1)
+        if (m_config.endpointPath.trimmed().isEmpty())
+        {
+            const QString b = m_config.baseUrl.trimmed().toLower();
+            if (b.endsWith("/v1") || b.endsWith("/v1/") || b.contains("/compatible-mode/v1"))
+                m_config.endpointPath = "/chat/completions";
+            else
+                m_config.endpointPath = "/v1/chat/completions";
+        }
     }
 
     if (root.contains("app_settings") && root["app_settings"].isObject())
@@ -469,6 +480,7 @@ QJsonObject ConfigManager::toJson() const
     QJsonObject api;
     api["api_key"] = m_config.apiKey;
     api["base_url"] = m_config.baseUrl;
+    api["endpoint"] = m_config.endpointPath;
     api["model"] = m_config.modelName;
     api["prompt_text"] = m_config.promptText;
     api["provider"] = m_config.apiProvider;

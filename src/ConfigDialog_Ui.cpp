@@ -57,6 +57,9 @@ void ConfigDialog::retranslateUi()
         if (m_testConnectionBtn)
             m_testConnectionBtn->setText(tm.tr("btn_test_connection"));
 
+        if (m_endpointPathEdit)
+            m_endpointPathEdit->setPlaceholderText(tm.tr("endpoint_placeholder"));
+
         m_showPreviewCheck->setText(tm.tr("chk_preview"));
         m_showResultCheck->setText(tm.tr("chk_result"));
 

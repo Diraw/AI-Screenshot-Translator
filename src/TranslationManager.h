@@ -207,6 +207,7 @@ private:
         m_translations["zh"]["lbl_capture_screen"] = "捕获屏幕:";
         m_translations["zh"]["lbl_api_key"] = "API 密钥:";
         m_translations["zh"]["lbl_base_url"] = "API 基础 URL";
+        m_translations["zh"]["endpoint_placeholder"] = "/chat/completions";
         m_translations["zh"]["lbl_model"] = "模型名称";
         m_translations["zh"]["lbl_prompt"] = "提示词";
         m_translations["zh"]["lbl_proxy_url"] = "代理地址";
@@ -225,6 +226,7 @@ private:
         m_translations["zh"]["test_title"] = "连通性测试";
         m_translations["zh"]["test_err_baseurl_empty"] = "API 基础 URL 不能为空。";
         m_translations["zh"]["test_err_baseurl_invalid"] = "API 基础 URL 无效。";
+        m_translations["zh"]["test_err_model_empty"] = "模型名称不能为空（OpenAI 格式测试需要 model）。";
         m_translations["zh"]["test_err_proxy_invalid"] = "代理地址无效。";
         m_translations["zh"]["test_err_proxy_unreachable"] = "代理不可达：%1";
         m_translations["zh"]["test_ok"] = "API 可连通：%1";
@@ -259,6 +261,8 @@ private:
         m_translations["en"]["test_title"] = "Connectivity Test";
         m_translations["en"]["test_err_baseurl_empty"] = "Base URL cannot be empty.";
         m_translations["en"]["test_err_baseurl_invalid"] = "Base URL is invalid.";
+        m_translations["en"]["endpoint_placeholder"] = "/chat/completions";
+        m_translations["en"]["test_err_model_empty"] = "Model cannot be empty (OpenAI-format test requires model).";
         m_translations["en"]["test_err_proxy_invalid"] = "Proxy URL is invalid.";
         m_translations["en"]["test_err_proxy_unreachable"] = "Proxy unreachable: %1";
         m_translations["en"]["test_ok"] = "API reachable: %1";

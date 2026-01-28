@@ -71,6 +71,7 @@ private:
     // Settings UI
     QLineEdit *m_apiKeyEdit;
     QLineEdit *m_baseUrlEdit;
+    QLineEdit *m_endpointPathEdit = nullptr;
     QLineEdit *m_modelNameEdit;
     QPushButton *m_testConnectionBtn = nullptr;
     QTextEdit *m_promptEdit;
