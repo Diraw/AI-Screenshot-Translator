@@ -1,9 +1,11 @@
 #include "ConfigDialog.h"
 
 #include <QDebug>
+#include <QSignalBlocker>
 
 void ConfigDialog::loadFromConfig()
 {
+    m_isLoadingConfig = true;
     AppConfig cfg = m_configManager->getConfig();
     m_apiKeyEdit->setText(cfg.apiKey);
     m_baseUrlEdit->setText(cfg.baseUrl);
@@ -14,9 +16,20 @@ void ConfigDialog::loadFromConfig()
     m_proxyUrlEdit->setText(cfg.proxyUrl);
     m_useProxyCheck->setChecked(cfg.useProxy);
 
-    int providerIndex = m_apiProviderCombo->findData(cfg.apiProvider);
-    if (providerIndex >= 0)
-        m_apiProviderCombo->setCurrentIndex(providerIndex);
+    {
+        const QSignalBlocker blocker(m_apiProviderCombo);
+        int providerIndex = m_apiProviderCombo->findData(cfg.apiProvider);
+        if (providerIndex >= 0)
+            m_apiProviderCombo->setCurrentIndex(providerIndex);
+    }
+
+    // If the stored endpoint is exactly the provider default, remember it as auto-filled.
+    if (m_endpointPathEdit)
+    {
+        const QString ep = m_endpointPathEdit->text().trimmed();
+        const QString def = defaultEndpointForProvider(cfg.apiProvider);
+        m_lastAutoEndpoint = (ep == def) ? ep : QString();
+    }
 
     m_hotkeyEdit->setText(cfg.screenshotHotkey);
     m_summaryHotkeyEdit->setText(cfg.summaryHotkey);
@@ -65,6 +78,8 @@ void ConfigDialog::loadFromConfig()
             break;
         }
     }
+
+    m_isLoadingConfig = false;
 }
 
 void ConfigDialog::save()

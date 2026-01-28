@@ -293,7 +293,20 @@ ConfigDialog::ConfigDialog(ConfigManager *configManager, QWidget *parent)
     m_endpointPathEdit = new QLineEdit(this);
     m_endpointPathEdit->setPlaceholderText(TranslationManager::instance().tr("endpoint_placeholder"));
     m_endpointPathEdit->setText("/chat/completions");
+    m_lastAutoEndpoint = "/chat/completions";
     m_endpointPathEdit->setMinimumWidth(160);
+
+    connect(m_endpointPathEdit, &QLineEdit::textEdited, this, [this](const QString &)
+            {
+                // User manually changed endpoint; stop auto-overwriting.
+                m_lastAutoEndpoint.clear(); });
+
+    connect(m_apiProviderCombo, &QComboBox::currentIndexChanged, this, [this](int)
+            {
+                if (m_isLoadingConfig)
+                    return;
+                const QString provider = m_apiProviderCombo ? m_apiProviderCombo->currentData().toString() : QString();
+                maybeApplyEndpointDefaultForProvider(provider); });
 
     QHBoxLayout *baseRowLayout = new QHBoxLayout();
     baseRowLayout->setContentsMargins(0, 0, 0, 0);
@@ -612,6 +625,34 @@ static QUrl joinBaseAndEndpointUi(const QString &baseUrl, const QString &endpoin
     while (ep.startsWith('/'))
         ep.remove(0, 1);
     return base.resolved(QUrl(ep));
+}
+
+QString ConfigDialog::defaultEndpointForProvider(const QString &provider) const
+{
+    const QString p = provider.trimmed().toLower();
+    if (p == "gemini")
+        return "/v1beta";
+    if (p == "claude")
+        return "/v1/messages";
+    return "/chat/completions";
+}
+
+void ConfigDialog::maybeApplyEndpointDefaultForProvider(const QString &provider)
+{
+    if (!m_endpointPathEdit)
+        return;
+
+    const QString newDefault = defaultEndpointForProvider(provider);
+    const QString cur = m_endpointPathEdit->text().trimmed();
+
+    // Only auto-update when user hasn't customized:
+    // - field empty, OR
+    // - field still equals the last auto-filled value.
+    if (cur.isEmpty() || (!m_lastAutoEndpoint.isEmpty() && cur == m_lastAutoEndpoint))
+    {
+        m_endpointPathEdit->setText(newDefault);
+        m_lastAutoEndpoint = newDefault;
+    }
 }
 
 void ConfigDialog::onTestConnection()

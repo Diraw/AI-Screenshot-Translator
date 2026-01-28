@@ -59,6 +59,11 @@ signals:
 private:
     ConfigManager *m_configManager;
 
+    QString defaultEndpointForProvider(const QString &provider) const;
+    void maybeApplyEndpointDefaultForProvider(const QString &provider);
+    bool m_isLoadingConfig = false;
+    QString m_lastAutoEndpoint;
+
     // Profile UI
     QListWidget *m_profileList;
     QPushButton *m_newProfileBtn;
