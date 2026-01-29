@@ -27,15 +27,16 @@ function focusSink() {
 function render(md) {
   if (typeof marked==='undefined') return;
   // Step 1: Extract LaTeX from backticks (e.g., `$formula$` -> $formula$)
+  // Only unwrap if the backticked content is a valid LaTeX expression (properly paired delimiters)
   var text = md || '';
-  // Match backtick-wrapped content that contains LaTeX delimiters
-  // Pattern matches: `...content with $ or \( or \[ or $$...`
-  text = text.replace(/`([^`]*(?:\$\$|\\\[|\\\(|\$)[^`]*)`/g, function(match, inner) {
-    // If the backticked content contains LaTeX delimiters, unwrap it
-    if (/\$\$|\\\[|\\\]|\\\(|\\\)|\$/.test(inner)) {
-      return inner;
+  text = text.replace(/`([^`]+)`/g, function(match, inner) {
+    // Check if content is a complete LaTeX expression with properly paired delimiters
+    // Match: $...$, $$...$$, \(...\), or \[...\]
+    // Using [\s\S]* to allow empty or any content including newlines
+    if (/^(?:\$\$[\s\S]*?\$\$|\$[^\$\n]+\$|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\])$/.test(inner.trim())) {
+      return inner; // Unwrap backticks
     }
-    return match; // Keep original if no LaTeX found
+    return match; // Keep original backticks if not valid LaTeX
   });
   
   // Step 2: Protect all LaTeX expressions before markdown parsing
@@ -65,9 +66,8 @@ function render(md) {
           {left:'\\(', right:'\\)', display:false},
           {left:'\\[', right:'\\]', display:true}
         ],
-        throwOnError: false,
-        ignoredTags: [], // Allow rendering in all tags
-        ignoredClasses: [] // Allow rendering in all classes
+        throwOnError: false
+        // Use KaTeX defaults for ignoredTags/ignoredClasses for safety
       });
     }
   }

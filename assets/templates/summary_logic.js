@@ -71,12 +71,15 @@ function renderContent(id, markdownOverride) {
     var markdown = (typeof markdownOverride === 'string') ? markdownOverride : (raw ? raw.textContent : '');
     
     // Step 1: Extract LaTeX from backticks (e.g., `$formula$` -> $formula$)
-    markdown = markdown.replace(/`([^`]*(?:\$\$|\\\[|\\\(|\$)[^`]*)`/g, function(match, inner) {
-      // If the backticked content contains LaTeX delimiters, unwrap it
-      if (/\$\$|\\\[|\\\]|\\\(|\\\)|\$/.test(inner)) {
-        return inner;
+    // Only unwrap if the backticked content is a valid LaTeX expression (properly paired delimiters)
+    markdown = markdown.replace(/`([^`]+)`/g, function(match, inner) {
+      // Check if content is a complete LaTeX expression with properly paired delimiters
+      // Match: $...$, $$...$$, \(...\), or \[...\]
+      // Using [\s\S]* to allow empty or any content including newlines
+      if (/^(?:\$\$[\s\S]*?\$\$|\$[^\$\n]+\$|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\])$/.test(inner.trim())) {
+        return inner; // Unwrap backticks
       }
-      return match; // Keep original if no LaTeX found
+      return match; // Keep original backticks if not valid LaTeX
     });
     
     // Step 2: Protect math expressions before markdown parsing
@@ -101,9 +104,8 @@ function renderContent(id, markdownOverride) {
           {left: '\\(', right: '\\)', display: false}, 
           {left: '\\[', right: '\\]', display: true}
         ], 
-        throwOnError: false,
-        ignoredTags: [], // Allow rendering in all tags
-        ignoredClasses: [] // Allow rendering in all classes
+        throwOnError: false
+        // Use KaTeX defaults for ignoredTags/ignoredClasses for safety
       });
     });
 }
