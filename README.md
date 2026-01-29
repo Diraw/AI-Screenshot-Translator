@@ -31,6 +31,8 @@
 
 ## 演示视频
 
+https://github.com/user-attachments/assets/458abdde-0d36-4b84-b486-8638194c3555
+
 ## 快速上手
 
 1. 启动程序（Release 包或自行构建）。
