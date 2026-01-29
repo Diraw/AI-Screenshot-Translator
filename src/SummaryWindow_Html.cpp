@@ -155,7 +155,16 @@ html, body { overflow-x: hidden; }
             --mark-bg: __MARK_BG__;
             --mark-bg-dark: __MARK_BG_DARK__;
     --mark-fg: #000;
+
+    --link-color: #0645ad;
+    --link-color-visited: #0b0080;
+    --link-color-dark: #78b7e6;
+    --link-color-dark-visited: #78b7e6;
 }
+
+a { color: var(--link-color); }
+a:visited { color: var(--link-color-visited); }
+a:hover { text-decoration: underline; }
 
 mark { background: var(--mark-bg); color: var(--mark-fg); }
 body.dark-mode mark { background: var(--mark-bg-dark); color: var(--mark-fg); }
@@ -174,6 +183,16 @@ body.dark-mode .raw-text { background: #1f1f1f !important; color: #e0e0e0 !impor
 body.dark-mode .rendered-html { color: #e0e0e0 !important; }
 body.dark-mode .katex,
 body.dark-mode .katex * { color: #e0e0e0 !important; }
+
+body.dark-mode a,
+body.dark-mode a:visited {
+    color: var(--link-color-dark) !important;
+}
+
+body.dark-mode a:hover {
+    color: var(--link-color-dark) !important;
+    text-decoration: underline;
+}
 .entry.selected { outline: 2px solid #3d8bfd; }
 .selection-rect {
   position: fixed;

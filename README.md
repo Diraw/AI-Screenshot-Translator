@@ -1,81 +1,116 @@
-# AI-Screenshot-Translator-Cpp
+# AI 截图翻译工具 (AI Screenshot Translator)
 
-一个基于 Qt 6 + WebView2 的截图翻译/归档工具，支持全局快捷键、标签管理、富文本渲染（Markdown/代码高亮/LaTeX）、多配置文件和代理。
+[![Qt6](https://img.shields.io/badge/Qt-6.x-41CD52)](https://www.qt.io/) [![WebView2](https://img.shields.io/badge/WebView2-Microsoft-0078D4?logo=microsoftedge&logoColor=white)](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) <img alt="GitHub release (latest by date)" src="https://img.shields.io/github/v/release/Diraw/AI-Screenshot-Translator"> <img alt="GitHub issues" src="https://img.shields.io/github/issues/Diraw/AI-Screenshot-Translator?color=green"> [![Downloads](https://img.shields.io/github/downloads/Diraw/AI-Screenshot-Translator/total?color=yellow)](https://github.com/Diraw/AI-Screenshot-Translator/releases/)
+
+一个基于 **Qt 6 + WebView2** 的截图翻译/归档工具：
+
+- 截图 → AI 翻译 → 富文本结果（Markdown/代码高亮/LaTeX）
+- 结果窗口支持快捷键翻页/编辑/查看原图/标签
+- 归档窗口支持筛选、批量操作与键盘导航
+- 多配置文件、代理、连通性测试
+
+> 注：目前本项目仅支持 Windows，将在未来支持跨平台
+
+## 适用场景（想解决的痛点）
+
+1. 不想用“整篇文档翻译”那种笨重工作流
+2. PDF 复制文本后公式（LaTeX）经常乱或不可用
+3. 扫描版 PDF 无法复制文本
+4. 划词翻译/截图翻译很多无法正确识别和渲染公式
 
 ## 功能亮点
-- 全局快捷键：截图、打开归档、打开设置，可在设置中自定义。
-- 截图工作流：框选区域 → 预览卡片（可拖拽、滚轮/拖动缩放、可选边框） → 可选结果窗口。
-- AI 处理：支持 OpenAI / Gemini / Claude，提示词可自定义，支持代理。
-- 结果视图：结果窗口可锁定置顶、翻页、编辑 Markdown、查看原图、标签弹窗、快捷键导航。
-- 归档视图：筛选（日期、标签），批量选择删除/加减标签，键盘切换查看/编辑/截图预览。
-- 历史存储：本地 `storage/history.json` + `storage/images/*`，删除图片会同步删除条目。
-- 配置与多配置文件：配置保存在 `%AppData%/AI-Screenshot-Translator-Cpp/profiles/*.json`，支持导入/导出/复制/重命名。
-- 日志：可在设置里开启 debug 模式，输出到工作目录 `debug.log`。
 
-## 目录结构（当前主要目录）
-- `src/` 核心代码：App、配置、服务（API/历史/翻译）、UI 窗口与小部件、平台封装（GlobalHotkey）、WebView 封装。
-- `assets/` 静态资源与前端库（marked/highlight/katex、字体、图标）。
-- `webview2_pkg/` WebView2 SDK 依赖。
-- `build/` 构建输出（本地生成）。
-- `REFACTOR_PLAN.md` 重构路线图。
+- 全局快捷键：截图、打开归档、打开设置（可自定义）
+- 截图工作流：框选区域 → 预览卡片（拖拽/缩放/可选边框） → 结果窗口
+- AI Provider：OpenAI / Gemini / Claude（可扩展），提示词可自定义，支持代理
+- 结果窗口：锁定置顶、翻页、编辑 Markdown、查看原图、标签弹窗、快捷键导航
+- 归档窗口：日期/标签筛选，批量选择删除/加减标签，键盘切换查看/编辑/截图预览
+- 本地历史：`storage/history.json` + `storage/images/*`（删除图片会同步删除条目）
+- 多配置文件：`%AppData%/AI-Screenshot-Translator-Cpp/profiles/*.json`，支持导入/导出/复制/重命名
+- 调试日志：设置里开启 Debug Mode，输出到工作目录 `debug.log`
+
+## 演示视频
+
+<video src="./doc/videos/演示视频v1.0.0-beta.mp4" controls="controls" width="500" height="300">
+</video>
+
+## 快速上手
+
+1. 启动程序（Release 包或自行构建）。
+2. 首次启动会自动弹出设置窗口：
+   - 选择 Provider
+   - 填写 API Key
+   - （可选）设置 Base URL / Endpoint / Proxy
+3. 使用托盘菜单或快捷键开始截图翻译。
+
+### 默认快捷键
+
+- 截图：`ctrl+alt+s`
+- 打开归档：`alt+s`
+- 结果窗口：上一页 `z` / 下一页 `x`；标签 `t`
+- 归档窗口：编辑 `e`、查看切换 `r`、截图预览 `s`
+- 编辑辅助：加粗/下划线/高亮：`ctrl+b / ctrl+u / ctrl+h`
+
+## API 配置说明
+
+### Base URL + Endpoint 是如何拼接的？
+
+- 请求地址统一按 `Base URL + Endpoint` 组合。
+- 默认 Endpoint（可自行改）：
+  - OpenAI：`/chat/completions`
+  - Gemini：`/v1beta`
+  - Claude：`/v1/messages`
+
+> 注意：如果你在 Base URL 里已经包含了版本路径（例如 `.../v1`），Endpoint 就不要再写 `/v1/...`，避免重复路径
+
+### 测试连通性
+
+设置页提供“测试”按钮，用于快速验证：
+
+- 代理是否可连接（若配置了 Proxy）
+- API 端点是否可访问（基于当前 Base URL + Endpoint）
+
+## 目录结构
+
+- `src/` 核心代码：App、配置、服务（API/历史/翻译）、UI 窗口与小部件、平台封装（GlobalHotkey）、WebView 封装
+- `assets/` 静态资源与前端库（marked/highlight/katex、字体、图标、模板等）
+- `webview2_pkg/` WebView2 SDK 依赖
+- `build/` 构建输出（本地生成）
 
 ## 环境与依赖
-- Windows + MSVC（推荐 VS 2022 工具链）。
-- CMake ≥ 3.16。
-- Qt 6（Widgets、Network、Gui、Core 组件）。
-- WebView2 Runtime（Windows 11 默认有，或单独安装）。
-- 已自带 WebView2 SDK 包（`webview2_pkg`）和前端库。
+
+- Windows + MSVC（推荐 VS 2022 工具链）
+- CMake ≥ 3.16
+- Qt 6（Widgets、Network、Gui、Core）
+- WebView2 Runtime（Windows 11 默认有，Windows 10 可能需要单独安装）
+- 仓库内置 WebView2 SDK（`webview2_pkg`）以及前端库（`assets/libs`）
 
 ### WebView2 包说明
-- 仓库已内置官方 NuGet 包 **Microsoft.Web.WebView2 1.0.2903.40**（原样解压，保留 LICENSE/NOTICE），克隆后可直接编译。
-- 需要精简仓库且只支持 x64 时，可只保留 `build/native/x64/WebView2Loader.dll(.lib)` 与 `WebView2.h/.idl/.tlb`；否则保持整包最稳妥。
-- 若读者拿到的仓库未包含 `webview2_pkg/`，请执行 `nuget install Microsoft.Web.WebView2 -Version 1.0.2903.40 -OutputDirectory third_party`，然后将生成的 `.nupkg` 解压到仓库根目录的 `webview2_pkg/`。
+
+- 仓库已内置官方 NuGet 包 **Microsoft.Web.WebView2 1.0.2903.40**（已精简，保留 `build/native/x64/WebView2Loader.dll(.lib)`、`WebView2.h/.idl/.tlb` 和 `LICENSE/NOTICE`），克隆后可直接编译。
+- 若仓库未包含 `webview2_pkg/`，可执行：
+  ```powershell
+  nuget install Microsoft.Web.WebView2 -Version 1.0.2903.40 -OutputDirectory third_party
+  ```
+  然后将生成的 `.nupkg` 解压到仓库根目录的 `webview2_pkg/`。
 
 ## 本地构建
-1. 确认已安装 Qt 6（并设置好 `CMAKE_PREFIX_PATH` 或在 VS 开发者命令行里使用 `-DCMAKE_PREFIX_PATH=".../Qt/6.x/msvc2019_64/lib/cmake"`）。
+
+1. 安装 Qt 6，并设置 `CMAKE_PREFIX_PATH`（或在 VS 开发者命令行中使用 `-DCMAKE_PREFIX_PATH=".../Qt/6.x/msvc2019_64/lib/cmake"`）。
 2. 生成并构建：
    ```powershell
    cmake -S . -B build -G "Visual Studio 17 2022" -A x64
    cmake --build build --config Release
    ```
-3. 运行可执行文件：
+3. 运行：
    ```powershell
    .\build\Release\AI-Screenshot-Translator-Cpp.exe
    ```
 
-## 运行与配置
-- 首次启动若未配置 API Key 会自动弹出设置窗口。
-- 托盘菜单：截图、归档、设置、退出。
-- 默认存储：`./storage`（可在设置里改为绝对路径），图片保存在 `images/`，历史为 `history.json`。
-- 默认快捷键（可在设置里修改）：
-  - 截图：`ctrl+alt+s`
-  - 归档：`alt+s`
-  - 结果窗口导航：上一页 `z` / 下一页 `x`
-  - 结果窗口标签：`t`
-  - 归档视图：编辑 `e`、查看切换 `r`、截图预览 `s`，加粗/下划线/高亮分别为 `ctrl+b / ctrl+u / ctrl+h`
+## 打包
 
-## 调试与日志
-- 设置中开启 “Enable Debug Mode” 后，会记录日志到工作目录 `debug.log`，App 启动/异常/网络错误会写入。
-- WebView 模板和资源已本地打包，无需联网；网络请求仅用于调用选定的 AI Provider。
-
-## 可选：使用 Umami 统计（DAU/MAU/使用时长）
-程序支持在启动 **5 秒后** 异步上报 Umami 事件（不会阻塞 UI）。你可以在仓库根目录放一个 `.env`（不要提交到 GitHub）：
-
-```dotenv
-# Umami 网站 ID（必填）
-website_uuid=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-
-# Umami 服务地址（可选，默认 https://umami.diraw.top）
-umami_host=https://umami.example.com
-
-# 客户端固定 ID（可选；不填则会在 %AppData% 下自动生成并持久化）
-client_uuid=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-```
-
-上报事件包括：`session_start`、`heartbeat`（每 60 秒）、`session_end`，并发送一次 pageview 以便在 Umami 中直接看到会话/访客指标。
-
-## 打包到 Release 目录（收敛依赖）
 构建后可将运行所需依赖统一放到 `build/Release/`：
+
 ```powershell
 # 1) 构建
 cmake --build build --config Release
@@ -90,21 +125,28 @@ cmake --build build --config Release
 # 3) 复制资产与 WebView2 Loader
 cmake -E copy_directory assets build/Release/assets
 cmake -E copy_if_different webview2_pkg/build/native/x64/WebView2Loader.dll build/Release/
-
-# 4) 可选：附带默认存储目录
-cmake -E copy_directory storage build/Release/storage
 ```
+
 完成后 `build/Release/` 下的 exe + DLL + assets 即为可分发包。
 
-## 已知注意点
-- 全局热键仅在 Windows 下实现；注册失败会在日志中提示。
-- WebView2 初始化失败时，请确认已安装 WebView2 Runtime，并保持 `webview2_pkg` 完整。
-- 删除 `storage/images/*` 会同步删除对应 JSON 条目（HistoryManager 行为）。
+## 常见问题（FAQ）
 
-## 相关文档
-- 重构计划：`REFACTOR_PLAN.md`
-- （建议补充）调试指南：`docs/DEBUGGING.md`、开发环境脚本 `scripts/dev_env.ps1`（可按需添加）。
+### 1) 测试连通但实际请求失败？
+
+- 重点检查 Base URL 和 Endpoint 是否重复包含了版本路径（例如 `/v1`）。
+- 如果你配置的是“兼容 OpenAI”的第三方服务，Endpoint 可能不是 `/chat/completions`，请按服务文档调整。
+
+### 2) WebView2 相关问题
+
+- Windows 10 可能需要单独安装 WebView2 Runtime。
+- 如果窗口空白/崩溃，先确认系统 WebView2 Runtime 正常，再检查打包时 `WebView2Loader.dll` 是否拷贝到 exe 同目录。
 
 ## 许可
+
 项目包含的 `webview.h` 遵循 MIT 许可，其余代码请根据仓库实际许可使用。
 
+## 其他
+
+喜欢本项目不妨点个 star 支持一下。
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Diraw/AI-Screenshot-Translator&type=Date)](https://www.star-history.com/#Diraw/AI-Screenshot-Translator&Date)
