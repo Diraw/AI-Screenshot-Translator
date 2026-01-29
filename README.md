@@ -31,9 +31,6 @@
 
 ## 演示视频
 
-<video src="./doc/videos/演示视频v1.0.0-beta.mp4" controls="controls" width="500" height="300">
-</video>
-
 ## 快速上手
 
 1. 启动程序（Release 包或自行构建）。
