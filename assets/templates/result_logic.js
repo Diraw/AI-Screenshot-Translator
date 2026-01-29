@@ -26,16 +26,37 @@ function focusSink() {
 }
 function render(md) {
   if (typeof marked==='undefined') return;
+  // Step 1: Extract LaTeX from backticks (e.g., `$formula$` -> $formula$)
+  var text = md || '';
+  // Match backtick-wrapped content that contains LaTeX delimiters
+  // Pattern matches: `...content with $ or \( or \[ or $$...`
+  text = text.replace(/`([^`]*(?:\$\$|\\\[|\\\(|\$)[^`]*)`/g, function(match, inner) {
+    // If the backticked content contains LaTeX delimiters, unwrap it
+    if (/\$\$|\\\[|\\\]|\\\(|\\\)|\$/.test(inner)) {
+      return inner;
+    }
+    return match; // Keep original if no LaTeX found
+  });
+  
+  // Step 2: Protect all LaTeX expressions before markdown parsing
   var prot = (function(t){
     var b=[], c=0, r=/(\$\$[\s\S]*?\$\$)|(\\\[[\s\S]*?\\\])|(\\\([\s\S]*?\\\))|(\$[^\$\n]+\$)/g;
     return {text: t.replace(r, function(m){ b.push(m); return 'MATHPH'+(c++); }), blocks: b};
-  })(md||'');
+  })(text);
+  
+  // Step 3: Parse markdown
   var h = marked.parse(prot.text);
+  
+  // Step 4: Restore protected LaTeX expressions
   prot.blocks.forEach(function(b, i){ h = h.split('MATHPH'+i).join(b); });
+  
+  // Step 5: Render to DOM
   var d = document.getElementById('content');
   if (d) {
     d.innerHTML = h;
     if (window.hljs) hljs.highlightAll();
+    
+    // Step 6: Render LaTeX with KaTeX
     if (window.renderMathInElement) {
       renderMathInElement(d, {
         delimiters: [
@@ -44,7 +65,9 @@ function render(md) {
           {left:'\\(', right:'\\)', display:false},
           {left:'\\[', right:'\\]', display:true}
         ],
-        throwOnError: false
+        throwOnError: false,
+        ignoredTags: [], // Allow rendering in all tags
+        ignoredClasses: [] // Allow rendering in all classes
       });
     }
   }
