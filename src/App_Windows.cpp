@@ -9,6 +9,8 @@
 #include <QSettings>
 #include <QTimer>
 
+#include "HintPopup.h"
+
 #ifdef _WIN32
 #include "WinKeyForwarder.h"
 #endif
@@ -56,6 +58,9 @@ void App::showSummary()
             m_summaryWindow->setWindowState((m_summaryWindow->windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
             m_summaryWindow->raise();
             m_summaryWindow->activateWindow();
+
+            // Show archive-window hints unless user opted out.
+            HintPopup::maybeShow(HintPopup::Kind::ArchiveWindow, m_summaryWindow, m_configManager.getConfig());
 
             // Re-enable updates in next event loop
             QTimer::singleShot(0, m_summaryWindow, [w = m_summaryWindow]()
@@ -131,6 +136,10 @@ void App::showResult(const QString &entryId)
 
     window->setContent(entry.translatedMarkdown, entry.originalBase64, entry.prompt, entry.id);
     window->show();
+
+    // Show result-window hints unless user opted out.
+    HintPopup::maybeShow(HintPopup::Kind::ResultWindow, window, cfg);
+
     m_activeWindows.append(window);
 
     connect(window, &ResultWindow::closed, this, [this, window]()

@@ -1,0 +1,14 @@
+{
+  "resultWindow": {
+    "title": "提示",
+    "text": "• 显示截图卡片：{shotToggle}\n• 显示原始文本：{viewToggle}\n• 进入编辑模式：{edit}\n  • 加粗：{bold}\n  • 下划线：{underline}\n  • 高亮：{highlight}\n  • 退出：{exit}\n• 添加标签：{tag}\n• 锁定模式：🔒\n  • 向左翻页：{prevPage}\n  • 向右翻页：{nextPage}"
+  },
+  "archiveWindow": {
+    "title": "提示",
+    "text": "• 显示截图卡片：{shotToggle}\n• 显示原始文本：{viewToggle}\n• 进入编辑模式：{edit}\n  • 加粗：{bold}\n  • 下划线：{underline}\n  • 高亮：{highlight}\n  • 退出：{exit}\n• 批量选择：{batchSelect}\n  • 按住左键拖动选择\n• 快速删除：DD"
+  },
+  "ui": {
+    "dontShowAgain": "不再提示",
+    "close": "关闭"
+  }
+}

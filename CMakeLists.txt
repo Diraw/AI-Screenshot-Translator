@@ -59,6 +59,8 @@ set(PROJECT_SOURCES
     src/TagDialog.cpp
     src/StartupWindow.h
     src/StartupWindow.cpp
+    src/HintPopup.h
+    src/HintPopup.cpp
     src/HistoryManager.cpp
     src/HistoryManager_Paths.cpp
     src/HistoryManager_Entries.cpp
