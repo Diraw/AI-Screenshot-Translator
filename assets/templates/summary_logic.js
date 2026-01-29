@@ -69,14 +69,42 @@ function renderContent(id, markdownOverride) {
     var raw = document.getElementById('raw_' + id);
     var rendered = document.getElementById('rendered_' + id);
     var markdown = (typeof markdownOverride === 'string') ? markdownOverride : (raw ? raw.textContent : '');
+    
+    // Step 1: Extract LaTeX from backticks (e.g., `$formula$` -> $formula$)
+    markdown = markdown.replace(/`([^`]*(?:\$\$|\\\[|\\\(|\$)[^`]*)`/g, function(match, inner) {
+      // If the backticked content contains LaTeX delimiters, unwrap it
+      if (/\$\$|\\\[|\\\]|\\\(|\\\)|\$/.test(inner)) {
+        return inner;
+      }
+      return match; // Keep original if no LaTeX found
+    });
+    
+    // Step 2: Protect math expressions before markdown parsing
     var p = protectMathJs(markdown);
+    
+    // Step 3: Parse markdown
     var html = marked.parse(p.text);
+    
+    // Step 4: Restore protected math blocks
     p.blocks.forEach(function(block, index) {
          html = html.replace('MATHBLOCKPH' + index, block);
     });
+    
     rendered.innerHTML = html;
+    
+    // Step 5: Render LaTeX with KaTeX
     requestAnimationFrame(function() {
-      renderMathInElement(rendered, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}, {left: '\\(', right: '\\)', display: false}, {left: '\\[', right: '\\]', display: true}], throwOnError : false});
+      renderMathInElement(rendered, {
+        delimiters: [
+          {left: '$$', right: '$$', display: true}, 
+          {left: '$', right: '$', display: false}, 
+          {left: '\\(', right: '\\)', display: false}, 
+          {left: '\\[', right: '\\]', display: true}
+        ], 
+        throwOnError: false,
+        ignoredTags: [], // Allow rendering in all tags
+        ignoredClasses: [] // Allow rendering in all classes
+      });
     });
 }
 
