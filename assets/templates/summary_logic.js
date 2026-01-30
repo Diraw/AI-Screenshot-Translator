@@ -89,8 +89,19 @@ function renderContent(id, markdownOverride) {
     var html = marked.parse(p.text);
     
     // Step 4: Restore protected math blocks
+    // Use regex replace for better performance and reliability with long strings
+    // This prevents issues when content is very long or has many formulas
     p.blocks.forEach(function(block, index) {
-         html = html.replace('MATHBLOCKPH' + index, block);
+         try {
+           var placeholder = 'MATHBLOCKPH' + index;
+           // Escape special regex characters in the placeholder
+           var escapedPlaceholder = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+           // Use global flag to replace all occurrences
+           var regex = new RegExp(escapedPlaceholder, 'g');
+           html = html.replace(regex, function() { return block; });
+         } catch (e) {
+           console.error('Error restoring math block ' + index + ':', e);
+         }
     });
     
     rendered.innerHTML = html;

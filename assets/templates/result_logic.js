@@ -49,7 +49,20 @@ function render(md) {
   var h = marked.parse(prot.text);
   
   // Step 4: Restore protected LaTeX expressions
-  prot.blocks.forEach(function(b, i){ h = h.split('MATHPH'+i).join(b); });
+  // Use regex replace for better performance and reliability with long strings
+  // This prevents issues when content is very long or has many formulas
+  prot.blocks.forEach(function(b, i){ 
+    try {
+      var placeholder = 'MATHPH' + i;
+      // Escape special regex characters in the placeholder
+      var escapedPlaceholder = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Use global flag to replace all occurrences
+      var regex = new RegExp(escapedPlaceholder, 'g');
+      h = h.replace(regex, function() { return b; });
+    } catch (e) {
+      console.error('Error restoring LaTeX block ' + i + ':', e);
+    }
+  });
   
   // Step 5: Render to DOM
   var d = document.getElementById('content');
