@@ -26,16 +26,51 @@ function focusSink() {
 }
 function render(md) {
   if (typeof marked==='undefined') return;
+  // Step 1: Extract LaTeX from backticks (e.g., `$formula$` -> $formula$)
+  // Only unwrap if the backticked content is a valid LaTeX expression (properly paired delimiters)
+  var text = md || '';
+  text = text.replace(/`([^`]+)`/g, function(match, inner) {
+    // Check if content is a complete LaTeX expression with properly paired delimiters
+    // Match: $...$, $$...$$, \(...\), or \[...\]
+    // Using [\s\S]* to allow empty or any content including newlines
+    if (/^(?:\$\$[\s\S]*?\$\$|\$[^\$\n]+\$|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\])$/.test(inner.trim())) {
+      return inner; // Unwrap backticks
+    }
+    return match; // Keep original backticks if not valid LaTeX
+  });
+  
+  // Step 2: Protect all LaTeX expressions before markdown parsing
   var prot = (function(t){
     var b=[], c=0, r=/(\$\$[\s\S]*?\$\$)|(\\\[[\s\S]*?\\\])|(\\\([\s\S]*?\\\))|(\$[^\$\n]+\$)/g;
     return {text: t.replace(r, function(m){ b.push(m); return 'MATHPH'+(c++); }), blocks: b};
-  })(md||'');
+  })(text);
+  
+  // Step 3: Parse markdown
   var h = marked.parse(prot.text);
-  prot.blocks.forEach(function(b, i){ h = h.split('MATHPH'+i).join(b); });
+  
+  // Step 4: Restore protected LaTeX expressions
+  // Use regex replace for better performance and reliability with long strings
+  // This prevents issues when content is very long or has many formulas
+  prot.blocks.forEach(function(b, i){ 
+    try {
+      var placeholder = 'MATHPH' + i;
+      // Escape special regex characters in the placeholder
+      var escapedPlaceholder = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Use global flag to replace all occurrences
+      var regex = new RegExp(escapedPlaceholder, 'g');
+      h = h.replace(regex, function() { return b; });
+    } catch (e) {
+      console.error('Error restoring LaTeX block ' + i + ':', e);
+    }
+  });
+  
+  // Step 5: Render to DOM
   var d = document.getElementById('content');
   if (d) {
     d.innerHTML = h;
     if (window.hljs) hljs.highlightAll();
+    
+    // Step 6: Render LaTeX with KaTeX
     if (window.renderMathInElement) {
       renderMathInElement(d, {
         delimiters: [
@@ -45,6 +80,7 @@ function render(md) {
           {left:'\\[', right:'\\]', display:true}
         ],
         throwOnError: false
+        // Use KaTeX defaults for ignoredTags/ignoredClasses for safety
       });
     }
   }

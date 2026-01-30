@@ -69,14 +69,55 @@ function renderContent(id, markdownOverride) {
     var raw = document.getElementById('raw_' + id);
     var rendered = document.getElementById('rendered_' + id);
     var markdown = (typeof markdownOverride === 'string') ? markdownOverride : (raw ? raw.textContent : '');
-    var p = protectMathJs(markdown);
-    var html = marked.parse(p.text);
-    p.blocks.forEach(function(block, index) {
-         html = html.replace('MATHBLOCKPH' + index, block);
+    
+    // Step 1: Extract LaTeX from backticks (e.g., `$formula$` -> $formula$)
+    // Only unwrap if the backticked content is a valid LaTeX expression (properly paired delimiters)
+    markdown = markdown.replace(/`([^`]+)`/g, function(match, inner) {
+      // Check if content is a complete LaTeX expression with properly paired delimiters
+      // Match: $...$, $$...$$, \(...\), or \[...\]
+      // Using [\s\S]* to allow empty or any content including newlines
+      if (/^(?:\$\$[\s\S]*?\$\$|\$[^\$\n]+\$|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\])$/.test(inner.trim())) {
+        return inner; // Unwrap backticks
+      }
+      return match; // Keep original backticks if not valid LaTeX
     });
+    
+    // Step 2: Protect math expressions before markdown parsing
+    var p = protectMathJs(markdown);
+    
+    // Step 3: Parse markdown
+    var html = marked.parse(p.text);
+    
+    // Step 4: Restore protected math blocks
+    // Use regex replace for better performance and reliability with long strings
+    // This prevents issues when content is very long or has many formulas
+    p.blocks.forEach(function(block, index) {
+         try {
+           var placeholder = 'MATHBLOCKPH' + index;
+           // Escape special regex characters in the placeholder
+           var escapedPlaceholder = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+           // Use global flag to replace all occurrences
+           var regex = new RegExp(escapedPlaceholder, 'g');
+           html = html.replace(regex, function() { return block; });
+         } catch (e) {
+           console.error('Error restoring math block ' + index + ':', e);
+         }
+    });
+    
     rendered.innerHTML = html;
+    
+    // Step 5: Render LaTeX with KaTeX
     requestAnimationFrame(function() {
-      renderMathInElement(rendered, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}, {left: '\\(', right: '\\)', display: false}, {left: '\\[', right: '\\]', display: true}], throwOnError : false});
+      renderMathInElement(rendered, {
+        delimiters: [
+          {left: '$$', right: '$$', display: true}, 
+          {left: '$', right: '$', display: false}, 
+          {left: '\\(', right: '\\)', display: false}, 
+          {left: '\\[', right: '\\]', display: true}
+        ], 
+        throwOnError: false
+        // Use KaTeX defaults for ignoredTags/ignoredClasses for safety
+      });
     });
 }
 
