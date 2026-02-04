@@ -5,6 +5,12 @@ QWidget#resultToolBar {
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
 
+QWidget#resultToolBar QToolButton:checked {
+  background: transparent;
+  border: none;
+  color: #111111;
+}
+
 /* Shared-ish MODE indicator look for native Qt labels */
 QLabel#statusIndicator {
   color: #111111;
