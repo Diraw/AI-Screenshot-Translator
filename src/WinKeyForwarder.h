@@ -24,7 +24,7 @@ class WinKeyForwarder : public QAbstractNativeEventFilter
 public:
     static WinKeyForwarder &instance();
 
-    // Hard trace that bypasses Qt message handler: writes to OutputDebugStringA and wkf.log.
+    // Hard trace that bypasses Qt message handler: writes to OutputDebugStringA and, when debug logging is enabled, wkf.log.
     static void trace(const char *msg);
 
     // Install/uninstall low-level keyboard hook (Windows only).

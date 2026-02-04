@@ -31,16 +31,19 @@ void WinKeyForwarder::trace(const char *msg)
     OutputDebugStringA(msg);
     OutputDebugStringA("\n");
 
-    // Keep writing wkf.log for hard traces, but when app file logging is enabled
-    // (debug mode or env override), truncate it once per process so each run starts fresh.
+    // Only emit wkf.log when debug logging is enabled (or env override).
+    // Default release runs should not create this file.
+    const bool fileLoggingEnabled = g_enableLogging || qEnvironmentVariableIsSet("FORCE_DEBUG_LOG");
+    if (!fileLoggingEnabled)
+        return;
+
     static bool wkfLogTruncatedThisRun = false;
-    const bool allowFreshRun = g_enableLogging || qEnvironmentVariableIsSet("FORCE_DEBUG_LOG");
-    const char *openMode = (allowFreshRun && !wkfLogTruncatedThisRun) ? "w" : "a";
+    const char *openMode = (!wkfLogTruncatedThisRun) ? "w" : "a";
 
     FILE *f = nullptr;
     if (fopen_s(&f, "wkf.log", openMode) == 0 && f)
     {
-        if (allowFreshRun && !wkfLogTruncatedThisRun)
+        if (!wkfLogTruncatedThisRun)
             wkfLogTruncatedThisRun = true;
         fprintf(f, "%s%s\n", ts, msg);
         fclose(f);
