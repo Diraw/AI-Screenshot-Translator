@@ -263,20 +263,12 @@ StartupWindow::StartupWindow(const AppConfig &cfg, QWidget *parent)
     setWindowTitle(formatText(windowTitle));
     setModal(true);
     setWindowFlag(Qt::WindowContextHelpButtonHint, false);
-    resize(360, 260);
+    resize(340, 220);
     ThemeUtils::applyThemeToWindow(this, ThemeUtils::isSystemDark());
 
     auto *root = new QVBoxLayout(this);
-    root->setContentsMargins(14, 12, 14, 12);
-    root->setSpacing(6);
-
-    const QString titleText = uiString("title", QStringLiteral("%1").arg(APP_NAME));
-    m_titleLabel = new QLabel(formatText(titleText), this);
-    QFont titleFont = m_titleLabel->font();
-    titleFont.setPointSize(titleFont.pointSize() + 3);
-    titleFont.setBold(true);
-    m_titleLabel->setFont(titleFont);
-    root->addWidget(m_titleLabel);
+    root->setContentsMargins(12, 10, 12, 10);
+    root->setSpacing(4);
 
     const QString versionFmt = uiString("versionFormat", QStringLiteral("版本：{version}"));
     m_versionLabel = new QLabel(formatText(versionFmt), this);
@@ -298,7 +290,7 @@ StartupWindow::StartupWindow(const AppConfig &cfg, QWidget *parent)
     root->addWidget(m_hotkeysLabel);
 
     auto *updateRow = new QHBoxLayout();
-    updateRow->setSpacing(6);
+    updateRow->setSpacing(4);
 
     m_updateStatusLabel = new QLabel(formatText(m_updateNotChecked.isEmpty() ? QStringLiteral("更新：未检查") : m_updateNotChecked), this);
     m_updateStatusLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
@@ -321,15 +313,13 @@ StartupWindow::StartupWindow(const AppConfig &cfg, QWidget *parent)
     m_hintLabel->setWordWrap(true);
     QFont hintFont = m_hintLabel->font();
     hintFont.setBold(true);
-    hintFont.setPointSize(hintFont.pointSize() + 1);
+    hintFont.setPointSize(hintFont.pointSize()); // keep default size for tighter layout
     m_hintLabel->setFont(hintFont);
     updateHintColor();
     root->addWidget(m_hintLabel);
 
     // Close-on-input behavior (but keep buttons usable)
     installEventFilter(this);
-    if (m_titleLabel)
-        m_titleLabel->installEventFilter(this);
     if (m_versionLabel)
         m_versionLabel->installEventFilter(this);
     if (m_copyrightLabel)
