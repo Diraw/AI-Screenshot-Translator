@@ -24,7 +24,24 @@ void App::onScreenshotRequested()
     // Otherwise, create new screenshot tool
     AppConfig cfg = m_configManager.getConfig();
     ScreenshotTool *sw = new ScreenshotTool(cfg.targetScreenIndex);
+    m_activeScreenshotTool = sw;
     connect(sw, &ScreenshotTool::screenshotTaken, this, &App::onScreenshotCaptured);
+    connect(sw, &ScreenshotTool::screenshotTaken, this, [this, sw](const QPixmap &, const QRect &)
+            {
+        if (m_activeScreenshotTool == sw)
+        {
+            m_activeScreenshotTool = nullptr;
+        }
+        sw->deleteLater();
+    });
+    connect(sw, &ScreenshotTool::cancelled, this, [this]()
+            {
+        if (m_activeScreenshotTool)
+        {
+            m_activeScreenshotTool->deleteLater();
+            m_activeScreenshotTool = nullptr;
+        }
+    });
     connect(sw, &ScreenshotTool::destroyed, this, [this]()
             { m_activeScreenshotTool = nullptr; });
 
