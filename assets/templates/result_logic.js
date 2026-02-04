@@ -51,18 +51,18 @@ function render(md) {
   // Step 4: Restore protected LaTeX expressions
   // Use regex replace for better performance and reliability with long strings
   // This prevents issues when content is very long or has many formulas
-  prot.blocks.forEach(function(b, i){ 
+  // Restore in reverse order to avoid prefix collisions (e.g., MATHPH1 vs MATHPH10)
+  for (var ri = prot.blocks.length - 1; ri >= 0; ri--) {
+    var b = prot.blocks[ri];
     try {
-      var placeholder = 'MATHPH' + i;
-      // Escape special regex characters in the placeholder
+      var placeholder = 'MATHPH' + ri;
       var escapedPlaceholder = placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      // Use global flag to replace all occurrences
       var regex = new RegExp(escapedPlaceholder, 'g');
       h = h.replace(regex, function() { return b; });
     } catch (e) {
-      console.error('Error restoring LaTeX block ' + i + ':', e);
+      console.error('Error restoring LaTeX block ' + ri + ':', e);
     }
-  });
+  }
   
   // Step 5: Render to DOM
   var d = document.getElementById('content');

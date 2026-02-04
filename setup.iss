@@ -4,7 +4,7 @@
 [Setup]
 ; 程序基本信息
 AppName={#MyAppName}
-AppVersion=1.0.0-beta
+AppVersion=1.0.0
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 SetupIconFile={#SourcePath}\assets\icon.ico
@@ -42,9 +42,6 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-; 卸载时清理用户数据目录
-Type: filesandordirs; Name: "{userappdata}\AI_Screenshot_Translator-Cpp"
-Type: filesandordirs; Name: "{userappdata}\AI-Screenshot-Translator"
 Type: filesandordirs; Name: "{app}\storage"
 Type: filesandordirs; Name: "{app}\wkf.log"
 Type: filesandordirs; Name: "{app}\debug.log"

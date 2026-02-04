@@ -8,28 +8,6 @@
 #include <QJsonDocument>
 #include <QJsonParseError>
 
-QString HistoryManager::normalizeMarkdown(const QString &raw)
-{
-    QString md = raw.trimmed();
-    if (md.startsWith('['))
-    {
-        QJsonParseError err;
-        auto doc = QJsonDocument::fromJson(md.toUtf8(), &err);
-        if (err.error == QJsonParseError::NoError && doc.isArray())
-        {
-            QStringList parts;
-            for (auto v : doc.array())
-            {
-                if (v.isString())
-                    parts << v.toString();
-            }
-            if (!parts.isEmpty())
-                return parts.join("\n");
-        }
-    }
-    return md;
-}
-
 QString HistoryManager::getJsonPath() const
 {
     return m_basePath + "/history.json";
