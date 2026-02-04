@@ -30,6 +30,19 @@ void ResultWindow::updateTheme(bool isDark)
     const QString statusQss = readTextFileUtf8OrEmpty(qssPath);
     if (m_toolBar)
         m_toolBar->setStyleSheet(statusQss);
+
+    // Only adjust pagination text/icon color with theme; keep transparent background.
+    if (m_pagingGroup)
+    {
+        const QString color = isDark ? "#e0e0e0" : "#111111";
+        const QString disabled = isDark ? "#6e6e6e" : "#999999";
+        const QString pagingStyle = QString(
+            "QWidget#pagingGroup QLabel{color:%1;}"
+            "QWidget#pagingGroup QToolButton{color:%1;border:none;background:transparent;}"
+            "QWidget#pagingGroup QToolButton:disabled, QWidget#pagingGroup QLabel:disabled{color:%2;}")
+                                         .arg(color, disabled);
+        m_pagingGroup->setStyleSheet(pagingStyle);
+    }
 }
 
 void ResultWindow::setConfig(const AppConfig &config)

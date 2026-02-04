@@ -1,4 +1,5 @@
 #include "ConfigDialog.h"
+#include "ThemeUtils.h"
 
 #include <QDebug>
 #include <QSignalBlocker>
@@ -158,6 +159,6 @@ void ConfigDialog::save()
 
 void ConfigDialog::updateTheme(bool isDark)
 {
-    Q_UNUSED(isDark);
+    ThemeUtils::applyThemeToWindow(this, isDark);
     setStyleSheet(""); // Keep default widget look
 }

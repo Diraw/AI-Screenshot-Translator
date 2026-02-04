@@ -1,7 +1,14 @@
-QToolBar#archiveFilterToolbar {
+QToolBar#archiveFilterToolbar,
+QWidget#archiveFilterToolbar {
   background: #1f1f1f;
   border: none;
+  border-bottom: 1px solid #2b2b2b; /* soften bright separator in dark mode */
   padding: 0px 2px;
+}
+QToolBar#archiveFilterToolbar::separator {
+  background: #2b2b2b;
+  width: 1px;
+  margin: 0 2px;
 }
 
 QWidget#archiveFiltersGroup,

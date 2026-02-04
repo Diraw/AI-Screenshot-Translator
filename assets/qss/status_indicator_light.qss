@@ -1,7 +1,8 @@
 QToolBar,
 QWidget#resultToolBar {
-  background: transparent;
+  background: #f6f7f9;
   border: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 /* Shared-ish MODE indicator look for native Qt labels */

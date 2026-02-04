@@ -394,6 +394,8 @@ void SummaryWindow::onBatchRemoveTags()
 
 void SummaryWindow::updateTheme(bool isDark)
 {
+    ThemeUtils::applyThemeToWindow(this, isDark);
+
     if (m_webView)
     {
         QColor bg = isDark ? QColor(30, 30, 30) : QColor(255, 255, 255);

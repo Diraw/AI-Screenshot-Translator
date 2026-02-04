@@ -22,6 +22,7 @@
 #include <QDateTime>
 #include <QUrl>
 #include <QVBoxLayout>
+#include "ThemeUtils.h"
 
 #ifndef APP_NAME
 #define APP_NAME "AI Screenshot Translator"
@@ -263,6 +264,7 @@ StartupWindow::StartupWindow(const AppConfig &cfg, QWidget *parent)
     setModal(true);
     setWindowFlag(Qt::WindowContextHelpButtonHint, false);
     resize(360, 260);
+    ThemeUtils::applyThemeToWindow(this, ThemeUtils::isSystemDark());
 
     auto *root = new QVBoxLayout(this);
     root->setContentsMargins(14, 12, 14, 12);

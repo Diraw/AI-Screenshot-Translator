@@ -139,6 +139,7 @@ ResultWindow::ResultWindow(QWidget *parent) : QWidget(parent)
   }
 
   m_pagingGroup = new QWidget(this);
+  m_pagingGroup->setObjectName("pagingGroup");
   {
     QHBoxLayout *p = new QHBoxLayout(m_pagingGroup);
     p->setContentsMargins(0, 0, 0, 0);
