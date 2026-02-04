@@ -4,5 +4,6 @@
     <file>assets/qss/archive_toolbar_dark.qss</file>
     <file>assets/qss/archive_toolbar_light.qss</file>
     <file>assets/default_profile.json</file>
+    <file alias="check-webview2.ps1">check-webview2.ps1</file>
 </qresource>
 </RCC>

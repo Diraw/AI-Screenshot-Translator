@@ -1,7 +1,7 @@
 {
   "windowTitle": "AI Screenshot Translator",
   "title": "AI Screenshot Translator",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "versionFormat": "版本：{version}",
   "copyright": "Copyright © 2026 Diraw",
   "hotkeysText": "提示：\n• 截图快捷键：{shot}\n• 打开归档窗口：{view}\n",

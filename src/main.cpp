@@ -4,10 +4,15 @@
 #include <QLockFile>
 #include <QDir>
 #include <QMessageBox>
+#include <QProcess>
+#include <QSettings>
+#include <QStandardPaths>
+#include <QFileInfo>
+#include <QProcessEnvironment>
 
 #include <QFile>
 #include <QTextStream>
-#include <QStandardPaths>
+#include <QFileDevice>
 #include <QDateTime>
 #include "ConfigManager.h"
 
@@ -24,6 +29,120 @@
 #endif
 
 bool g_enableLogging = false;
+
+#ifdef _WIN32
+static const char *kWebViewRuntimeKey =
+    "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}";
+static const char *kWebViewRuntimeKeyWow =
+    "HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}";
+static const char *kWebViewRuntimeKeyUser =
+    "HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}";
+
+bool isWebView2RuntimeInstalled()
+{
+    const QStringList keys{QString::fromLatin1(kWebViewRuntimeKey), QString::fromLatin1(kWebViewRuntimeKeyWow),
+                           QString::fromLatin1(kWebViewRuntimeKeyUser)};
+    for (const QString &k : keys)
+    {
+        QSettings reg(k, QSettings::NativeFormat);
+        if (reg.contains("pv"))
+            return true;
+    }
+    return false;
+}
+
+QString ensureWebViewInstallerScript()
+{
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QString diskPath = QDir(appDir).filePath("check-webview2.ps1");
+    if (QFile::exists(diskPath))
+        return diskPath;
+
+    QFile res(":/check-webview2.ps1");
+    if (!res.exists())
+        return QString();
+    if (!res.open(QIODevice::ReadOnly))
+        return QString();
+
+    const QString tempDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    QDir().mkpath(tempDir);
+    const QString tempPath = QDir(tempDir).filePath("check-webview2.ps1");
+
+    QFile out(tempPath);
+    if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return QString();
+
+    out.write(res.readAll());
+    out.close();
+
+    QFile::setPermissions(tempPath, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ReadGroup |
+                                          QFileDevice::ReadOther);
+    return tempPath;
+}
+
+bool runWebViewInstaller(QWidget *parent)
+{
+    const QString scriptPath = ensureWebViewInstallerScript();
+    if (scriptPath.isEmpty())
+    {
+        QMessageBox::critical(parent, "Missing installer script",
+                              "Cannot extract WebView2 installer script. Please reinstall or download WebView2 manually.");
+        return false;
+    }
+
+    QProcess proc;
+    proc.setProgram("powershell");
+    QStringList args{
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", scriptPath};
+    proc.setArguments(args);
+
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert("NO_PAUSE", "1"); // avoid waiting for keypress in bundled automation
+    proc.setProcessEnvironment(env);
+    proc.setWorkingDirectory(QFileInfo(scriptPath).absolutePath());
+
+    proc.start();
+    if (!proc.waitForStarted())
+    {
+        QMessageBox::critical(parent, "WebView2 install failed", "Failed to start installer PowerShell process.");
+        return false;
+    }
+    proc.waitForFinished(-1);
+
+    const int code = proc.exitCode();
+    if (code == 0 || code == 3010)
+    {
+        if (code == 3010)
+        {
+            QMessageBox::information(parent, "WebView2 installed",
+                                     "WebView2 Runtime installed successfully. A restart is recommended to finalize setup.");
+        }
+        return true;
+    }
+
+    const QString err = QString::fromLocal8Bit(proc.readAllStandardError());
+    QMessageBox::critical(parent, "WebView2 install failed",
+                          QString("Installer exited with code %1.\n\n%2").arg(code).arg(err));
+    return false;
+}
+
+bool ensureWebViewRuntime(QWidget *parent)
+{
+    if (isWebView2RuntimeInstalled())
+        return true;
+
+    const auto choice = QMessageBox::question(
+        parent, "WebView2 Runtime required",
+        "Microsoft Edge WebView2 Runtime is not detected.\nIt is required to run this application.\n\nInstall it now?");
+    if (choice != QMessageBox::Yes)
+        return false;
+
+    if (!runWebViewInstaller(parent))
+        return false;
+
+    return isWebView2RuntimeInstalled();
+}
+#endif
 
 void customMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg)
 {
@@ -110,6 +229,14 @@ int main(int argc, char *argv[])
                              "The application is already running.\nCheck the system tray.");
         return 1;
     }
+
+#ifdef _WIN32
+    if (!ensureWebViewRuntime(nullptr))
+    {
+        qWarning() << "WebView2 runtime missing or installation declined.";
+        return 1;
+    }
+#endif
 
     try
     {
