@@ -27,11 +27,11 @@ AllowNoIcons=yes
 AppId={{c0b26d24-9393-41f3-815b-a13b15fe8f3e}}
 
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkablealone
 
 [Files]
 Source: "{#SourcePath}\build\Release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#SourcePath}\build\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "{#MyAppExeName},storage\,*.log"
+Source: "{#SourcePath}\build\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "{#MyAppExeName},storage,*.log"
 Source: "{#SourcePath}\.env"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
@@ -43,12 +43,9 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-Type: filesandordirs; Name: "{app}\storage"
+Type: filesandordirs; Name: "{app}\storage\*"
 Type: filesandordirs; Name: "{app}\wkf.log"
 Type: filesandordirs; Name: "{app}\debug.log"
-Type: filesandordirs; Name: "{app}\imageformats"
-Type: filesandordirs; Name: "{app}\platforms"
-Type: filesandordirs; Name: "{app}\styles"
 
 [Code]
 // 检查进程是否正在运行的函数
