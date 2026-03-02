@@ -61,6 +61,9 @@ private:
 
     QString defaultEndpointForProvider(const QString &provider) const;
     void maybeApplyEndpointDefaultForProvider(const QString &provider);
+    void browseForStoragePath();
+    bool validateStoragePathInput(const QString &pathText, QString *resolvedPath = nullptr);
+    void refreshStoragePathPlaceholder();
     bool m_isLoadingConfig = false;
     QString m_lastAutoEndpoint;
 

@@ -1,6 +1,7 @@
 #include "ConfigDialog.h"
 #include "ThemeUtils.h"
 
+#include <QDir>
 #include <QDebug>
 #include <QSignalBlocker>
 
@@ -50,6 +51,7 @@ void ConfigDialog::loadFromConfig()
     m_quitHotkeyEdit->setText(cfg.quitHotkey);
     m_quitHotkeyEdit->setEnabled(cfg.enableQuitHotkey);
     m_storagePathEdit->setText(cfg.storagePath);
+    refreshStoragePathPlaceholder();
     m_showPreviewCheck->setChecked(cfg.showPreviewCard);
     m_showResultCheck->setChecked(cfg.showResultWindow);
 
@@ -86,6 +88,17 @@ void ConfigDialog::loadFromConfig()
 void ConfigDialog::save()
 {
     AppConfig cfg = m_configManager->getConfig();
+    QString resolvedStoragePath;
+    if (!validateStoragePathInput(m_storagePathEdit->text(), &resolvedStoragePath))
+        return;
+
+    const QString rawStoragePath = m_storagePathEdit->text().trimmed();
+    const QString normalizedStoragePath = rawStoragePath.isEmpty() ? QString() : QDir::cleanPath(rawStoragePath);
+    const QString storageSetting =
+        (QDir::cleanPath(resolvedStoragePath) == QDir::cleanPath(ConfigManager::defaultStoragePath()))
+            ? QString()
+            : normalizedStoragePath;
+
     cfg.apiKey = m_apiKeyEdit->text();
     // ...
     cfg.baseUrl = m_baseUrlEdit->text();
@@ -95,7 +108,7 @@ void ConfigDialog::save()
     cfg.promptText = m_promptEdit->toPlainText();
     cfg.proxyUrl = m_proxyUrlEdit->text();
     cfg.useProxy = m_useProxyCheck->isChecked();
-    cfg.storagePath = m_storagePathEdit->text();
+    cfg.storagePath = storageSetting;
     cfg.apiProvider = m_apiProviderCombo->currentData().toString();
     cfg.showPreviewCard = m_showPreviewCheck->isChecked();
     cfg.showResultWindow = m_showResultCheck->isChecked();
@@ -142,7 +155,7 @@ void ConfigDialog::save()
         cfg.quitHotkey = "alt+q";
 
     cfg.debugMode = m_debugModeCheck->isChecked();
-    cfg.storagePath = m_storagePathEdit->text(); // Ensure persistence
+    cfg.storagePath = storageSetting; // Keep auto-default behavior when the chosen path matches the default.
 
     m_configManager->setConfig(cfg); // Saves to current profile
 

@@ -3,6 +3,7 @@
 #ifdef _WIN32
 
 #include <QApplication>
+#include <QDir>
 #include <QMetaObject>
 #include <QtGlobal>
 #include <cstdio>
@@ -12,6 +13,7 @@
 
 // From main.cpp
 extern bool g_enableLogging;
+extern QString g_logDirectoryPath;
 
 void WinKeyForwarder::trace(const char *msg)
 {
@@ -38,10 +40,11 @@ void WinKeyForwarder::trace(const char *msg)
         return;
 
     static bool wkfLogTruncatedThisRun = false;
-    const char *openMode = (!wkfLogTruncatedThisRun) ? "w" : "a";
+    const wchar_t *openMode = (!wkfLogTruncatedThisRun) ? L"w" : L"a";
 
     FILE *f = nullptr;
-    if (fopen_s(&f, "wkf.log", openMode) == 0 && f)
+    const QString logPath = QDir(g_logDirectoryPath).filePath("wkf.log");
+    if (_wfopen_s(&f, reinterpret_cast<const wchar_t *>(logPath.utf16()), openMode) == 0 && f)
     {
         if (!wkfLogTruncatedThisRun)
             wkfLogTruncatedThisRun = true;

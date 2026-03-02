@@ -1,4 +1,5 @@
 #include "HistoryManager.h"
+#include "ConfigManager.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -48,23 +49,7 @@ void HistoryManager::ensureJsonFileExists() const
 void HistoryManager::setStoragePath(const QString &path)
 {
     const QString previousJson = m_watchedJsonPath;
-
-    if (path.isEmpty())
-    {
-        m_basePath = QCoreApplication::applicationDirPath() + "/storage";
-    }
-    else
-    {
-        QFileInfo info(path);
-        if (info.isRelative())
-        {
-            m_basePath = QCoreApplication::applicationDirPath() + "/" + path;
-        }
-        else
-        {
-            m_basePath = path;
-        }
-    }
+    m_basePath = ConfigManager::resolveStoragePath(path);
 
     ensureJsonFileExists();
 

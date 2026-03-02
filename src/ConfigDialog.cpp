@@ -9,6 +9,7 @@
 #include <QTimer>
 
 #include <QFileDialog>
+#include <QDir>
 #include <QGridLayout>
 #include <QGuiApplication>
 #include <QGroupBox>
@@ -191,6 +192,49 @@ static void updateColorPreviewLabel(QLabel *label, const QString &text)
                              .arg(c.alpha()));
 }
 
+void ConfigDialog::refreshStoragePathPlaceholder()
+{
+    if (!m_storagePathEdit)
+        return;
+
+    m_storagePathEdit->setPlaceholderText(QDir::toNativeSeparators(ConfigManager::defaultStoragePath()));
+}
+
+bool ConfigDialog::validateStoragePathInput(const QString &pathText, QString *resolvedPath)
+{
+    const QString resolved = ConfigManager::resolveStoragePath(pathText);
+    QString errorMessage;
+    if (!ConfigManager::ensureWritableDirectory(resolved, &errorMessage))
+    {
+        QMessageBox::warning(
+            this, "Storage Path Not Writable",
+            QString("The selected storage directory is not writable:\n%1\n\nReason: %2\n\nPlease choose another directory.")
+                .arg(QDir::toNativeSeparators(resolved),
+                     errorMessage.isEmpty() ? QString("Write access denied.") : errorMessage));
+        return false;
+    }
+
+    if (resolvedPath)
+        *resolvedPath = resolved;
+    return true;
+}
+
+void ConfigDialog::browseForStoragePath()
+{
+    const QString currentText = m_storagePathEdit ? m_storagePathEdit->text().trimmed() : QString();
+    const QString initialDir = ConfigManager::resolveStoragePath(currentText);
+    const QString dir = QFileDialog::getExistingDirectory(this, "Select Storage Directory", initialDir);
+    if (dir.isEmpty())
+        return;
+
+    QString resolvedPath;
+    if (!validateStoragePathInput(dir, &resolvedPath))
+        return;
+
+    if (m_storagePathEdit)
+        m_storagePathEdit->setText(QDir::toNativeSeparators(resolvedPath));
+}
+
 ConfigDialog::ConfigDialog(ConfigManager *configManager, QWidget *parent)
     : QDialog(parent), m_configManager(configManager)
 {
@@ -346,14 +390,9 @@ ConfigDialog::ConfigDialog(ConfigManager *configManager, QWidget *parent)
     layout->addRow(m_proxyLabel, proxyLayout);
 
     m_storagePathEdit = new QLineEdit(this);
-    m_storagePathEdit->setPlaceholderText("./storage");
+    refreshStoragePathPlaceholder();
     QPushButton *browseBtn = new QPushButton("Browse...", this);
-    connect(browseBtn, &QPushButton::clicked, [this]()
-            {
-        QString dir = QFileDialog::getExistingDirectory(this, "Select Storage Directory", m_storagePathEdit->text());
-        if (!dir.isEmpty()) {
-            m_storagePathEdit->setText(dir);
-        } });
+    connect(browseBtn, &QPushButton::clicked, this, &ConfigDialog::browseForStoragePath);
 
     QHBoxLayout *storageLayout = new QHBoxLayout();
     storageLayout->addWidget(m_storagePathEdit);

@@ -29,6 +29,15 @@
 #endif
 
 bool g_enableLogging = false;
+QString g_logDirectoryPath;
+
+static QString logFilePath(const QString &fileName)
+{
+    if (g_logDirectoryPath.isEmpty())
+        return fileName;
+
+    return QDir(g_logDirectoryPath).filePath(fileName);
+}
 
 #ifdef _WIN32
 static const char *kWebViewRuntimeKey =
@@ -181,7 +190,7 @@ void customMessageHandler(QtMsgType type, const QMessageLogContext &context, con
         return;
 
     static bool logCleared = false;
-    QFile outFile("debug.log");
+    QFile outFile(logFilePath("debug.log"));
     const QIODevice::OpenMode mode = QIODevice::WriteOnly | (logCleared ? QIODevice::Append : QIODevice::Truncate);
     if (outFile.open(mode))
     {
@@ -194,24 +203,25 @@ void customMessageHandler(QtMsgType type, const QMessageLogContext &context, con
 
 int main(int argc, char *argv[])
 {
+    QApplication a(argc, argv);
+
     // Determine debug mode from config before initializing logging
     {
         ConfigManager tempConfig;
         g_enableLogging = tempConfig.getConfig().debugMode;
+        g_logDirectoryPath = ConfigManager::resolveWritableStoragePath(tempConfig.getConfig().storagePath);
     }
     bool forceDebug = qEnvironmentVariableIsSet("FORCE_DEBUG_LOG");
     bool enableFileLog = g_enableLogging || forceDebug;
     if (enableFileLog)
     {
         // Clear previous logs on startup when file logging is enabled.
-        QFile::remove("debug.log");
-        QFile::remove("wkf.log");
+        QFile::remove(logFilePath("debug.log"));
+        QFile::remove(logFilePath("wkf.log"));
     }
 
     qInstallMessageHandler(customMessageHandler);
     qDebug() << "Application starting...";
-
-    QApplication a(argc, argv);
 
     QCoreApplication::setApplicationName(QString::fromUtf8(APP_NAME));
     QCoreApplication::setApplicationVersion(QString::fromUtf8(APP_VERSION));

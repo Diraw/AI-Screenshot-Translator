@@ -21,6 +21,8 @@
 #include "WinKeyForwarder.h"
 #endif
 
+extern QString g_logDirectoryPath;
+
 App::App(QObject *parent)
     : QObject(parent), m_configManager(),
       m_screenshotHotkey(100, this),
@@ -41,13 +43,30 @@ App::App(QObject *parent)
 #endif
 
     AppConfig cfg = m_configManager.getConfig();
+    QString storageWriteError;
+    bool storageFallbackUsed = false;
+    const QString configuredStoragePath = ConfigManager::resolveStoragePath(cfg.storagePath);
+    const QString effectiveStoragePath =
+        ConfigManager::resolveWritableStoragePath(cfg.storagePath, &storageFallbackUsed, &storageWriteError);
     g_enableLogging = cfg.debugMode;
+    g_logDirectoryPath = effectiveStoragePath;
     TranslationManager::instance().setLanguage(cfg.language);
 
     // Startup window (shows on every launch)
     {
         StartupWindow w(cfg);
         w.exec();
+    }
+
+    if (storageFallbackUsed)
+    {
+        QMessageBox::warning(
+            nullptr, "Storage Path Not Writable",
+            QString("The configured storage directory is not writable:\n%1\n\nReason: %2\n\n"
+                    "This session will use:\n%3\n\nPlease update the storage path in Settings.")
+                .arg(QDir::toNativeSeparators(configuredStoragePath),
+                     storageWriteError.isEmpty() ? QString("Write access denied.") : storageWriteError,
+                     QDir::toNativeSeparators(effectiveStoragePath)));
     }
 
     m_preferredLockState = cfg.defaultResultWindowLocked;
@@ -98,7 +117,7 @@ App::App(QObject *parent)
         } });
 
     setupTray();
-    m_historyManager.setStoragePath(cfg.storagePath);
+    m_historyManager.setStoragePath(effectiveStoragePath);
 
     QList<TranslationEntry> history = m_historyManager.loadEntries();
     m_summaryWindow->setInitialHistory(history);
@@ -114,7 +133,7 @@ App::App(QObject *parent)
     connect(&m_settingsHotkey, &GlobalHotkey::activated, this, &App::showConfig);
     connect(&m_quitHotkey, &GlobalHotkey::activated, this, &App::quitApp);
 
-    if (m_configManager.getConfig().apiKey.isEmpty())
+    if (m_configManager.getConfig().apiKey.isEmpty() || storageFallbackUsed)
     {
         m_forceConfigDialogForegroundOnce = true;
         QTimer::singleShot(100, this, &App::showConfig);

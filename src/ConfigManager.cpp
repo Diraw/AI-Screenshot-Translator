@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 
 #include <QJsonParseError>
+#include <QUuid>
 
 static QString findDefaultProfileTemplatePath()
 {
@@ -85,6 +86,119 @@ QString ConfigManager::settingsJsonPath()
 QString ConfigManager::settingsIniPath()
 {
     return QDir::cleanPath(appDataDirPath() + "/app.ini");
+}
+
+QString ConfigManager::defaultStoragePath()
+{
+    const QString appDir = QCoreApplication::applicationDirPath();
+    if (!appDir.isEmpty() && ensureWritableDirectory(appDir))
+        return QDir(appDir).filePath("storage");
+
+    return QDir(appDataDirPath()).filePath("storage");
+}
+
+QString ConfigManager::resolveStoragePath(const QString &path)
+{
+    const QString trimmedPath = path.trimmed();
+    if (trimmedPath.isEmpty())
+        return QDir::cleanPath(defaultStoragePath());
+
+    QFileInfo info(trimmedPath);
+    if (info.isRelative())
+        return QDir::cleanPath(QDir(QCoreApplication::applicationDirPath()).filePath(trimmedPath));
+
+    return QDir::cleanPath(trimmedPath);
+}
+
+QString ConfigManager::resolveWritableStoragePath(const QString &path, bool *usedFallback, QString *errorMessage)
+{
+    if (usedFallback)
+        *usedFallback = false;
+    if (errorMessage)
+        errorMessage->clear();
+
+    const QString resolvedPath = resolveStoragePath(path);
+    QString writeError;
+    if (ensureWritableDirectory(resolvedPath, &writeError))
+        return resolvedPath;
+
+    const QString fallbackPath = QDir::cleanPath(defaultStoragePath());
+    if (fallbackPath != resolvedPath)
+    {
+        if (ensureWritableDirectory(fallbackPath))
+        {
+            if (usedFallback)
+                *usedFallback = true;
+            if (errorMessage)
+                *errorMessage = writeError;
+            return fallbackPath;
+        }
+    }
+
+    const QString tempBase = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    if (!tempBase.isEmpty())
+    {
+        const QString emergencyPath =
+            QDir(tempBase).filePath(QString("%1/storage").arg(kAppDataFolderName));
+        if (emergencyPath != resolvedPath && emergencyPath != fallbackPath)
+        {
+            if (ensureWritableDirectory(emergencyPath))
+            {
+                if (usedFallback)
+                    *usedFallback = true;
+                if (errorMessage)
+                    *errorMessage = writeError;
+                return emergencyPath;
+            }
+        }
+    }
+
+    if (errorMessage)
+        *errorMessage = writeError;
+    return resolvedPath;
+}
+
+bool ConfigManager::ensureWritableDirectory(const QString &path, QString *errorMessage)
+{
+    if (errorMessage)
+        errorMessage->clear();
+
+    const QString cleanPath = QDir::cleanPath(path.trimmed());
+    if (cleanPath.isEmpty())
+    {
+        if (errorMessage)
+            *errorMessage = "The storage path is empty.";
+        return false;
+    }
+
+    QFileInfo info(cleanPath);
+    if (info.exists() && !info.isDir())
+    {
+        if (errorMessage)
+            *errorMessage = QString("The path exists but is not a directory: %1").arg(cleanPath);
+        return false;
+    }
+
+    QDir dir(cleanPath);
+    if (!dir.exists() && !QDir().mkpath(cleanPath))
+    {
+        if (errorMessage)
+            *errorMessage = QString("Unable to create directory: %1").arg(cleanPath);
+        return false;
+    }
+
+    QFile probe(dir.filePath(QString(".write_test_%1.tmp").arg(QUuid::createUuid().toString(QUuid::WithoutBraces))));
+    if (!probe.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
+        if (errorMessage)
+            *errorMessage = QString("Write access denied: %1").arg(cleanPath);
+        return false;
+    }
+
+    probe.write("ok");
+    probe.close();
+    probe.remove();
+    return true;
 }
 
 ConfigManager::ConfigManager()

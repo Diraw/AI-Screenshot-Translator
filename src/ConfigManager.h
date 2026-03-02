@@ -87,6 +87,11 @@ public:
     static QString appDataDirPath();
     static QString settingsJsonPath();
     static QString settingsIniPath();
+    static QString defaultStoragePath();
+    static QString resolveStoragePath(const QString &path);
+    static QString resolveWritableStoragePath(const QString &path, bool *usedFallback = nullptr,
+                                             QString *errorMessage = nullptr);
+    static bool ensureWritableDirectory(const QString &path, QString *errorMessage = nullptr);
 
     ConfigManager();
     ~ConfigManager() = default;

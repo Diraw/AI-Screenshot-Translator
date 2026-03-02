@@ -1,9 +1,13 @@
 #include "App.h"
 
 #include <QDialog>
+#include <QDir>
+#include <QMessageBox>
 #include <QTimer>
 
 #include "TranslationManager.h"
+
+extern QString g_logDirectoryPath;
 
 QString App::reloadHotkeys()
 {
@@ -27,10 +31,27 @@ QString App::updateConfig(const AppConfig &cfg)
 {
     QString errorMsg = "";
 
-    m_historyManager.setStoragePath(cfg.storagePath);
+    bool storageFallbackUsed = false;
+    QString storageWriteError;
+    const QString configuredStoragePath = ConfigManager::resolveStoragePath(cfg.storagePath);
+    const QString effectiveStoragePath =
+        ConfigManager::resolveWritableStoragePath(cfg.storagePath, &storageFallbackUsed, &storageWriteError);
+
+    m_historyManager.setStoragePath(effectiveStoragePath);
     g_enableLogging = cfg.debugMode;
+    g_logDirectoryPath = effectiveStoragePath;
     TranslationManager::instance().setLanguage(cfg.language);
     setupTray();
+
+    if (storageFallbackUsed)
+    {
+        errorMsg = QString("The selected storage directory is not writable:\n%1\n\nReason: %2\n\n"
+                           "The app has temporarily switched to:\n%3")
+                       .arg(QDir::toNativeSeparators(configuredStoragePath),
+                            storageWriteError.isEmpty() ? QString("Write access denied.") : storageWriteError,
+                            QDir::toNativeSeparators(effectiveStoragePath));
+        QMessageBox::warning(nullptr, "Storage Path Not Writable", errorMsg);
+    }
 
     // Apply lock-related preferences immediately for future ResultWindow creation.
     m_preferredLockState = cfg.defaultResultWindowLocked;
