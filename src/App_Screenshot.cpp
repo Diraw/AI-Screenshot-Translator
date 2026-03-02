@@ -1,10 +1,12 @@
 #include "App.h"
 
 #include <QBuffer>
+#include <QClipboard>
 #include <QDateTime>
 #include <QDebug>
 #include <QFuture>
 #include <QFutureWatcher>
+#include <QGuiApplication>
 #include <QImage>
 #include <QtConcurrent>
 #include <QUuid>
@@ -52,6 +54,11 @@ void App::onScreenshotCaptured(const QPixmap &pixmap, const QRect &rect)
 {
     Q_UNUSED(rect);
     AppConfig cfg = m_configManager.getConfig();
+
+    if (QClipboard *clipboard = QGuiApplication::clipboard())
+    {
+        clipboard->setPixmap(pixmap);
+    }
 
     // 0. Generate entryId early so PreviewCard and API can share it
     QString entryId = QUuid::createUuid().toString(QUuid::WithoutBraces);
