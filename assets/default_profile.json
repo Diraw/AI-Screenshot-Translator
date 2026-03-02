@@ -38,6 +38,7 @@
     "show_result_window": true,
 
     "debug_mode": false,
+    "launch_at_startup": false,
     "storage_path": "",
 
     "default_result_window_locked": false,

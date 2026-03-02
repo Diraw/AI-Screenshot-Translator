@@ -51,6 +51,9 @@ App::App(QObject *parent)
     g_enableLogging = cfg.debugMode;
     g_logDirectoryPath = effectiveStoragePath;
     TranslationManager::instance().setLanguage(cfg.language);
+    const QString autoStartError = syncLaunchAtStartup(cfg.launchAtStartup);
+    if (!autoStartError.isEmpty())
+        qWarning() << "[AutoStart]" << autoStartError;
 
     // Startup window (shows on every launch)
     {

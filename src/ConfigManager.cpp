@@ -553,6 +553,7 @@ void ConfigManager::parseJson(const QJsonObject &root)
         m_config.initialFontSize = app["initial_font_size"].toInt(16);
         m_config.cardBorderColor = app["card_border_color"].toString("100,100,100");
         m_config.debugMode = app["debug_mode"].toBool(false);
+        m_config.launchAtStartup = app["launch_at_startup"].toBool(false);
         m_config.showPreviewCard = app["show_preview_card"].toBool(true);
         if (app.contains("show_result_window"))
         {
@@ -628,6 +629,7 @@ QJsonObject ConfigManager::toJson() const
     app["initial_font_size"] = m_config.initialFontSize;
     app["card_border_color"] = m_config.cardBorderColor;
     app["debug_mode"] = m_config.debugMode;
+    app["launch_at_startup"] = m_config.launchAtStartup;
     app["show_preview_card"] = m_config.showPreviewCard;
     app["show_result_window"] = m_config.showResultWindow;
     app["use_card_border"] = m_config.useCardBorder;

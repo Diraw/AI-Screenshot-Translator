@@ -135,6 +135,7 @@ private:
 
     QCheckBox *m_showPreviewCheck;
     QCheckBox *m_showResultCheck;
+    QCheckBox *m_launchAtStartupCheck;
     QCheckBox *m_debugModeCheck;
 
     QCheckBox *m_enableQuitHotkeyCheck;

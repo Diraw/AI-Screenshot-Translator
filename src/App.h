@@ -79,6 +79,7 @@ private:
 
     void setupTray();
     QString reloadHotkeys();
+    QString syncLaunchAtStartup(bool enabled);
     void showResult(const QString &entryId);
     QString updateConfig(const AppConfig &cfg);
     // New hotkey configuration

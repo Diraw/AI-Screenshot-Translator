@@ -3,11 +3,43 @@
 #include <QDialog>
 #include <QDir>
 #include <QMessageBox>
+#include <QSettings>
 #include <QTimer>
+#include <QCoreApplication>
 
 #include "TranslationManager.h"
 
 extern QString g_logDirectoryPath;
+
+QString App::syncLaunchAtStartup(bool enabled)
+{
+#ifdef _WIN32
+    static const QString kRunKey =
+        QStringLiteral("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run");
+    static const QString kValueName = QStringLiteral("AI Screenshot Translator");
+
+    QSettings settings(kRunKey, QSettings::NativeFormat);
+    if (enabled)
+    {
+        const QString exePath = QDir::toNativeSeparators(QCoreApplication::applicationFilePath());
+        settings.setValue(kValueName, QString("\"%1\"").arg(exePath));
+    }
+    else
+    {
+        settings.remove(kValueName);
+    }
+
+    settings.sync();
+    if (settings.status() != QSettings::NoError)
+    {
+        return enabled ? QStringLiteral("Failed to enable launch at startup.")
+                       : QStringLiteral("Failed to disable launch at startup.");
+    }
+#else
+    Q_UNUSED(enabled);
+#endif
+    return QString();
+}
 
 QString App::reloadHotkeys()
 {
@@ -42,6 +74,7 @@ QString App::updateConfig(const AppConfig &cfg)
     g_logDirectoryPath = effectiveStoragePath;
     TranslationManager::instance().setLanguage(cfg.language);
     setupTray();
+    const QString autoStartError = syncLaunchAtStartup(cfg.launchAtStartup);
 
     if (storageFallbackUsed)
     {
@@ -51,6 +84,10 @@ QString App::updateConfig(const AppConfig &cfg)
                             storageWriteError.isEmpty() ? QString("Write access denied.") : storageWriteError,
                             QDir::toNativeSeparators(effectiveStoragePath));
         QMessageBox::warning(nullptr, "Storage Path Not Writable", errorMsg);
+    }
+    if (!autoStartError.isEmpty())
+    {
+        QMessageBox::warning(nullptr, "Launch at Startup", autoStartError);
     }
 
     // Apply lock-related preferences immediately for future ResultWindow creation.

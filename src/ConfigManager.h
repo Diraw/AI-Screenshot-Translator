@@ -51,6 +51,7 @@ struct AppConfig
     int initialFontSize = 16;
     QString cardBorderColor = "100,100,100";
     bool debugMode = false;
+    bool launchAtStartup = false;
 
     // New Settings
     bool showPreviewCard = false;

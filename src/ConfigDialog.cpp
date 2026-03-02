@@ -570,6 +570,9 @@ ConfigDialog::ConfigDialog(ConfigManager *configManager, QWidget *parent)
     grpAdvanced->setObjectName("grpAdvanced");
     QVBoxLayout *advLayout = new QVBoxLayout(grpAdvanced);
 
+    m_launchAtStartupCheck = new QCheckBox("Launch at Startup", this);
+    advLayout->addWidget(m_launchAtStartupCheck);
+
     m_debugModeCheck = new QCheckBox("Enable Debug Mode", this);
     advLayout->addWidget(m_debugModeCheck);
 
