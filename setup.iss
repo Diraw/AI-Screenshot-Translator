@@ -22,6 +22,7 @@ AppSupportURL=https://github.com/Diraw/AI-Screenshot-Translator/issues
 AppCopyright=Copyright © 2026 Diraw
 ; 如果已安装过，自动关闭正在运行的程序，防止文件占用导致安装失败
 CloseApplications=yes
+RestartApplications=no
 ; 允许用户在覆盖安装时无需先卸载
 AllowNoIcons=yes
 AppId={{c0b26d24-9393-41f3-815b-a13b15fe8f3e}}
@@ -29,10 +30,35 @@ AppId={{c0b26d24-9393-41f3-815b-a13b15fe8f3e}}
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkablealone
 
+[InstallDelete]
+; Remove app-managed runtime files before copying new ones so renamed/removed
+; payload files do not linger across upgrades. Do not touch user data files.
+Type: filesandordirs; Name: "{app}\assets"
+Type: filesandordirs; Name: "{app}\generic"
+Type: filesandordirs; Name: "{app}\iconengines"
+Type: filesandordirs; Name: "{app}\imageformats"
+Type: filesandordirs; Name: "{app}\networkinformation"
+Type: filesandordirs; Name: "{app}\platforms"
+Type: filesandordirs; Name: "{app}\styles"
+Type: filesandordirs; Name: "{app}\tls"
+Type: files; Name: "{app}\D3Dcompiler_47.dll"
+Type: files; Name: "{app}\opengl32sw.dll"
+Type: files; Name: "{app}\profile.json"
+Type: files; Name: "{app}\Qt6Core.dll"
+Type: files; Name: "{app}\Qt6Gui.dll"
+Type: files; Name: "{app}\Qt6Network.dll"
+Type: files; Name: "{app}\Qt6Svg.dll"
+Type: files; Name: "{app}\Qt6Widgets.dll"
+Type: files; Name: "{app}\WebView2Loader.dll"
+Type: files; Name: "{app}\wkf.log"
+Type: files; Name: "{app}\debug.log"
+
 [Files]
-Source: "{#SourcePath}\build\Release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#SourcePath}\build\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "{#MyAppExeName},storage,*.log"
-Source: "{#SourcePath}\.env"; DestDir: "{app}"; Flags: ignoreversion
+; Let Inno use normal version checks for versioned binaries.
+Source: "{#SourcePath}\build\Release\{#MyAppExeName}"; DestDir: "{app}"
+Source: "{#SourcePath}\build\Release\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs; Excludes: "{#MyAppExeName},storage,*.log,.stfolder,.stfolder\*"
+; Preserve an existing user-maintained .env during upgrades.
+Source: "{#SourcePath}\.env"; DestDir: "{app}"; Flags: onlyifdoesntexist
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
