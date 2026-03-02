@@ -24,6 +24,7 @@ private slots:
     void startUpdateCheck(bool forceNetwork = false);
     void onUpdateReplyFinished();
     void openReleasesPage();
+    void openPrivacyPolicy();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -68,6 +69,7 @@ private:
     QLabel *m_updateStatusLabel = nullptr;
     QPushButton *m_checkUpdateBtn = nullptr;
     QPushButton *m_openReleasesBtn = nullptr;
+    QPushButton *m_privacyBtn = nullptr;
 
     QPointer<QNetworkAccessManager> m_nam;
     QPointer<QNetworkReply> m_reply;
@@ -76,6 +78,7 @@ private:
     QString m_latestUrl;
 
     bool m_hasNewVersion = false;
+    bool m_showingChildDialog = false;
 };
 
 #endif // STARTUPWINDOW_H

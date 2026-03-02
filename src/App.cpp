@@ -149,7 +149,9 @@ App::App(QObject *parent)
 
     // Analytics (Umami): start 5s after launch to avoid startup stalls
     m_analytics = new AnalyticsManager(this);
-    m_analytics->startDelayed(5000);
+    m_analytics->setEnabled(cfg.enableUmamiAnalytics);
+    if (cfg.enableUmamiAnalytics)
+        m_analytics->startDelayed(5000);
     connect(qApp, &QCoreApplication::aboutToQuit, this, [this]()
             {
         if (m_analytics)

@@ -23,6 +23,32 @@ UmamiClient::UmamiClient(QObject *parent)
 void UmamiClient::setConfig(const UmamiConfig &cfg)
 {
     m_cfg = cfg;
+    m_cacheToken.clear();
+    ++m_configVersion;
+}
+
+void UmamiClient::clearConfig()
+{
+    m_cfg = UmamiConfig();
+    m_cacheToken.clear();
+    ++m_configVersion;
+}
+
+void UmamiClient::abortPendingRequests()
+{
+    const auto replies = m_manager->findChildren<QNetworkReply *>();
+    for (QNetworkReply *reply : replies)
+    {
+        if (!reply)
+            continue;
+        reply->abort();
+    }
+}
+
+void UmamiClient::disableAndAbort()
+{
+    clearConfig();
+    abortPendingRequests();
 }
 
 bool UmamiClient::isEnabled() const
@@ -122,9 +148,10 @@ void UmamiClient::post(const QJsonObject &body)
         req.setRawHeader("x-umami-cache", m_cacheToken.toUtf8());
 
     const QByteArray json = QJsonDocument(body).toJson(QJsonDocument::Compact);
+    const quint64 requestConfigVersion = m_configVersion;
 
     QNetworkReply *reply = m_manager->post(req, json);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]()
+    connect(reply, &QNetworkReply::finished, this, [this, reply, requestConfigVersion]()
             {
         const QByteArray resp = reply->readAll();
 
@@ -140,7 +167,7 @@ void UmamiClient::post(const QJsonObject &body)
         {
             const QJsonObject obj = doc.object();
             const QString cache = obj.value("cache").toString();
-            if (!cache.isEmpty())
+            if (!cache.isEmpty() && requestConfigVersion == m_configVersion && isEnabled())
                 m_cacheToken = cache;
         }
 

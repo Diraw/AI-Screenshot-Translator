@@ -52,6 +52,7 @@ struct AppConfig
     QString cardBorderColor = "100,100,100";
     bool debugMode = false;
     bool launchAtStartup = false;
+    bool enableUmamiAnalytics = true;
 
     // New Settings
     bool showPreviewCard = false;

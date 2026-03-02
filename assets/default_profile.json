@@ -39,6 +39,7 @@
 
     "debug_mode": false,
     "launch_at_startup": false,
+    "enable_umami_analytics": true,
     "storage_path": "",
 
     "default_result_window_locked": false,

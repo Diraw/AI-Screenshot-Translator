@@ -190,6 +190,8 @@ void ConfigDialog::retranslateUi()
         grpAdvanced->setTitle(tm.tr("grp_advanced"));
         if (m_launchAtStartupCheck)
             m_launchAtStartupCheck->setText(tm.tr("chk_launch_startup"));
+        if (m_enableUmamiAnalyticsCheck)
+            m_enableUmamiAnalyticsCheck->setText(tm.tr("chk_umami_analytics"));
         m_debugModeCheck->setText(tm.tr("chk_debug"));
         if (m_enableQuitHotkeyCheck)
             m_enableQuitHotkeyCheck->setText(tm.tr("chk_quit_hotkey"));

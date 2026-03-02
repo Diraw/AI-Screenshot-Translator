@@ -47,6 +47,7 @@ void ConfigDialog::loadFromConfig()
     m_highlightMarkColorDarkEdit->setText(cfg.highlightMarkColorDark);
 
     m_launchAtStartupCheck->setChecked(cfg.launchAtStartup);
+    m_enableUmamiAnalyticsCheck->setChecked(cfg.enableUmamiAnalytics);
     m_debugModeCheck->setChecked(cfg.debugMode);
     m_enableQuitHotkeyCheck->setChecked(cfg.enableQuitHotkey);
     m_quitHotkeyEdit->setText(cfg.quitHotkey);
@@ -156,6 +157,7 @@ void ConfigDialog::save()
         cfg.quitHotkey = "alt+q";
 
     cfg.launchAtStartup = m_launchAtStartupCheck->isChecked();
+    cfg.enableUmamiAnalytics = m_enableUmamiAnalyticsCheck->isChecked();
     cfg.debugMode = m_debugModeCheck->isChecked();
     cfg.storagePath = storageSetting; // Keep auto-default behavior when the chosen path matches the default.
 

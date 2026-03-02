@@ -573,6 +573,9 @@ ConfigDialog::ConfigDialog(ConfigManager *configManager, QWidget *parent)
     m_launchAtStartupCheck = new QCheckBox("Launch at Startup", this);
     advLayout->addWidget(m_launchAtStartupCheck);
 
+    m_enableUmamiAnalyticsCheck = new QCheckBox("Enable Umami Analytics", this);
+    advLayout->addWidget(m_enableUmamiAnalyticsCheck);
+
     m_debugModeCheck = new QCheckBox("Enable Debug Mode", this);
     advLayout->addWidget(m_debugModeCheck);
 

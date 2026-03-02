@@ -1,6 +1,7 @@
 #include "App.h"
 
 #include <QDialog>
+#include <QDebug>
 #include <QDir>
 #include <QMessageBox>
 #include <QSettings>
@@ -68,6 +69,8 @@ QString App::updateConfig(const AppConfig &cfg)
     const QString configuredStoragePath = ConfigManager::resolveStoragePath(cfg.storagePath);
     const QString effectiveStoragePath =
         ConfigManager::resolveWritableStoragePath(cfg.storagePath, &storageFallbackUsed, &storageWriteError);
+    const bool loggingWasEnabled = g_enableLogging;
+    const QString previousLogDirectory = g_logDirectoryPath;
 
     m_historyManager.setStoragePath(effectiveStoragePath);
     g_enableLogging = cfg.debugMode;
@@ -75,6 +78,12 @@ QString App::updateConfig(const AppConfig &cfg)
     TranslationManager::instance().setLanguage(cfg.language);
     setupTray();
     const QString autoStartError = syncLaunchAtStartup(cfg.launchAtStartup);
+
+    if (g_enableLogging && (!loggingWasEnabled || previousLogDirectory != g_logDirectoryPath))
+    {
+        qInfo() << "[Logging] Debug logging enabled. File:"
+                << QDir::toNativeSeparators(QDir(g_logDirectoryPath).filePath("debug.log"));
+    }
 
     if (storageFallbackUsed)
     {
@@ -88,6 +97,14 @@ QString App::updateConfig(const AppConfig &cfg)
     if (!autoStartError.isEmpty())
     {
         QMessageBox::warning(nullptr, "Launch at Startup", autoStartError);
+    }
+
+    if (m_analytics)
+    {
+        const bool wasEnabled = m_analytics->isUserEnabled();
+        m_analytics->setEnabled(cfg.enableUmamiAnalytics);
+        if (cfg.enableUmamiAnalytics && !wasEnabled)
+            m_analytics->startDelayed(1000);
     }
 
     // Apply lock-related preferences immediately for future ResultWindow creation.

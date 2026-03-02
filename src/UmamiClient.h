@@ -21,6 +21,9 @@ public:
     explicit UmamiClient(QObject *parent = nullptr);
 
     void setConfig(const UmamiConfig &cfg);
+    void clearConfig();
+    void abortPendingRequests();
+    void disableAndAbort();
     bool isEnabled() const;
 
     void trackPageview(const QString &urlPath, const QString &title);
@@ -33,6 +36,7 @@ private:
     QNetworkAccessManager *m_manager = nullptr;
     UmamiConfig m_cfg;
     QString m_cacheToken;
+    quint64 m_configVersion = 0;
 };
 
 #endif // UMAMICLIENT_H

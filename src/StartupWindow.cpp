@@ -3,6 +3,7 @@
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDesktopServices>
+#include <QDir>
 #include <QEvent>
 #include <QFile>
 #include <QHBoxLayout>
@@ -12,10 +13,13 @@
 #include <QJsonObject>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QMessageBox>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPushButton>
+#include <QDialogButtonBox>
+#include <QTextBrowser>
 #include <QTimer>
 #include <QRegularExpression>
 #include <QSettings>
@@ -254,6 +258,26 @@ static QString prettyHotkey(QString s)
     return out.join('+');
 }
 
+static QString loadPrivacyPolicyMarkdown()
+{
+    const QString baseDir = QCoreApplication::applicationDirPath();
+    const QStringList candidates = {
+        QDir::cleanPath(baseDir + "/assets/privacy_policy.md"),
+        QDir::cleanPath(baseDir + "/../assets/privacy_policy.md"),
+        QDir::cleanPath(baseDir + "/../../assets/privacy_policy.md"),
+    };
+
+    for (const QString &path : candidates)
+    {
+        QFile f(path);
+        if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+            continue;
+        return QString::fromUtf8(f.readAll());
+    }
+
+    return QString();
+}
+
 StartupWindow::StartupWindow(const AppConfig &cfg, QWidget *parent)
     : QDialog(parent), m_cfg(cfg)
 {
@@ -308,15 +332,25 @@ StartupWindow::StartupWindow(const AppConfig &cfg, QWidget *parent)
 
     root->addLayout(updateRow);
 
+    auto *privacyRow = new QHBoxLayout();
+    privacyRow->setSpacing(4);
+    privacyRow->addStretch();
+
+    m_privacyBtn = new QPushButton(formatText(uiString("buttons.privacy", QStringLiteral("隐私协议"))), this);
+    connect(m_privacyBtn, &QPushButton::clicked, this, &StartupWindow::openPrivacyPolicy);
+    privacyRow->addWidget(m_privacyBtn);
+
+
     const QString hint = uiString("hint", QStringLiteral("提示：点击空白处或按任意键继续"));
     m_hintLabel = new QLabel(formatText(hint), this);
-    m_hintLabel->setWordWrap(true);
+    m_hintLabel->setWordWrap(false);
     QFont hintFont = m_hintLabel->font();
     hintFont.setBold(true);
     hintFont.setPointSize(hintFont.pointSize()); // keep default size for tighter layout
     m_hintLabel->setFont(hintFont);
     updateHintColor();
-    root->addWidget(m_hintLabel);
+    privacyRow->insertWidget(0, m_hintLabel, 1);
+    root->addLayout(privacyRow);
 
     // Close-on-input behavior (but keep buttons usable)
     installEventFilter(this);
@@ -645,6 +679,48 @@ void StartupWindow::openReleasesPage()
     QDesktopServices::openUrl(QUrl(url));
 }
 
+void StartupWindow::openPrivacyPolicy()
+{
+    const QString privacyTitle = uiString("privacyDialog.title",
+                                          uiString("buttons.privacy", QStringLiteral("隐私协议")));
+    const QString privacyMissingText = uiString("privacyDialog.missingFile",
+                                                QStringLiteral("未找到隐私协议文件。"));
+    const QString closeText = uiString("buttons.close", QStringLiteral("关闭"));
+
+    const QString markdown = loadPrivacyPolicyMarkdown();
+    if (markdown.trimmed().isEmpty())
+    {
+        QMessageBox::warning(this, privacyTitle, privacyMissingText);
+        return;
+    }
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(privacyTitle);
+    dlg.setModal(true);
+    dlg.resize(680, 520);
+    ThemeUtils::applyThemeToWindow(&dlg, ThemeUtils::isSystemDark());
+
+    auto *layout = new QVBoxLayout(&dlg);
+    layout->setContentsMargins(10, 10, 10, 10);
+    layout->setSpacing(8);
+
+    auto *viewer = new QTextBrowser(&dlg);
+    viewer->setOpenExternalLinks(true);
+    viewer->setMarkdown(markdown);
+    layout->addWidget(viewer);
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dlg);
+    if (QPushButton *closeButton = buttons->button(QDialogButtonBox::Close))
+        closeButton->setText(closeText);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    layout->addWidget(buttons);
+
+    m_showingChildDialog = true;
+    dlg.exec();
+    m_showingChildDialog = false;
+}
+
 void StartupWindow::closeIfNonInteractive(QObject *eventTarget)
 {
     if (!eventTarget)
@@ -654,7 +730,7 @@ void StartupWindow::closeIfNonInteractive(QObject *eventTarget)
     }
 
     // Do not auto-close if interacting with buttons
-    if (eventTarget == m_checkUpdateBtn || eventTarget == m_openReleasesBtn)
+    if (eventTarget == m_checkUpdateBtn || eventTarget == m_openReleasesBtn || eventTarget == m_privacyBtn)
         return;
 
     accept();
@@ -668,6 +744,8 @@ bool StartupWindow::eventFilter(QObject *watched, QEvent *event)
     switch (event->type())
     {
     case QEvent::WindowDeactivate:
+        if (m_showingChildDialog)
+            return QDialog::eventFilter(watched, event);
         accept();
         return false;
     case QEvent::ApplicationPaletteChange:
@@ -698,7 +776,7 @@ void StartupWindow::keyPressEvent(QKeyEvent *event)
 
     // If focus is on update button, allow Enter/Space to trigger without closing.
     QObject *focusObj = QApplication::focusObject();
-    const bool focusIsButton = (focusObj == m_checkUpdateBtn || focusObj == m_openReleasesBtn);
+    const bool focusIsButton = (focusObj == m_checkUpdateBtn || focusObj == m_openReleasesBtn || focusObj == m_privacyBtn);
     if (focusIsButton && (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter || event->key() == Qt::Key_Space))
     {
         QDialog::keyPressEvent(event);

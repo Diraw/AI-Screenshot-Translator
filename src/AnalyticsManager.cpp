@@ -44,14 +44,62 @@ AnalyticsManager::AnalyticsManager(QObject *parent)
 
 void AnalyticsManager::startDelayed(int delayMs)
 {
-    if (m_started)
+    if (!m_enabled)
+    {
+        qInfo() << "[Analytics] startup skipped: disabled by user.";
         return;
+    }
+    if (m_started)
+    {
+        qInfo() << "[Analytics] startup skipped: analytics session already active.";
+        return;
+    }
+    if (m_startDelayTimer.isActive())
+    {
+        qInfo() << "[Analytics] startup already scheduled; keeping existing timer.";
+        return;
+    }
+
+    qInfo() << "[Analytics] startup scheduled in" << delayMs << "ms.";
     m_startDelayTimer.start(delayMs);
+}
+
+void AnalyticsManager::setEnabled(bool enabled)
+{
+    if (m_enabled == enabled)
+        return;
+
+    m_enabled = enabled;
+    if (!m_enabled)
+    {
+        qInfo() << "[Analytics] disabled by user; stopping timers and aborting pending requests.";
+        m_startDelayTimer.stop();
+        m_heartbeatTimer.stop();
+        if (m_client)
+        {
+            if (m_started)
+            {
+                m_client->abortPendingRequests();
+                qInfo() << "[Analytics] active session detected during disable; sending session_end.";
+                sendEnd();
+                m_client->clearConfig();
+            }
+            else
+            {
+                m_client->disableAndAbort();
+            }
+        }
+        m_started = false;
+    }
+    else
+    {
+        qInfo() << "[Analytics] enabled by user; analytics can start when scheduled.";
+    }
 }
 
 void AnalyticsManager::startNow()
 {
-    if (m_started)
+    if (!m_enabled || m_started)
         return;
 
     const UmamiConfig cfg = loadConfig();
@@ -59,12 +107,13 @@ void AnalyticsManager::startNow()
 
     if (!m_client->isEnabled())
     {
-        qInfo() << "[Analytics] Umami disabled (.env missing or website_uuid not set).";
+        qInfo() << "[Analytics] startup skipped: Umami config unavailable (.env missing or website_uuid not set).";
         return;
     }
 
     m_started = true;
     m_uptime.start();
+    qInfo() << "[Analytics] session started; heartbeat interval = 60s.";
 
     // Optional identify: helps attach stable user id
     QJsonObject idData;
@@ -80,10 +129,15 @@ void AnalyticsManager::startNow()
 
 void AnalyticsManager::stop()
 {
+    m_startDelayTimer.stop();
     if (!m_started)
+    {
+        qInfo() << "[Analytics] stop skipped: analytics session not active.";
         return;
+    }
 
     m_heartbeatTimer.stop();
+    qInfo() << "[Analytics] stopping active session; sending session_end.";
     sendEnd();
     m_started = false;
 }
@@ -102,7 +156,11 @@ void AnalyticsManager::sendStart()
 
 void AnalyticsManager::sendHeartbeat()
 {
+    if (!m_enabled || !m_started)
+        return;
+
     const qint64 ms = m_uptime.isValid() ? m_uptime.elapsed() : 0;
+    qInfo() << "[Analytics] sending heartbeat; uptime_ms =" << ms << "interval_s = 60.";
 
     QJsonObject data;
     data["uptime_ms"] = static_cast<double>(ms);
@@ -114,6 +172,7 @@ void AnalyticsManager::sendHeartbeat()
 void AnalyticsManager::sendEnd()
 {
     const qint64 ms = m_uptime.isValid() ? m_uptime.elapsed() : 0;
+    qInfo() << "[Analytics] sending session_end; uptime_ms =" << ms;
 
     QJsonObject data;
     data["uptime_ms"] = static_cast<double>(ms);

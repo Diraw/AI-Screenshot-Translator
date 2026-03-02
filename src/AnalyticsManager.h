@@ -13,6 +13,8 @@ class AnalyticsManager : public QObject
 public:
     explicit AnalyticsManager(QObject *parent = nullptr);
 
+    bool isUserEnabled() const { return m_enabled; }
+    void setEnabled(bool enabled);
     // Starts after delayMs to avoid startup stalls.
     void startDelayed(int delayMs);
     void stop();
@@ -33,6 +35,7 @@ private:
     QElapsedTimer m_uptime;
 
     bool m_started = false;
+    bool m_enabled = true;
 };
 
 #endif // ANALYTICSMANAGER_H
