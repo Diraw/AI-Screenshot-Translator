@@ -1,9 +1,8 @@
-name: Sync cpp to main
+name: Sync cpp to main on Release
 
 on:
-  push:
-    branches:
-      - cpp
+  release:
+    types: [published]
 
 permissions:
   contents: write
