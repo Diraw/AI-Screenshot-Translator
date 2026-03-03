@@ -24,6 +24,7 @@
 #include <QNetworkReply>
 
 class QFileSystemWatcher;
+class QColor;
 class QTimer;
 
 // ...
@@ -61,6 +62,16 @@ private:
 
     QString defaultEndpointForProvider(const QString &provider) const;
     void maybeApplyEndpointDefaultForProvider(const QString &provider);
+    void setupDialogUi();
+    void setupProfileSection(QVBoxLayout *mainLayout);
+    void setupTabs(QVBoxLayout *mainLayout);
+    void setupGeneralTab();
+    void setupTranslationTab();
+    void setupArchiveTab();
+    void setupOtherTab();
+    void setupActionButtons(QVBoxLayout *mainLayout);
+    bool tryParseColorText(QString text, QColor &out) const;
+    void updateColorPreviewLabel(QLabel *label, const QString &text) const;
     void browseForStoragePath();
     bool validateStoragePathInput(const QString &pathText, QString *resolvedPath = nullptr);
     void refreshStoragePathPlaceholder();

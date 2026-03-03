@@ -13,6 +13,7 @@ class QNetworkAccessManager;
 class QNetworkReply;
 class QEvent;
 class QKeyEvent;
+class QVBoxLayout;
 
 class StartupWindow : public QDialog
 {
@@ -31,6 +32,11 @@ protected:
     void keyPressEvent(QKeyEvent *event) override;
 
 private:
+    void setupWindowChrome();
+    void setupDialogUi();
+    void addUpdateRow(QVBoxLayout *root);
+    void addFooterRow(QVBoxLayout *root);
+    void installCloseOnInputFilters();
     void closeIfNonInteractive(QObject *eventTarget);
     void setUpdateStatus(const QString &text);
     void updateHintColor();

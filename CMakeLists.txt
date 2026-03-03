@@ -44,9 +44,18 @@ set(PROJECT_SOURCES
     src/ResultWindow.h
     src/ConfigDialog.cpp
     src/ConfigDialog_Ui.cpp
-    src/ConfigDialog_Profiles.cpp
+    src/ConfigDialog_UiSections.cpp
+    src/ConfigDialog_ColorPreview.cpp
+    src/ConfigDialog_GeneralTab.cpp
+    src/ConfigDialog_TranslationTab.cpp
+    src/ConfigDialog_ArchiveTab.cpp
+    src/ConfigDialog_OtherTab.cpp
+    src/ConfigDialog_Retranslate.cpp
+    src/ConfigDialog_ProfileWatcher.cpp
+    src/ConfigDialog_ProfileCrud.cpp
     src/ConfigDialog_Config.cpp
     src/ConfigDialog.h
+    src/TranslationManager.cpp
     src/ApiClient.cpp
     src/ApiClient.h
     src/SummaryWindow.cpp
@@ -59,6 +68,7 @@ set(PROJECT_SOURCES
     src/TagDialog.cpp
     src/StartupWindow.h
     src/StartupWindow.cpp
+    src/StartupWindow_Ui.cpp
     src/HintPopup.h
     src/HintPopup.cpp
     src/HistoryManager.cpp
