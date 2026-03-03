@@ -38,6 +38,16 @@ function render(md) {
     }
     return match; // Keep original backticks if not valid LaTeX
   });
+
+  // Normalize common LaTeX display environments so KaTeX auto-render can process them
+  // through the configured $$...$$ delimiters.
+  text = text.replace(
+    /\\begin\{(equation\*?|align\*?|gather\*?|multline\*?)\}([\s\S]*?)\\end\{\1\}/g,
+    function(_match, _envName, body) {
+      var inner = (body || '').trim();
+      return '\n$$\n' + inner + '\n$$\n';
+    }
+  );
   
   // Step 2: Protect all LaTeX expressions before markdown parsing
   var prot = (function(t){
@@ -85,7 +95,15 @@ function render(md) {
     }
   }
 }
-window.updateContentFromNative = function(m) { CUR_MD = m; if(!EDIT) render(m); };
+window.updateContentFromNative = function(payload) {
+  var next = payload;
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    next = payload.raw_md;
+  }
+  if (typeof next !== 'string') next = '';
+  CUR_MD = next;
+  if (!EDIT) render(next);
+};
 window.toggleSource = function() {
   if (EDIT) return;
   var c = document.getElementById('content'), r = document.getElementById('raw_view');

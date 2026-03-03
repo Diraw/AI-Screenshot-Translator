@@ -15,6 +15,17 @@
 #include <QRegularExpressionMatch>
 #include <QRegularExpressionMatchIterator>
 
+static QString makeHtmlSafeJson(const QJsonDocument &doc)
+{
+    QString json = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+    json.replace("<", "\\u003C");
+    json.replace(">", "\\u003E");
+    json.replace("&", "\\u0026");
+    json.replace(QChar(0x2028), "\\u2028");
+    json.replace(QChar(0x2029), "\\u2029");
+    return json;
+}
+
 static QString readTextFileUtf8(const QString &path)
 {
     QFile f(path);
@@ -93,8 +104,7 @@ void ResultWindow::setContent(const QString &markdown, const QString &originalBa
     initData["mark_bg"] = ColorUtils::normalizeCssColor(m_config.highlightMarkColor, "#ffeb3b");
     initData["mark_bg_dark"] = ColorUtils::normalizeCssColor(m_config.highlightMarkColorDark, "#d4af37");
 
-    QString initJson = QString::fromUtf8(QJsonDocument(initData).toJson(QJsonDocument::Compact));
-    initJson.replace("</script>", "<\\/script>", Qt::CaseInsensitive);
+    const QString initJson = makeHtmlSafeJson(QJsonDocument(initData));
 
     auto loadLib = [](const QString &name)
     {
@@ -197,8 +207,9 @@ void ResultWindow::externalContentUpdate(const QString &m)
 
     if (m_webView)
     {
-        QString js = m;
-        js.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "");
-        m_webView->eval(QString("updateContentFromNative(\"%1\");").arg(js).toStdString());
+        QJsonObject payload;
+        payload["raw_md"] = m;
+        const QString safeJson = makeHtmlSafeJson(QJsonDocument(payload));
+        m_webView->eval(QString("updateContentFromNative(%1);").arg(safeJson).toStdString());
     }
 }

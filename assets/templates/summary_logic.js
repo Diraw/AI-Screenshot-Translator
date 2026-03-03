@@ -76,11 +76,21 @@ function renderContent(id, markdownOverride) {
       // Check if content is a complete LaTeX expression with properly paired delimiters
       // Match: $...$, $$...$$, \(...\), or \[...\]
       // Using [\s\S]* to allow empty or any content including newlines
-      if (/^(?:\$\$[\s\S]*?\$\$|\$[^\$\n]+\$|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\])$/.test(inner.trim())) {
-        return inner; // Unwrap backticks
-      }
-      return match; // Keep original backticks if not valid LaTeX
+    if (/^(?:\$\$[\s\S]*?\$\$|\$[^\$\n]+\$|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\])$/.test(inner.trim())) {
+      return inner; // Unwrap backticks
+    }
+    return match; // Keep original backticks if not valid LaTeX
     });
+
+    // Normalize common LaTeX display environments so KaTeX auto-render can process them
+    // through the configured $$...$$ delimiters.
+    markdown = markdown.replace(
+      /\\begin\{(equation\*?|align\*?|gather\*?|multline\*?)\}([\s\S]*?)\\end\{\1\}/g,
+      function(_match, _envName, body) {
+        var inner = (body || '').trim();
+        return '\n$$\n' + inner + '\n$$\n';
+      }
+    );
     
     // Step 2: Protect math expressions before markdown parsing
     var p = protectMathJs(markdown);
@@ -321,21 +331,48 @@ function addEntryToDom(id, time, markdown, mathBlocks, originalRaw, isSelectionM
 
   var checkboxDisplay = isSelectionMode ? 'block' : 'none';
 
-  var tagText = tags.length ? `Tags: ${tags.join(', ')}` : '';
+  var header = document.createElement('div');
+  header.className = 'entry-header';
 
-  div.innerHTML = `
-    <div class='entry-header'>
-        <input type='checkbox' class='selection-checkbox' style='display: ${checkboxDisplay}' data-id='${id}'>
-        <div class='entry-info'>
-            <div>${time}</div>
-            ${tagText ? `<div>${tagText}</div>` : ''}
-        </div>
-    </div>
-    <div class='content-area'>
-        <div id='rendered_${id}' class='rendered-html'></div>
-        <div id='raw_${id}' class='raw-text' style='display:none;' spellcheck='false'></div>
-    </div>
-  `;
+  var checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.className = 'selection-checkbox';
+  checkbox.style.display = checkboxDisplay;
+  checkbox.setAttribute('data-id', id);
+  header.appendChild(checkbox);
+
+  var info = document.createElement('div');
+  info.className = 'entry-info';
+
+  var timeLine = document.createElement('div');
+  timeLine.textContent = time;
+  info.appendChild(timeLine);
+
+  if (tags.length) {
+      var tagLine = document.createElement('div');
+      tagLine.textContent = 'Tags: ' + tags.join(', ');
+      info.appendChild(tagLine);
+  }
+
+  header.appendChild(info);
+  div.appendChild(header);
+
+  var contentArea = document.createElement('div');
+  contentArea.className = 'content-area';
+
+  var rendered = document.createElement('div');
+  rendered.id = 'rendered_' + id;
+  rendered.className = 'rendered-html';
+  contentArea.appendChild(rendered);
+
+  var raw = document.createElement('div');
+  raw.id = 'raw_' + id;
+  raw.className = 'raw-text';
+  raw.style.display = 'none';
+  raw.spellcheck = false;
+  contentArea.appendChild(raw);
+
+  div.appendChild(contentArea);
   document.body.appendChild(div);
   
   var rawContainer = document.getElementById('raw_' + id);
@@ -343,6 +380,38 @@ function addEntryToDom(id, time, markdown, mathBlocks, originalRaw, isSelectionM
       rawContainer.textContent = originalRaw; 
       renderContent(id);
   }
+}
+
+function addEntryFromNative(entry, isSelectionMode) {
+    if (!entry || typeof entry !== 'object') return;
+    var tags = Array.isArray(entry.tags) ? entry.tags : [];
+    addEntryToDom(
+        String(entry.id || ''),
+        String(entry.time || ''),
+        '',
+        [],
+        String(entry.originalRaw || ''),
+        !!isSelectionMode,
+        tags
+    );
+}
+
+function bootstrapEntriesFromNative(scriptId, isSelectionMode) {
+    var dataNode = document.getElementById(scriptId);
+    if (!dataNode) return;
+    var raw = dataNode.textContent || '[]';
+    var entries = [];
+    try {
+        entries = JSON.parse(raw);
+    } catch (e) {
+        console.error('Failed to parse initial entry JSON:', e);
+        return;
+    }
+    if (!Array.isArray(entries)) return;
+    SELECTION_MODE = !!isSelectionMode;
+    entries.forEach(function(entry) {
+        addEntryFromNative(entry, isSelectionMode);
+    });
 }
 
 function toggleSelectionMode(show) {

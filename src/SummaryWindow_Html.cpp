@@ -7,46 +7,34 @@
 #include <QCoreApplication>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QRegularExpression>
 #include <QRegularExpressionMatch>
 #include <QRegularExpressionMatchIterator>
 #include <QStringList>
 
-// Helper struct for math protection
-struct ProtectedContent
+static QString makeHtmlSafeJson(const QJsonDocument &doc)
 {
-    QString text;
-    QStringList mathBlocks;
-};
+    QString json = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+    // Keep JSON valid while preventing inline HTML parsing from breaking out.
+    json.replace("<", "\\u003C");
+    json.replace(">", "\\u003E");
+    json.replace("&", "\\u0026");
+    json.replace(QChar(0x2028), "\\u2028");
+    json.replace(QChar(0x2029), "\\u2029");
+    return json;
+}
 
-static ProtectedContent protectMath(const QString &markdown)
+static QJsonObject makeEntryPayload(const TranslationEntry &entry)
 {
-    ProtectedContent result;
-    result.text = markdown;
-
-    QRegularExpression finalRegex(R"((\$\$[\s\S]*?\$\$)|(\\\[[\s\S]*?\\\])|(\\\([\s\S]*?\\\))|(\$[^\$\n]+\$))");
-
-    int counter = 0;
-    QString newText;
-    int lastPos = 0;
-
-    QRegularExpressionMatchIterator i = finalRegex.globalMatch(result.text);
-    while (i.hasNext())
-    {
-        QRegularExpressionMatch match = i.next();
-        newText.append(result.text.mid(lastPos, match.capturedStart() - lastPos));
-
-        QString matchStr = match.captured();
-        result.mathBlocks.append(matchStr);
-
-        QString placeholder = QString("MATHBLOCKPH%1").arg(counter++);
-        newText.append(placeholder);
-
-        lastPos = match.capturedEnd();
-    }
-    newText.append(result.text.mid(lastPos));
-    result.text = newText;
-    return result;
+    QJsonObject payload;
+    payload["id"] = entry.id;
+    payload["time"] = entry.timestamp.toString("yyyy-MM-dd HH:mm:ss");
+    payload["originalRaw"] = entry.translatedMarkdown;
+    payload["tags"] = QJsonArray::fromStringList(entry.tags);
+    return payload;
 }
 
 void SummaryWindow::refreshHtml()
@@ -57,45 +45,13 @@ void SummaryWindow::refreshHtml()
 
 QString SummaryWindow::getAddEntryJs(const TranslationEntry &entry)
 {
-    QString originalMarkdown = entry.translatedMarkdown;
-    ProtectedContent protectedData = protectMath(originalMarkdown);
-
-    QString safeContent = protectedData.text;
-    safeContent.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "");
-
-    QString mathBlocksJs = "[";
-    for (int i = 0; i < protectedData.mathBlocks.size(); ++i)
-    {
-        QString b = protectedData.mathBlocks[i];
-        b.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "");
-        if (i > 0)
-            mathBlocksJs += ",";
-        mathBlocksJs += "\"" + b + "\"";
-    }
-    mathBlocksJs += "]";
-
-    QString originalSafe = originalMarkdown;
-    originalSafe.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "");
-
-    QString tagsJs = "[";
-    for (int i = 0; i < entry.tags.size(); ++i)
-    {
-        if (i > 0)
-            tagsJs += ",";
-        QString t = entry.tags[i];
-        t.replace("\\", "\\\\").replace("\"", "\\\"");
-        tagsJs += "\"" + t + "\"";
-    }
-    tagsJs += "]";
-
-    return QString("addEntryToDom('%1', '%2', \"%3\", %4, \"%5\", %6, %7);")
-        .arg(entry.id)
-        .arg(entry.timestamp.toString("yyyy-MM-dd HH:mm:ss"))
-        .arg(safeContent)
-        .arg(mathBlocksJs)
-        .arg(originalSafe)
-        .arg(m_selectionMode ? "true" : "false")
-        .arg(tagsJs);
+    const QString entryJson = makeHtmlSafeJson(QJsonDocument(makeEntryPayload(entry)));
+    QString js = "addEntryFromNative(";
+    js += entryJson;
+    js += ",";
+    js += (m_selectionMode ? "true" : "false");
+    js += ");";
+    return js;
 }
 
 void SummaryWindow::initHtml()
@@ -321,13 +277,22 @@ document.addEventListener('mousedown', function() {
 
     html += "</head><body class=\"__BODY_CLASS__\">";
     html = html.replace("__BODY_CLASS__", isDark ? "dark-mode" : "");
-    html += "<div id='status-indicator'>MODE: VIEW</div>";
-    html += "<script>";
     QList<TranslationEntry> filteredEntries = getFilteredEntries();
+    QJsonArray initialEntries;
     for (const auto &entry : filteredEntries)
     {
-        html += getAddEntryJs(entry);
+        initialEntries.append(makeEntryPayload(entry));
     }
+    html += "</head><body class=\"__BODY_CLASS__\">";
+    html = html.replace("__BODY_CLASS__", isDark ? "dark-mode" : "");
+    html += "<div id='status-indicator'>MODE: VIEW</div>";
+    html += "<script id='initial-entry-data' type='application/json'>";
+    html += makeHtmlSafeJson(QJsonDocument(initialEntries));
+    html += "</script>";
+    html += "<script>";
+    html += "try { bootstrapEntriesFromNative('initial-entry-data', ";
+    html += (m_selectionMode ? "true" : "false");
+    html += "); } catch(e) { console.error('bootstrapEntriesFromNative failed', e); }";
     // Apply zoom
     if (m_currentZoom != 1.0)
     {
