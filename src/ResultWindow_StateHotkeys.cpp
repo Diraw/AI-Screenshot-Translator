@@ -22,12 +22,14 @@ void ResultWindow::configureHotkeys(const QString &v, const QString &e, const QS
     qDeleteAll(m_navShortcuts);
     m_navShortcuts.clear();
 
-    auto add = [this](const QString &k, std::function<void()> f, Qt::ShortcutContext c = Qt::WindowShortcut)
+    auto add = [this](const QString &k, std::function<void()> f, Qt::ShortcutContext c = Qt::WindowShortcut,
+                      bool autoRepeat = false)
     {
         if (k.isEmpty())
             return;
         QShortcut *sc = new QShortcut(QKeySequence(k), this);
         sc->setContext(c);
+        sc->setAutoRepeat(autoRepeat);
         connect(sc, &QShortcut::activated, this, f);
         m_navShortcuts.append(sc);
     };
@@ -63,9 +65,9 @@ void ResultWindow::configureHotkeys(const QString &v, const QString &e, const QS
                 m_webView->eval("applyFormat('highlight');"); });
 
     add(m_prevKey, [this]()
-        { showPrevious(); }, Qt::ApplicationShortcut);
+        { showPrevious(); }, Qt::ApplicationShortcut, true);
     add(m_nextKey, [this]()
-        { showNext(); }, Qt::ApplicationShortcut);
+        { showNext(); }, Qt::ApplicationShortcut, true);
     add(m_tagKey, [this]()
         { openTagDialog(); }, Qt::ApplicationShortcut);
 }

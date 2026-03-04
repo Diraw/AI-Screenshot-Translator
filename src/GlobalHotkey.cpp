@@ -4,6 +4,9 @@
 
 #ifdef Q_OS_WIN
 #include <windows.h>
+#ifndef MOD_NOREPEAT
+#define MOD_NOREPEAT 0x4000
+#endif
 #endif
 
 GlobalHotkey::GlobalHotkey(int id, QObject *parent)
@@ -32,9 +35,17 @@ bool GlobalHotkey::registerHotkey(const QString &keySequence) {
     }
 
 #ifdef Q_OS_WIN
-    if (RegisterHotKey(NULL, m_hotkeyId, modifiers, vk)) {
+    const UINT noRepeatModifiers = modifiers | MOD_NOREPEAT;
+    if (RegisterHotKey(NULL, m_hotkeyId, noRepeatModifiers, vk)) {
         m_isRegistered = true;
         qDebug() << "Registered global hotkey:" << keySequence;
+        return true;
+    }
+
+    // Fallback for environments that do not support MOD_NOREPEAT.
+    if (RegisterHotKey(NULL, m_hotkeyId, modifiers, vk)) {
+        m_isRegistered = true;
+        qDebug() << "Registered global hotkey without MOD_NOREPEAT:" << keySequence;
         return true;
     } else {
         qWarning() << "Failed to register global hotkey:" << keySequence << "Error:" << GetLastError();

@@ -67,6 +67,7 @@ void SummaryWindow::configureHotkeys(const QString &editKey, const QString &view
             return;
         QShortcut *sc = new QShortcut(QKeySequence(key), this);
         sc->setContext(Qt::ApplicationShortcut);
+        sc->setAutoRepeat(false);
         connect(sc, &QShortcut::activated, this, [this, js, key]()
                 {
             qDebug() << "[QShortcut activated]" << key;

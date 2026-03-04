@@ -96,6 +96,7 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent)
     // - Esc exits RAW (if active), selection mode, or clears active filters
     m_selectionToggleShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+S")), this);
     m_selectionToggleShortcut->setContext(Qt::WindowShortcut);
+    m_selectionToggleShortcut->setAutoRepeat(false);
     connect(m_selectionToggleShortcut, &QShortcut::activated, this, [this]()
             {
         if (m_selectionModeBtn) m_selectionModeBtn->setChecked(!m_selectionModeBtn->isChecked()); });

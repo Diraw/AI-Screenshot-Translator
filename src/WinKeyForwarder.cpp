@@ -122,12 +122,23 @@ LRESULT WinKeyForwarder::handleLowLevel(WPARAM wParam, KBDLLHOOKSTRUCT *ks)
         return 0;
 
     const bool isDown = (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN);
-    if (!isDown)
-        return 0;
-
+    const bool isUp = (wParam == WM_KEYUP || wParam == WM_SYSKEYUP);
     const int vk = static_cast<int>(ks->vkCode);
     if (vk != 'S')
         return 0; // only plain S
+
+    if (isUp)
+    {
+        const bool swallow = m_sForwardedDown;
+        m_sForwardedDown = false;
+        return swallow ? 1 : 0;
+    }
+
+    if (!isDown)
+        return 0;
+
+    if (m_sForwardedDown)
+        return 1; // Suppress key-repeat while the key remains held.
 
     if (anyModifierDown())
         return 0; // require no modifiers
@@ -145,6 +156,7 @@ LRESULT WinKeyForwarder::handleLowLevel(WPARAM wParam, KBDLLHOOKSTRUCT *ks)
         if (rwHwnd == fg)
         {
             trace("[WKF] HIT S (hook) -> DISPATCH");
+            m_sForwardedDown = true;
             QMetaObject::invokeMethod(rw, "triggerScreenshotFromNative", Qt::QueuedConnection);
             return 1;
         }
@@ -162,6 +174,7 @@ LRESULT WinKeyForwarder::handleLowLevel(WPARAM wParam, KBDLLHOOKSTRUCT *ks)
             if (rwHwnd == root)
             {
                 trace("[WKF] HIT S (hook/root) -> DISPATCH");
+                m_sForwardedDown = true;
                 QMetaObject::invokeMethod(rw, "triggerScreenshotFromNative", Qt::QueuedConnection);
                 return 1;
             }
