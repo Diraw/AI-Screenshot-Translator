@@ -37,6 +37,7 @@ public:
     ~ConfigDialog();
 
     void updateTheme(bool isDark);
+    void setGlobalHotkeyConflictKeys(const QStringList &labelKeys, bool focusConflicts = false);
 
 private slots:
     void save();
@@ -171,6 +172,10 @@ private:
     QComboBox *m_languageCombo;
     QComboBox *m_screenCombo;
     void retranslateUi();
+    QLineEdit *globalHotkeyEditForKey(const QString &labelKey) const;
+    void applyGlobalHotkeyConflictIndicators(bool focusConflicts);
+
+    QStringList m_globalHotkeyConflictKeys;
 
     // CDN Removed
 };

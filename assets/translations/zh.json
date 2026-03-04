@@ -119,6 +119,10 @@
     "btn_batch_delete": "批量删除",
     "btn_batch_add_tag": "批量加标签",
     "btn_batch_remove_tag": "批量减标签",
+    "hotkey_conflict_title": "全局快捷键冲突",
+    "msg_hotkey_conflict_item": "- %1 (%2)",
+    "msg_hotkey_conflict_body": "以下全局快捷键无法注册，因为已被其他程序占用：\n%1\n\n请在设置中修改快捷键，或关闭冲突的程序。",
     "msg_saved": "设置已保存！"
   }
 }
+

@@ -44,6 +44,7 @@ private slots:
 
     // Theme Management
     void checkForThemeChange();
+    void checkHotkeyRegistrationHealth();
     void updateAllWindowThemes(bool isDark);
 
 public slots:
@@ -78,6 +79,8 @@ private:
     QPointer<ScreenshotTool> m_activeScreenshotTool;
 
     void setupTray();
+    void notifyHotkeyConflicts(const QString &message, bool interactive);
+    void presentConfigDialog(bool allowToggle, bool focusGlobalHotkeys, bool forceForeground);
     QString reloadHotkeys();
     QString syncLaunchAtStartup(bool enabled);
     void showResult(const QString &entryId);
@@ -89,7 +92,10 @@ private:
     bool m_forceConfigDialogForegroundOnce = false;
 
     QTimer m_themeTimer;
+    QTimer m_hotkeyHealthTimer;
     bool m_lastTopBarDark = false;
+    QString m_lastHotkeyConflictMessage;
+    QStringList m_lastConflictingGlobalHotkeyKeys;
 
     AnalyticsManager *m_analytics = nullptr;
 };

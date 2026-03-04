@@ -192,4 +192,6 @@ void ConfigDialog::retranslateUi()
             b->setText(tm.tr("btn_save"));
         }
     }
+
+    applyGlobalHotkeyConflictIndicators(false);
 }

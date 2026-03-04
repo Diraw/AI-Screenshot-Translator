@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonDocument>
 #include <QJsonObject>
 
@@ -87,6 +88,10 @@ QString TranslationManager::getLanguage() const
 
 QString TranslationManager::tr(const QString &key) const
 {
+    const QString currentBuiltin = builtinTranslation(m_currentLang, key);
+    if (!currentBuiltin.isEmpty())
+        return currentBuiltin;
+
     const auto currentIt = m_languages.constFind(m_currentLang);
     if (currentIt != m_languages.cend())
     {
@@ -94,6 +99,10 @@ QString TranslationManager::tr(const QString &key) const
         if (translationIt != currentIt->translations.cend())
             return *translationIt;
     }
+
+    const QString enBuiltin = builtinTranslation(QStringLiteral("en"), key);
+    if (!enBuiltin.isEmpty())
+        return enBuiltin;
 
     const auto enIt = m_languages.constFind(QStringLiteral("en"));
     if (enIt != m_languages.cend())
@@ -128,4 +137,36 @@ void TranslationManager::registerLanguage(const QString &lang, const QString &di
     pack.displayName = displayName;
     pack.translations = translations;
     m_languages.insert(lang, pack);
+}
+
+QString TranslationManager::builtinTranslation(const QString &lang, const QString &key) const
+{
+    static const QHash<QString, QString> zhTranslations = {
+        {QStringLiteral("hotkey_conflict_title"), QStringLiteral("全局快捷键冲突")},
+        {QStringLiteral("msg_hotkey_conflict_item"), QStringLiteral("- %1 (%2)")},
+        {QStringLiteral("msg_hotkey_conflict_body"),
+         QStringLiteral("以下全局快捷键注册失败：\n%1\n\n请在设置中修改快捷键，或关闭冲突的程序。")},
+    };
+
+    static const QHash<QString, QString> enTranslations = {
+        {QStringLiteral("hotkey_conflict_title"), QStringLiteral("Global Hotkey Conflict")},
+        {QStringLiteral("msg_hotkey_conflict_item"), QStringLiteral("- %1 (%2)")},
+        {QStringLiteral("msg_hotkey_conflict_body"),
+         QStringLiteral("The following global hotkeys could not be registered:\n%1\n\nChange the shortcut in Settings or close the conflicting app.")},
+    };
+
+    const QHash<QString, QString> *translations = nullptr;
+    if (lang == QStringLiteral("zh"))
+        translations = &zhTranslations;
+    else if (lang == QStringLiteral("en"))
+        translations = &enTranslations;
+
+    if (!translations)
+        return QString();
+
+    const auto it = translations->constFind(key);
+    if (it == translations->cend())
+        return QString();
+
+    return *it;
 }

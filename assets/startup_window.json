@@ -1,6 +1,6 @@
 {
   "windowTitle": "AI Screenshot Translator",
-  "version": "1.0.2",
+  "version": "1.0.3 alpha",
   "versionFormat": "\u7248\u672c\uff1a{version}",
   "copyright": "Copyright \u00a9 2026 Diraw",
   "hotkeysText": "\u63d0\u793a\uff1a\n\u2022 \u622a\u56fe\u5feb\u6377\u952e\uff1a{shot}\n\u2022 \u6253\u5f00\u5f52\u6863\u7a97\u53e3\uff1a{view}\n",

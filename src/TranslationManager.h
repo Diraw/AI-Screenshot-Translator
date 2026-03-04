@@ -29,6 +29,7 @@ private:
     TranslationManager();
 
     void registerLanguage(const QString &lang, const QString &displayName, const TranslationMap &translations);
+    QString builtinTranslation(const QString &lang, const QString &key) const;
 
     QString m_currentLang;
     QMap<QString, LanguagePack> m_languages;

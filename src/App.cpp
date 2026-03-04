@@ -129,7 +129,10 @@ App::App(QObject *parent)
     m_summaryWindow->configureHotkeys(cfg.editHotkey, cfg.viewToggleHotkey, cfg.screenshotToggleHotkey,
                                       cfg.boldHotkey, cfg.underlineHotkey, cfg.highlightHotkey);
 
-    reloadHotkeys();
+    const QString hotkeyConflictMessage = reloadHotkeys();
+    m_lastHotkeyConflictMessage = hotkeyConflictMessage;
+    if (!hotkeyConflictMessage.isEmpty())
+        notifyHotkeyConflicts(hotkeyConflictMessage, true);
 
     connect(&m_screenshotHotkey, &GlobalHotkey::activated, this, &App::onScreenshotRequested);
     connect(&m_summaryHotkey, &GlobalHotkey::activated, this, &App::showSummary);
@@ -138,14 +141,21 @@ App::App(QObject *parent)
 
     if (m_configManager.getConfig().apiKey.isEmpty() || storageFallbackUsed)
     {
-        m_forceConfigDialogForegroundOnce = true;
-        QTimer::singleShot(100, this, &App::showConfig);
+        if (m_lastConflictingGlobalHotkeyKeys.isEmpty())
+        {
+            m_forceConfigDialogForegroundOnce = true;
+            QTimer::singleShot(100, this, &App::showConfig);
+        }
     }
 
     // Theme Init
     m_lastTopBarDark = ThemeUtils::isSystemDark();
     connect(&m_themeTimer, &QTimer::timeout, this, &App::checkForThemeChange);
     m_themeTimer.start(2000);
+
+    // Periodically rebind global hotkeys so runtime conflicts or OS-level loss do not stay silent.
+    connect(&m_hotkeyHealthTimer, &QTimer::timeout, this, &App::checkHotkeyRegistrationHealth);
+    m_hotkeyHealthTimer.start(5000);
 
     // Analytics (Umami): start 5s after launch to avoid startup stalls
     m_analytics = new AnalyticsManager(this);

@@ -119,6 +119,9 @@
     "btn_batch_delete": "Delete",
     "btn_batch_add_tag": "Add Tags",
     "btn_batch_remove_tag": "Remove Tags",
+    "hotkey_conflict_title": "Global Hotkey Conflict",
+    "msg_hotkey_conflict_item": "- %1 (%2)",
+    "msg_hotkey_conflict_body": "Some global hotkeys could not be registered because another app is already using them:\n%1\n\nChange the shortcut in Settings or close the conflicting app.",
     "msg_saved": "Settings saved!"
   }
 }

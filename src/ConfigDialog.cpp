@@ -235,3 +235,79 @@ void ConfigDialog::onTestConnection()
 }
 
 ConfigDialog::~ConfigDialog() = default;
+
+void ConfigDialog::setGlobalHotkeyConflictKeys(const QStringList &labelKeys, bool focusConflicts)
+{
+    m_globalHotkeyConflictKeys = labelKeys;
+    m_globalHotkeyConflictKeys.removeDuplicates();
+    applyGlobalHotkeyConflictIndicators(focusConflicts);
+}
+
+QLineEdit *ConfigDialog::globalHotkeyEditForKey(const QString &labelKey) const
+{
+    if (labelKey == QStringLiteral("lbl_shot_hotkey"))
+        return m_hotkeyEdit;
+    if (labelKey == QStringLiteral("lbl_sum_hotkey"))
+        return m_summaryHotkeyEdit;
+    if (labelKey == QStringLiteral("lbl_set_hotkey"))
+        return m_settingsHotkeyEdit;
+    if (labelKey == QStringLiteral("lbl_quit_hotkey"))
+        return m_quitHotkeyEdit;
+    return nullptr;
+}
+
+void ConfigDialog::applyGlobalHotkeyConflictIndicators(bool focusConflicts)
+{
+    const QStringList trackedKeys = {
+        QStringLiteral("lbl_shot_hotkey"),
+        QStringLiteral("lbl_sum_hotkey"),
+        QStringLiteral("lbl_set_hotkey"),
+        QStringLiteral("lbl_quit_hotkey"),
+    };
+
+    for (const QString &key : trackedKeys)
+    {
+        if (QLineEdit *edit = globalHotkeyEditForKey(key))
+        {
+            const bool conflicted = m_globalHotkeyConflictKeys.contains(key);
+            edit->setStyleSheet(conflicted ? QStringLiteral("border: 2px solid #d94b4b; border-radius: 4px;")
+                                           : QString());
+        }
+    }
+
+    const int otherTabIndex = m_tabWidget ? m_tabWidget->indexOf(m_otherTab) : -1;
+    if (otherTabIndex >= 0)
+    {
+        QString baseText = TranslationManager::instance().tr("tab_other");
+        if (!m_globalHotkeyConflictKeys.isEmpty())
+            baseText += QStringLiteral(" *");
+        m_tabWidget->setTabText(otherTabIndex, baseText);
+    }
+
+    if (!focusConflicts || m_globalHotkeyConflictKeys.isEmpty() || !m_tabWidget)
+        return;
+
+    m_tabWidget->setCurrentWidget(m_otherTab);
+
+    QLineEdit *target = nullptr;
+    for (const QString &key : trackedKeys)
+    {
+        if (m_globalHotkeyConflictKeys.contains(key))
+        {
+            target = globalHotkeyEditForKey(key);
+            if (target)
+                break;
+        }
+    }
+
+    if (!target)
+        return;
+
+    QPointer<QLineEdit> targetEdit = target;
+    QTimer::singleShot(0, this, [targetEdit]()
+                       {
+        if (!targetEdit)
+            return;
+        targetEdit->setFocus(Qt::OtherFocusReason);
+        targetEdit->selectAll(); });
+}
