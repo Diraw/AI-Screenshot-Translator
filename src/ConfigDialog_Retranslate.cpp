@@ -35,6 +35,8 @@ void ConfigDialog::retranslateUi()
         updateLabel(gLayout, 6, "lbl_prompt");
         updateLabel(gLayout, 7, "lbl_proxy");
         m_useProxyCheck->setToolTip(tm.tr("tip_proxy_toggle"));
+        if (m_proxyUrlEdit)
+            m_proxyUrlEdit->setPlaceholderText(tm.tr("proxy_placeholder"));
         updateLabel(gLayout, 8, "lbl_storage");
 
         if (m_testConnectionBtn)

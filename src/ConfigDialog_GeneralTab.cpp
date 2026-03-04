@@ -93,6 +93,7 @@ void ConfigDialog::setupGeneralTab()
     m_proxyUrlEdit->setPlaceholderText("ä¾‹å¦‚ http://127.0.0.1:1080 æˆ– socks5://127.0.0.1:1080");
     m_useProxyCheck = new QCheckBox(this);
     m_proxyLabel = new QLabel(this);
+    m_proxyUrlEdit->setPlaceholderText(TranslationManager::instance().tr("proxy_placeholder"));
 
     auto *proxyLayout = new QHBoxLayout();
     proxyLayout->addWidget(m_proxyUrlEdit);

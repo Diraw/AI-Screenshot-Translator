@@ -141,14 +141,18 @@ void TranslationManager::registerLanguage(const QString &lang, const QString &di
 
 QString TranslationManager::builtinTranslation(const QString &lang, const QString &key) const
 {
-    static const QHash<QString, QString> zhTranslations = {
+static const QHash<QString, QString> zhTranslations = {
+        {QStringLiteral("proxy_placeholder"),
+         QStringLiteral("例如 http://127.0.0.1:1080 或 socks5://127.0.0.1:1080")},
         {QStringLiteral("hotkey_conflict_title"), QStringLiteral("全局快捷键冲突")},
         {QStringLiteral("msg_hotkey_conflict_item"), QStringLiteral("- %1 (%2)")},
         {QStringLiteral("msg_hotkey_conflict_body"),
          QStringLiteral("以下全局快捷键注册失败：\n%1\n\n请在设置中修改快捷键，或关闭冲突的程序。")},
     };
 
-    static const QHash<QString, QString> enTranslations = {
+static const QHash<QString, QString> enTranslations = {
+        {QStringLiteral("proxy_placeholder"),
+         QStringLiteral("For example: http://127.0.0.1:1080 or socks5://127.0.0.1:1080")},
         {QStringLiteral("hotkey_conflict_title"), QStringLiteral("Global Hotkey Conflict")},
         {QStringLiteral("msg_hotkey_conflict_item"), QStringLiteral("- %1 (%2)")},
         {QStringLiteral("msg_hotkey_conflict_body"),
