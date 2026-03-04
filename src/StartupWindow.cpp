@@ -123,6 +123,8 @@ static SemVer parseSemVer(QString v)
     if (plusIdx >= 0)
         v = v.left(plusIdx);
 
+    v = v.trimmed();
+
     QString core = v;
     QString pre;
     const int dashIdx = v.indexOf('-');
@@ -131,16 +133,43 @@ static SemVer parseSemVer(QString v)
         core = v.left(dashIdx);
         pre = v.mid(dashIdx + 1);
     }
+    else
+    {
+        static const QRegularExpression spacedPreRe(
+            QStringLiteral(R"(^\s*(\d+(?:\.\d+){0,2})\s+([A-Za-z0-9][A-Za-z0-9.\-_]*)\s*$)"));
+        const QRegularExpressionMatch spacedPre = spacedPreRe.match(v);
+        if (spacedPre.hasMatch())
+        {
+            core = spacedPre.captured(1);
+            pre = spacedPre.captured(2);
+        }
+    }
 
     SemVer out;
     core = core.trimmed();
     const QStringList coreParts = core.split('.', Qt::SkipEmptyParts);
+    auto parseCoreNumber = [](const QString &part, QString *suffix = nullptr)
+    {
+        static const QRegularExpression partRe(QStringLiteral(R"(^\s*(\d+)(?:\s*([A-Za-z][A-Za-z0-9.\-_]*))?\s*$)"));
+        const QRegularExpressionMatch match = partRe.match(part);
+        if (!match.hasMatch())
+            return 0;
+        if (suffix)
+            *suffix = match.captured(2).trimmed();
+        return match.captured(1).toInt();
+    };
+
     if (coreParts.size() >= 1)
-        out.major = coreParts[0].toInt();
+        out.major = parseCoreNumber(coreParts[0]);
     if (coreParts.size() >= 2)
-        out.minor = coreParts[1].toInt();
+        out.minor = parseCoreNumber(coreParts[1]);
     if (coreParts.size() >= 3)
-        out.patch = coreParts[2].toInt();
+    {
+        QString suffixFromPatch;
+        out.patch = parseCoreNumber(coreParts[2], &suffixFromPatch);
+        if (pre.isEmpty() && !suffixFromPatch.isEmpty())
+            pre = suffixFromPatch;
+    }
 
     pre = pre.trimmed();
     if (!pre.isEmpty())
