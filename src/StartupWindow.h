@@ -41,9 +41,13 @@ private:
     void setUpdateStatus(const QString &text);
     void updateHintColor();
     void updateUpdateHighlight(bool hasNewVersion);
+    QString buildUpdateNetworkErrorStatus(const QNetworkReply *reply) const;
 
     bool applyCachedUpdateStatusIfFresh();
-    void saveUpdateCache(const QString &status, const QString &latestVer = QString(), const QString &latestUrl = QString());
+    void saveUpdateCache(const QString &status,
+                         const QString &latestVer = QString(),
+                         const QString &latestUrl = QString(),
+                         const QString &displayText = QString());
 
     void loadUiConfig();
     QString formatText(QString text) const;

@@ -218,6 +218,7 @@ bool StartupWindow::applyCachedUpdateStatusIfFresh()
     const QString status = settings.value(QStringLiteral("status"), QString()).toString();
     const QString latestVer = settings.value(QStringLiteral("latestVer"), QString()).toString();
     const QString latestUrl = settings.value(QStringLiteral("latestUrl"), QString()).toString();
+    const QString displayText = settings.value(QStringLiteral("displayText"), QString()).toString();
     settings.endGroup();
 
     if (checkedAtMs <= 0)
@@ -247,19 +248,19 @@ bool StartupWindow::applyCachedUpdateStatusIfFresh()
     }
     if (status == QStringLiteral("neterr"))
     {
-        setUpdateStatus(formatText(m_updateNetworkError));
+        setUpdateStatus(displayText.isEmpty() ? formatText(m_updateNetworkError) : displayText);
         updateUpdateHighlight(false);
         return true;
     }
     if (status == QStringLiteral("parseerr"))
     {
-        setUpdateStatus(formatText(m_updateParseError));
+        setUpdateStatus(displayText.isEmpty() ? formatText(m_updateParseError) : displayText);
         updateUpdateHighlight(false);
         return true;
     }
     if (status == QStringLiteral("noversion"))
     {
-        setUpdateStatus(formatText(m_updateNoVersion));
+        setUpdateStatus(displayText.isEmpty() ? formatText(m_updateNoVersion) : displayText);
         updateUpdateHighlight(false);
         return true;
     }
@@ -267,7 +268,10 @@ bool StartupWindow::applyCachedUpdateStatusIfFresh()
     return false;
 }
 
-void StartupWindow::saveUpdateCache(const QString &status, const QString &latestVer, const QString &latestUrl)
+void StartupWindow::saveUpdateCache(const QString &status,
+                                    const QString &latestVer,
+                                    const QString &latestUrl,
+                                    const QString &displayText)
 {
     QSettings settings(ConfigManager::settingsIniPath(), QSettings::IniFormat);
     settings.beginGroup(QStringLiteral("updateCache"));
@@ -275,6 +279,7 @@ void StartupWindow::saveUpdateCache(const QString &status, const QString &latest
     settings.setValue(QStringLiteral("status"), status);
     settings.setValue(QStringLiteral("latestVer"), latestVer);
     settings.setValue(QStringLiteral("latestUrl"), latestUrl);
+    settings.setValue(QStringLiteral("displayText"), displayText);
     settings.endGroup();
 }
 
@@ -302,6 +307,29 @@ void StartupWindow::setUpdateStatus(const QString &text)
 {
     if (m_updateStatusLabel)
         m_updateStatusLabel->setText(text);
+}
+
+QString StartupWindow::buildUpdateNetworkErrorStatus(const QNetworkReply *reply) const
+{
+    const QString base = formatText(m_updateNetworkError);
+    if (!reply)
+        return base;
+
+    QStringList details;
+    details << QStringLiteral("\u9519\u8BEF\u7801 %1").arg(static_cast<int>(reply->error()));
+
+    const QVariant httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
+    if (httpStatus.isValid())
+        details << QStringLiteral("HTTP %1").arg(httpStatus.toInt());
+
+    const QString errorText = reply->errorString().trimmed();
+    if (!errorText.isEmpty())
+        details << errorText;
+
+    if (details.isEmpty())
+        return base;
+
+    return base + QStringLiteral("\n") + details.join(QStringLiteral(" | "));
 }
 
 void StartupWindow::startUpdateCheck(bool forceNetwork)
@@ -339,8 +367,12 @@ void StartupWindow::onUpdateReplyFinished()
     if (!m_reply)
         return;
 
-    const QByteArray body = m_reply->readAll();
-    const auto err = m_reply->error();
+    QNetworkReply *reply = m_reply;
+    const QByteArray body = reply->readAll();
+    const auto err = reply->error();
+    const QString networkErrorText = (err != QNetworkReply::NoError)
+                                         ? buildUpdateNetworkErrorStatus(reply)
+                                         : QString();
 
     m_reply->deleteLater();
     m_reply = nullptr;
@@ -350,9 +382,9 @@ void StartupWindow::onUpdateReplyFinished()
 
     if (err != QNetworkReply::NoError)
     {
-        setUpdateStatus(formatText(m_updateNetworkError));
+        setUpdateStatus(networkErrorText);
         updateUpdateHighlight(false);
-        saveUpdateCache(QStringLiteral("neterr"));
+        saveUpdateCache(QStringLiteral("neterr"), QString(), QString(), networkErrorText);
         return;
     }
 
@@ -360,9 +392,13 @@ void StartupWindow::onUpdateReplyFinished()
     const QJsonDocument doc = QJsonDocument::fromJson(body, &jerr);
     if (jerr.error != QJsonParseError::NoError || !doc.isObject())
     {
-        setUpdateStatus(formatText(m_updateParseError));
+        const QString parseErrorText = formatText(m_updateParseError)
+                                       + QStringLiteral("\n%1 (offset %2)")
+                                             .arg(jerr.errorString())
+                                             .arg(jerr.offset);
+        setUpdateStatus(parseErrorText);
         updateUpdateHighlight(false);
-        saveUpdateCache(QStringLiteral("parseerr"));
+        saveUpdateCache(QStringLiteral("parseerr"), QString(), QString(), parseErrorText);
         return;
     }
 
@@ -378,9 +414,10 @@ void StartupWindow::onUpdateReplyFinished()
 
     if (latestVer.isEmpty())
     {
-        setUpdateStatus(formatText(m_updateNoVersion));
+        const QString noVersionText = formatText(m_updateNoVersion);
+        setUpdateStatus(noVersionText);
         updateUpdateHighlight(false);
-        saveUpdateCache(QStringLiteral("noversion"));
+        saveUpdateCache(QStringLiteral("noversion"), QString(), QString(), noVersionText);
         return;
     }
 

@@ -141,6 +141,7 @@ void StartupWindow::addUpdateRow(QVBoxLayout *root)
     updateRow->setSpacing(4);
 
     m_updateStatusLabel = new QLabel(formatText(m_updateNotChecked.isEmpty() ? QStringLiteral("æ›´æ–°ï¼šæœªæ£€æŸ¥") : m_updateNotChecked), this);
+    m_updateStatusLabel->setWordWrap(true);
     m_updateStatusLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     updateRow->addWidget(m_updateStatusLabel);
 
