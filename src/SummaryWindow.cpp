@@ -223,6 +223,23 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent)
                     {
         if (m_selectionModeBtn) m_selectionModeBtn->setChecked(!m_selectionModeBtn->isChecked()); });
 
+    // Load next page of entries without rebuilding the whole DOM
+    m_webView->bind("cmd_loadMore", [this](std::string, std::string, void *)
+                    {
+        QList<TranslationEntry> filtered = getFilteredEntries();
+        int total = filtered.size();
+        if (m_displayLimit >= total) return;
+        int oldLimit = m_displayLimit;
+        m_displayLimit = qMin(m_displayLimit + 200, total);
+        QString js = QStringLiteral("(()=>{");
+        for (int i = oldLimit; i < m_displayLimit; ++i) {
+            js += getAddEntryJs(filtered[i]) + QStringLiteral(";");
+        }
+        js += QString("try{if(window.updateLoadMoreButton) updateLoadMoreButton(%1,%2);}catch(e){};")
+                  .arg(m_displayLimit).arg(total);
+        js += QStringLiteral("})();");
+        m_webView->eval(js.toStdString()); });
+
     // Bind DevTools opener for JS-triggered hotkey inside WebView
     m_webView->bind("cmd_openDevTools", [this](std::string, std::string, void *)
                     {

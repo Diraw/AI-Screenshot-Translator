@@ -8,12 +8,14 @@ void SummaryWindow::setInitialHistory(const QList<TranslationEntry> &history)
 {
     captureScrollPosition();
     m_entries = history;
+    m_displayLimit = 200; // Reset pagination when history is replaced
     refreshHtml();
 }
 
 void SummaryWindow::addEntry(const TranslationEntry &entry)
 {
     m_entries.append(entry);
+    ++m_displayLimit; // Keep limit in sync so Load More skips this already-displayed entry
     appendEntryHtml(entry);
 }
 

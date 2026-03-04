@@ -68,6 +68,7 @@ private:
     AppConfig m_config;
     qreal m_currentZoom = 1.0;
     qreal m_lastScrollY = 0.0;
+    int m_displayLimit = 200;
 
     // Filter UI
     QToolBar *m_filterToolbar = nullptr;

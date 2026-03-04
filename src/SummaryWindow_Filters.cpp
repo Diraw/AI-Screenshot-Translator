@@ -271,6 +271,7 @@ void SummaryWindow::loadAvailableTags()
 void SummaryWindow::applyFilters()
 {
     captureScrollPosition();
+    m_displayLimit = 200; // Reset page on every filter change
     refreshHtml();
 }
 

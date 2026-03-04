@@ -135,24 +135,12 @@ QList<TranslationEntry> HistoryManager::loadEntries()
             entry.tags = obj["tags"].toVariant().toStringList();
         }
 
-        QImage img(fullPath);
-        if (!img.isNull())
-        {
-            QByteArray ba;
-            QBuffer buffer(&ba);
-            buffer.open(QIODevice::WriteOnly);
-            img.save(&buffer, "PNG");
-            entry.originalBase64 = ba.toBase64();
-            entry.localImagePath = fullPath;
+        // Lazy-load image: only store the path now, base64 is loaded on demand in getEntryById()
+        entry.localImagePath = fullPath;
 
-            // Update caches
-            m_markdownCache[entry.id] = entry.translatedMarkdown;
-            m_entryCache[entry.id] = entry;
-        }
-        else
-        {
-            continue;
-        }
+        // Update caches
+        m_markdownCache[entry.id] = entry.translatedMarkdown;
+        m_entryCache[entry.id] = entry;
 
         entries.append(entry);
         validArray.append(obj);
@@ -299,15 +287,27 @@ bool HistoryManager::deleteEntries(const QStringList &ids)
 
 TranslationEntry HistoryManager::getEntryById(const QString &id)
 {
-    if (m_entryCache.contains(id))
-    {
-        return m_entryCache.value(id);
-    }
+    if (!m_entryCache.contains(id))
+        loadEntries();
 
-    loadEntries();
     if (m_entryCache.contains(id))
     {
-        return m_entryCache.value(id);
+        TranslationEntry entry = m_entryCache.value(id);
+        // Lazy-load base64 image when it hasn't been loaded yet
+        if (entry.originalBase64.isEmpty() && !entry.localImagePath.isEmpty())
+        {
+            QImage img(entry.localImagePath);
+            if (!img.isNull())
+            {
+                QByteArray ba;
+                QBuffer buffer(&ba);
+                buffer.open(QIODevice::WriteOnly);
+                img.save(&buffer, "PNG");
+                entry.originalBase64 = ba.toBase64();
+                m_entryCache[id] = entry;
+            }
+        }
+        return entry;
     }
 
     return TranslationEntry();

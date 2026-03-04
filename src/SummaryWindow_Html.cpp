@@ -66,16 +66,20 @@ void SummaryWindow::initHtml()
     if (m_htmlLoaded)
     {
         QList<TranslationEntry> filteredEntries = getFilteredEntries();
+        int total = filteredEntries.size();
+        int displayed = qMin(m_displayLimit, total);
 
         QString js;
         js += "(()=>{";
         js += QString("try{applyDarkMode(%1);}catch(e){};").arg(isDark ? "true" : "false");
         js += QString("try{SELECTION_MODE=%1;}catch(e){};").arg(m_selectionMode ? "true" : "false");
         js += "try{document.querySelectorAll('.entry').forEach(function(n){n.remove();});}catch(e){};";
-        for (const auto &entry : filteredEntries)
+        for (int i = 0; i < displayed; ++i)
         {
-            js += getAddEntryJs(entry) + ";";
+            js += getAddEntryJs(filteredEntries[i]) + ";";
         }
+        js += QString("try{if(window.updateLoadMoreButton) updateLoadMoreButton(%1,%2);}catch(e){};")
+                  .arg(displayed).arg(total);
         if (m_currentZoom != 1.0)
         {
             js += QString("try{document.body.style.zoom='%1';}catch(e){};").arg(m_currentZoom);
@@ -278,10 +282,12 @@ document.addEventListener('mousedown', function() {
     html += "</head><body class=\"__BODY_CLASS__\">";
     html = html.replace("__BODY_CLASS__", isDark ? "dark-mode" : "");
     QList<TranslationEntry> filteredEntries = getFilteredEntries();
+    int total = filteredEntries.size();
+    int displayed = qMin(m_displayLimit, total);
     QJsonArray initialEntries;
-    for (const auto &entry : filteredEntries)
+    for (int i = 0; i < displayed; ++i)
     {
-        initialEntries.append(makeEntryPayload(entry));
+        initialEntries.append(makeEntryPayload(filteredEntries[i]));
     }
     html += "</head><body class=\"__BODY_CLASS__\">";
     html = html.replace("__BODY_CLASS__", isDark ? "dark-mode" : "");
@@ -289,10 +295,14 @@ document.addEventListener('mousedown', function() {
     html += "<script id='initial-entry-data' type='application/json'>";
     html += makeHtmlSafeJson(QJsonDocument(initialEntries));
     html += "</script>";
+    html += "<div id='load-more-container' style='text-align:center;padding:16px;display:none;'>";
+    html += "<span id='load-more-info' style='display:block;color:#888;font-size:0.9em;margin-bottom:8px;'></span>";
+    html += "<button id='load-more-btn' onclick='if(window.cmd_loadMore) window.cmd_loadMore();' style='padding:8px 24px;cursor:pointer;'>Load More</button>";
+    html += "</div>";
     html += "<script>";
     html += "try { bootstrapEntriesFromNative('initial-entry-data', ";
     html += (m_selectionMode ? "true" : "false");
-    html += "); } catch(e) { console.error('bootstrapEntriesFromNative failed', e); }";
+    html += ", " + QString::number(total) + "); } catch(e) { console.error('bootstrapEntriesFromNative failed', e); }";
     // Apply zoom
     if (m_currentZoom != 1.0)
     {

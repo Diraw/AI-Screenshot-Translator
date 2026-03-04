@@ -373,7 +373,14 @@ function addEntryToDom(id, time, markdown, mathBlocks, originalRaw, isSelectionM
   contentArea.appendChild(raw);
 
   div.appendChild(contentArea);
-  document.body.appendChild(div);
+
+  // Insert before the load-more container so new entries always appear above it
+  var loadMoreContainer = document.getElementById('load-more-container');
+  if (loadMoreContainer) {
+      document.body.insertBefore(div, loadMoreContainer);
+  } else {
+      document.body.appendChild(div);
+  }
   
   var rawContainer = document.getElementById('raw_' + id);
   if (rawContainer) {
@@ -396,7 +403,19 @@ function addEntryFromNative(entry, isSelectionMode) {
     );
 }
 
-function bootstrapEntriesFromNative(scriptId, isSelectionMode) {
+function updateLoadMoreButton(displayed, total) {
+    var container = document.getElementById('load-more-container');
+    var info = document.getElementById('load-more-info');
+    if (!container) return;
+    if (displayed >= total) {
+        container.style.display = 'none';
+    } else {
+        container.style.display = 'block';
+        if (info) info.textContent = displayed + ' / ' + total;
+    }
+}
+
+function bootstrapEntriesFromNative(scriptId, isSelectionMode, totalCount) {
     var dataNode = document.getElementById(scriptId);
     if (!dataNode) return;
     var raw = dataNode.textContent || '[]';
@@ -412,6 +431,8 @@ function bootstrapEntriesFromNative(scriptId, isSelectionMode) {
     entries.forEach(function(entry) {
         addEntryFromNative(entry, isSelectionMode);
     });
+    var total = (typeof totalCount === 'number') ? totalCount : entries.length;
+    updateLoadMoreButton(entries.length, total);
 }
 
 function toggleSelectionMode(show) {
