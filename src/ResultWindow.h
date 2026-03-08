@@ -46,7 +46,8 @@ public:
                           const QString &screenshotToggle, const QString &boldKey,
                           const QString &underlineKey, const QString &highlightKey,
                           const QString &prevKey, const QString &nextKey,
-                          const QString &tagKey);
+                          const QString &tagKey, const QString &retranslateKey);
+    QString retranslateHotkey() const { return m_retranslateKey; }
 
     void setHistoryManager(class HistoryManager *historyManager);
 
@@ -56,7 +57,7 @@ public:
 
 signals:
     void closed();
-    void retranslateRequested();
+    void retranslateRequested(const QString &base64Image);  // Retranslate current image with current config
     void screenshotRequested(const QString &entryId, const QString &base64);  // New signal
     void contentUpdated(const QString &newMarkdown);                          // Legacy Signal
     void contentUpdatedWithId(const QString &id, const QString &newMarkdown); // Signal for persistence with ID
@@ -69,6 +70,7 @@ protected:
     bool event(QEvent *event) override;
 public slots:
     void triggerScreenshotFromNative();
+    void triggerRetranslateFromNative();
 private slots:
     void toggleLock();
     void showPrevious();
@@ -130,6 +132,7 @@ private:
     QString m_prevKey;
     QString m_nextKey;
     QString m_tagKey;
+    QString m_retranslateKey;
 
     // Tag management
     class HistoryManager *m_historyManager = nullptr;

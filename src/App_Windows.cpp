@@ -8,6 +8,8 @@
 #include <QScreen>
 #include <QSettings>
 #include <QTimer>
+#include <QUuid>
+#include <QDateTime>
 
 #include "HintPopup.h"
 
@@ -104,13 +106,18 @@ void App::showResult(const QString &entryId)
                     this, &App::onResultWindowScreenshotRequested,
                     Qt::UniqueConnection);
 
+            // Connect retranslate signal for locked windows
+            connect(rw, &ResultWindow::retranslateRequested,
+                    this, &App::onRetranslateRequested,
+                    Qt::UniqueConnection);
+
             AppConfig cfgForLocked = cfg;
             cfgForLocked.defaultResultWindowLocked = rw->isLocked();
             rw->setConfig(cfgForLocked);
             rw->configureHotkeys(cfg.viewToggleHotkey, cfg.editHotkey, cfg.screenshotToggleHotkey,
                                  cfg.boldHotkey, cfg.underlineHotkey, cfg.highlightHotkey,
                                  cfg.prevResultShortcut, cfg.nextResultShortcut,
-                                 cfg.tagHotkey);
+                                 cfg.tagHotkey, cfg.retranslateHotkey);
             rw->setHistoryManager(&m_historyManager);
             rw->addEntry(entry);
         }
@@ -126,12 +133,17 @@ void App::showResult(const QString &entryId)
     window->configureHotkeys(cfg.viewToggleHotkey, cfg.editHotkey, cfg.screenshotToggleHotkey,
                              cfg.boldHotkey, cfg.underlineHotkey, cfg.highlightHotkey,
                              cfg.prevResultShortcut, cfg.nextResultShortcut,
-                             cfg.tagHotkey);
+                             cfg.tagHotkey, cfg.retranslateHotkey);
     window->setHistoryManager(&m_historyManager);
 
     // Connect Screenshot Request (Fixes 's' hotkey)
     connect(window, &ResultWindow::screenshotRequested,
             this, &App::onResultWindowScreenshotRequested,
+            Qt::UniqueConnection);
+
+    // Connect Retranslate Request (Ctrl+R)
+    connect(window, &ResultWindow::retranslateRequested,
+            this, &App::onRetranslateRequested,
             Qt::UniqueConnection);
 
     window->setContent(entry.translatedMarkdown, entry.originalBase64, entry.prompt, entry.id);
@@ -340,4 +352,57 @@ void App::restorePreview(const QString &entryId)
                 m_activeWindows.removeAll(card);
                 // m_previewCards[entryId] will become null due to QPointer
             });
+}
+
+void App::onRetranslateRequested(const QString &base64Image)
+{
+    if (base64Image.isEmpty()) {
+        qWarning() << "[App] onRetranslateRequested: empty base64 image";
+        return;
+    }
+
+    AppConfig cfg = m_configManager.getConfig();
+
+    if (cfg.apiKey.isEmpty()) {
+        qWarning() << "[App] onRetranslateRequested: no API key configured";
+        return;
+    }
+
+    // Generate new entryId for this retranslation
+    QString entryId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+
+    qDebug() << "[App] Retranslating image, new entryId:" << entryId;
+
+    // Create entry in history
+    TranslationEntry entry;
+    entry.id = entryId;
+    entry.timestamp = QDateTime::currentDateTime();
+    entry.prompt = cfg.promptText;
+    entry.translatedMarkdown = "Processing...";
+    entry.originalBase64 = base64Image;
+
+    m_historyManager.saveEntry(entry);
+
+    // Show result window
+    if (cfg.showResultWindow) {
+        showResult(entryId);
+    }
+
+    // Convert QString apiProvider to enum
+    ApiProvider provider = ApiProvider::OpenAI;  // default
+    QString providerStr = cfg.apiProvider.trimmed().toLower();
+    if (providerStr == "gemini") provider = ApiProvider::Gemini;
+    else if (providerStr == "claude") provider = ApiProvider::Claude;
+
+    m_apiClient->configure(cfg.apiKey, cfg.baseUrl, cfg.modelName, provider, cfg.useProxy, cfg.proxyUrl, cfg.endpointPath);
+
+    // Store entryId in heap to pass as context
+    QByteArray *contextData = new QByteArray(entryId.toUtf8());
+
+    // Convert base64 string back to QByteArray for API call
+    QByteArray base64Bytes = base64Image.toLatin1();
+
+    m_apiClient->processImage(base64Bytes, cfg.promptText, (void*)contextData);
+
+    qDebug() << "[App] Retranslation request sent for entry:" << entryId;
 }

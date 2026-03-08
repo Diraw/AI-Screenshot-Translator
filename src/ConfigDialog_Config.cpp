@@ -73,6 +73,7 @@ void ConfigDialog::loadFromConfig()
     m_prevPageHotkeyEdit->setText(cfg.prevResultShortcut);
     m_nextPageHotkeyEdit->setText(cfg.nextResultShortcut);
     m_tagHotkeyEdit->setText(cfg.tagHotkey);
+    m_retranslateHotkeyEdit->setText(cfg.retranslateHotkey);
 
     // Screen selection
     for (int i = 0; i < m_screenCombo->count(); ++i)
@@ -127,6 +128,9 @@ void ConfigDialog::save()
     cfg.prevResultShortcut = m_prevPageHotkeyEdit->text();
     cfg.nextResultShortcut = m_nextPageHotkeyEdit->text();
     cfg.tagHotkey = m_tagHotkeyEdit->text();
+    cfg.retranslateHotkey = m_retranslateHotkeyEdit->text().trimmed();
+    if (cfg.retranslateHotkey.isEmpty())
+        cfg.retranslateHotkey = "f";
 
     // Screenshot Card settings
     cfg.zoomSensitivity = m_zoomSensitivitySpin->value();

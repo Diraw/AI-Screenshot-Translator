@@ -7,7 +7,7 @@
 #include <QKeySequence>
 #include <QShortcut>
 
-void ResultWindow::configureHotkeys(const QString &v, const QString &e, const QString &s, const QString &b, const QString &u, const QString &h, const QString &p, const QString &n, const QString &t)
+void ResultWindow::configureHotkeys(const QString &v, const QString &e, const QString &s, const QString &b, const QString &u, const QString &h, const QString &p, const QString &n, const QString &t, const QString &r)
 {
     m_viewToggleKey = v;
     m_editToggleKey = e;
@@ -18,6 +18,7 @@ void ResultWindow::configureHotkeys(const QString &v, const QString &e, const QS
     m_prevKey = p;
     m_nextKey = n;
     m_tagKey = t;
+    m_retranslateKey = r.isEmpty() ? QString("f") : r.toLower();
 
     qDeleteAll(m_navShortcuts);
     m_navShortcuts.clear();
@@ -70,6 +71,8 @@ void ResultWindow::configureHotkeys(const QString &v, const QString &e, const QS
         { showNext(); }, Qt::ApplicationShortcut, true);
     add(m_tagKey, [this]()
         { openTagDialog(); }, Qt::ApplicationShortcut);
+
+    // Note: 'F' key for retranslate is handled by WinKeyForwarder to bypass WebView2 interception
 }
 
 void ResultWindow::addEntry(const TranslationEntry &entry)
@@ -150,3 +153,36 @@ void ResultWindow::openTagDialog()
 }
 
 void ResultWindow::updateShortcuts() {}
+
+void ResultWindow::triggerRetranslateFromNative()
+{
+    qDebug() << "[RW] triggerRetranslateFromNative called, locked=" << m_isLocked;
+    if (m_isLocked) {
+        // When locked, try to go to next first
+        if (m_currentIndex < m_history.size() - 1) {
+            showNext();
+        } else {
+            // Already at latest, trigger retranslate in locked window (adds new entry)
+            QString base64ToUse;
+            if (m_currentIndex >= 0 && m_currentIndex < m_history.size()) {
+                base64ToUse = m_history[m_currentIndex].originalBase64;
+            } else if (!m_originalBase64.isEmpty()) {
+                base64ToUse = m_originalBase64;
+            }
+            if (!base64ToUse.isEmpty()) {
+                emit retranslateRequested(base64ToUse);
+            }
+        }
+    } else {
+        // When not locked, trigger retranslate with current image
+        QString base64ToUse;
+        if (m_currentIndex >= 0 && m_currentIndex < m_history.size()) {
+            base64ToUse = m_history[m_currentIndex].originalBase64;
+        } else if (!m_originalBase64.isEmpty()) {
+            base64ToUse = m_originalBase64;
+        }
+        if (!base64ToUse.isEmpty()) {
+            emit retranslateRequested(base64ToUse);
+        }
+    }
+}

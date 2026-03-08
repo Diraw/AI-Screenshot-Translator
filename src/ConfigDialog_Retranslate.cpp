@@ -84,6 +84,7 @@ void ConfigDialog::retranslateUi()
             updateLabel(layout, 3, "lbl_prev_hotkey");
             updateLabel(layout, 4, "lbl_next_hotkey");
             updateLabel(layout, 5, "lbl_tag_hotkey");
+            updateLabel(layout, 6, "lbl_retranslate_hotkey");
         }
     }
 

@@ -61,6 +61,9 @@ void ConfigDialog::setupTranslationTab()
     m_tagHotkeyEdit = new QLineEdit(this);
     transWinLayout->addRow("Tag Dialog Hotkey:", m_tagHotkeyEdit);
 
+    m_retranslateHotkeyEdit = new QLineEdit(this);
+    transWinLayout->addRow("Retranslate Hotkey:", m_retranslateHotkeyEdit);
+
     transMainLayout->addWidget(grpTrans);
     transMainLayout->addStretch();
 

@@ -43,6 +43,7 @@ private:
     // Track active windows. ResultWindow unregisters itself in its destructor.
     QSet<ResultWindow *> m_windows;
     bool m_sForwardedDown = false;
+    bool m_fForwardedDown = false;
 
     // Low-level keyboard hook state
     HHOOK m_kbHook = nullptr;

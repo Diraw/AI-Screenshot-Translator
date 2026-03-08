@@ -136,6 +136,7 @@ private:
     QLineEdit *m_prevPageHotkeyEdit;
     QLineEdit *m_nextPageHotkeyEdit;
     QLineEdit *m_tagHotkeyEdit;
+    QLineEdit *m_retranslateHotkeyEdit;
 
     QLineEdit *m_cardBorderColorEdit;
     QLabel *m_lblCardBorderColor;

@@ -69,6 +69,7 @@
     "lbl_prev_hotkey": "上一页快捷键:",
     "lbl_next_hotkey": "下一页快捷键:",
     "lbl_tag_hotkey": "标签快捷键:",
+    "lbl_retranslate_hotkey": "重新翻译快捷键:",
     "lbl_view_hotkey": "原始视图切换:",
     "lbl_shot_toggle_hotkey": "截图卡片切换:",
     "lbl_selection_toggle_hotkey": "批量选择切换:",

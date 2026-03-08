@@ -124,64 +124,125 @@ LRESULT WinKeyForwarder::handleLowLevel(WPARAM wParam, KBDLLHOOKSTRUCT *ks)
     const bool isDown = (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN);
     const bool isUp = (wParam == WM_KEYUP || wParam == WM_SYSKEYUP);
     const int vk = static_cast<int>(ks->vkCode);
-    if (vk != 'S')
-        return 0; // only plain S
 
-    if (isUp)
+    // Handle 'S' key (screenshot toggle)
+    if (vk == 'S')
     {
-        const bool swallow = m_sForwardedDown;
-        m_sForwardedDown = false;
-        return swallow ? 1 : 0;
-    }
-
-    if (!isDown)
-        return 0;
-
-    if (m_sForwardedDown)
-        return 1; // Suppress key-repeat while the key remains held.
-
-    if (anyModifierDown())
-        return 0; // require no modifiers
-
-    HWND fg = GetForegroundWindow();
-    if (!fg)
-        return 0;
-
-    // Exact match to foreground window
-    for (ResultWindow *rw : m_windows)
-    {
-        if (!rw)
-            continue;
-        HWND rwHwnd = reinterpret_cast<HWND>(rw->winId());
-        if (rwHwnd == fg)
+        if (isUp)
         {
-            trace("[WKF] HIT S (hook) -> DISPATCH");
-            m_sForwardedDown = true;
-            QMetaObject::invokeMethod(rw, "triggerScreenshotFromNative", Qt::QueuedConnection);
-            return 1;
+            const bool swallow = m_sForwardedDown;
+            m_sForwardedDown = false;
+            return swallow ? 1 : 0;
         }
-    }
 
-    // Fallback: match by root window
-    HWND root = GetAncestor(fg, GA_ROOT);
-    if (root)
-    {
+        if (!isDown)
+            return 0;
+
+        if (m_sForwardedDown)
+            return 1; // Suppress key-repeat while the key remains held.
+
+        if (anyModifierDown())
+            return 0; // require no modifiers
+
+        HWND fg = GetForegroundWindow();
+        if (!fg)
+            return 0;
+
+        // Exact match to foreground window
         for (ResultWindow *rw : m_windows)
         {
             if (!rw)
                 continue;
             HWND rwHwnd = reinterpret_cast<HWND>(rw->winId());
-            if (rwHwnd == root)
+            if (rwHwnd == fg)
             {
-                trace("[WKF] HIT S (hook/root) -> DISPATCH");
+                trace("[WKF] HIT S (hook) -> DISPATCH");
                 m_sForwardedDown = true;
                 QMetaObject::invokeMethod(rw, "triggerScreenshotFromNative", Qt::QueuedConnection);
                 return 1;
             }
         }
+
+        // Fallback: match by root window
+        HWND root = GetAncestor(fg, GA_ROOT);
+        if (root)
+        {
+            for (ResultWindow *rw : m_windows)
+            {
+                if (!rw)
+                    continue;
+                HWND rwHwnd = reinterpret_cast<HWND>(rw->winId());
+                if (rwHwnd == root)
+                {
+                    trace("[WKF] HIT S (hook/root) -> DISPATCH");
+                    m_sForwardedDown = true;
+                    QMetaObject::invokeMethod(rw, "triggerScreenshotFromNative", Qt::QueuedConnection);
+                    return 1;
+                }
+            }
+        }
+
+        trace("[WKF] HIT S (hook) but no matching ResultWindow");
+        return 0;
     }
 
-    trace("[WKF] HIT S (hook) but no matching ResultWindow");
+    // Handle retranslate hotkey (configurable, default 'F')
+    // Check if any ResultWindow has this key configured
+    HWND fg = GetForegroundWindow();
+    if (fg && isDown && !anyModifierDown())
+    {
+        // Check all registered ResultWindows
+        for (ResultWindow *rw : m_windows)
+        {
+            if (!rw)
+                continue;
+            HWND rwHwnd = reinterpret_cast<HWND>(rw->winId());
+            // Match foreground window or its root
+            HWND root = GetAncestor(fg, GA_ROOT);
+            if (rwHwnd == fg || rwHwnd == root)
+            {
+                QString hotkey = rw->retranslateHotkey();
+                if (hotkey.isEmpty())
+                    hotkey = "f";
+                
+                // Parse hotkey - support single key only for native hook
+                // Convert to uppercase for comparison
+                QString keyName = hotkey.toUpper();
+                int expectedVk = 0;
+                
+                // Single character keys A-Z, 0-9
+                if (keyName.length() == 1)
+                {
+                    QChar c = keyName[0];
+                    if (c >= 'A' && c <= 'Z')
+                        expectedVk = c.unicode();
+                    else if (c >= '0' && c <= '9')
+                        expectedVk = c.unicode();
+                }
+                
+                if (expectedVk != 0 && vk == expectedVk)
+                {
+                    if (m_fForwardedDown)
+                        return 1; // Suppress key-repeat
+                    
+                    char buf[128];
+                    sprintf_s(buf, sizeof(buf), "[WKF] HIT %c (retranslate hook) -> DISPATCH", (char)expectedVk);
+                    trace(buf);
+                    m_fForwardedDown = true;
+                    QMetaObject::invokeMethod(rw, "triggerRetranslateFromNative", Qt::QueuedConnection);
+                    return 1;
+                }
+                break; // Found matching window, don't check others
+            }
+        }
+    }
+    
+    if (isUp && m_fForwardedDown)
+    {
+        m_fForwardedDown = false;
+        return 1;
+    }
+
     return 0;
 }
 

@@ -75,6 +75,7 @@ struct AppConfig
     QString prevResultShortcut = "z";
     QString nextResultShortcut = "x";
     QString tagHotkey = "t"; // New: Tag Dialog Hotkey
+    QString retranslateHotkey = "f"; // Retranslate shortcut (default: F)
 
     // Quit Hotkey
     bool enableQuitHotkey = false;

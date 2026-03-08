@@ -586,6 +586,7 @@ void ConfigManager::parseJson(const QJsonObject &root)
         m_config.prevResultShortcut = app["prev_result_shortcut"].toString("z");
         m_config.nextResultShortcut = app["next_result_shortcut"].toString("x");
         m_config.tagHotkey = app["tag_hotkey"].toString("t");
+        m_config.retranslateHotkey = app["retranslate_hotkey"].toString("f");
     }
 }
 
@@ -652,6 +653,7 @@ QJsonObject ConfigManager::toJson() const
     app["prev_result_shortcut"] = m_config.prevResultShortcut;
     app["next_result_shortcut"] = m_config.nextResultShortcut;
     app["tag_hotkey"] = m_config.tagHotkey;
+    app["retranslate_hotkey"] = m_config.retranslateHotkey;
 
     root["app_settings"] = app;
 
