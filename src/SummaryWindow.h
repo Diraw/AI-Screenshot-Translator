@@ -10,6 +10,7 @@
 #include <QDateEdit>
 #include <QPushButton>
 #include <QShortcut>
+#include <QLineEdit>
 
 #include "TranslationEntry.h"
 
@@ -77,6 +78,7 @@ private:
     QDateEdit *m_toDateEdit = nullptr;
     QPushButton *m_tagFilterBtn = nullptr;
     QPushButton *m_clearFilterBtn = nullptr;
+    QLineEdit *m_searchEdit = nullptr; // Search by translation content
     QStringList m_selectedTags;
     HistoryManager *m_historyManager = nullptr;
 

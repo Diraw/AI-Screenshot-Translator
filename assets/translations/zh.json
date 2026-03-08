@@ -113,6 +113,8 @@
     "filter_tags": "标签",
     "filter_all_tags": "所有标签",
     "filter_clear": "清除筛选",
+    "filter_search": "搜索",
+    "filter_search_placeholder": "输入关键词搜索翻译内容",
     "btn_selection_mode": "批量选择",
     "btn_cancel_selection_mode": "取消选择",
     "btn_select_all": "全选",

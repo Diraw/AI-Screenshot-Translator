@@ -130,6 +130,21 @@ void SummaryWindow::setupFilterUI()
     m_clearFilterBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     filtersLayout->addWidget(m_clearFilterBtn);
 
+    // Search by translation content
+    QLabel *searchLabel = new QLabel(TranslationManager::instance().tr("filter_search") + ":", this);
+    searchLabel->setProperty("role", "caption");
+    searchLabel->setAlignment(Qt::AlignVCenter);
+    searchLabel->setMinimumHeight(controlHeight);
+    filtersLayout->addWidget(searchLabel);
+
+    m_searchEdit = new QLineEdit(this);
+    m_searchEdit->setObjectName("searchEdit");
+    m_searchEdit->setPlaceholderText(TranslationManager::instance().tr("filter_search_placeholder"));
+    m_searchEdit->setMinimumHeight(controlHeight);
+    m_searchEdit->setFixedWidth(175);
+    m_searchEdit->setFocusPolicy(Qt::ClickFocus);
+    filtersLayout->addWidget(m_searchEdit);
+
     m_filterToolbar->addWidget(m_filtersGroup);
 
     // Push batch actions to the right
@@ -234,12 +249,18 @@ void SummaryWindow::setupFilterUI()
         dialog->exec();
         dialog->deleteLater(); });
 
+    // Search text changed
+    connect(m_searchEdit, &QLineEdit::textChanged, this, [this]() {
+        applyFilters();
+    });
+
     connect(m_clearFilterBtn, &QPushButton::clicked, this, [this]()
             {
         m_fromDateEdit->setDate(QDate::currentDate().addMonths(-1));
         m_toDateEdit->setDate(QDate::currentDate());
         m_selectedTags.clear();
         if (m_tagFilterBtn) m_tagFilterBtn->setText(TranslationManager::instance().tr("filter_all_tags"));
+        if (m_searchEdit) m_searchEdit->clear();
         applyFilters(); });
 }
 
@@ -281,6 +302,7 @@ QList<TranslationEntry> SummaryWindow::getFilteredEntries() const
     QDate fromDate = m_fromDateEdit ? m_fromDateEdit->date() : QDate();
     QDate toDate = m_toDateEdit ? m_toDateEdit->date() : QDate();
     const QStringList selectedTags = m_selectedTags;
+    const QString searchText = m_searchEdit ? m_searchEdit->text().trimmed().toLower() : QString();
 
     for (const TranslationEntry &entry : m_entries)
     {
@@ -302,6 +324,14 @@ QList<TranslationEntry> SummaryWindow::getFilteredEntries() const
                 }
             }
             if (!anyMatch)
+                continue;
+        }
+
+        // Search by translation content
+        if (!searchText.isEmpty())
+        {
+            const QString content = entry.translatedMarkdown.toLower();
+            if (!content.contains(searchText))
                 continue;
         }
 
