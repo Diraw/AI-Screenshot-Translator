@@ -54,6 +54,7 @@ public:
     void setConfig(const AppConfig &config);
     void focusEditor(); // Restore focus to WebView
     void updateTheme(bool isDark);
+    void updateLanguage();
 
 signals:
     void closed();

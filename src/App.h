@@ -42,6 +42,7 @@ private slots:
     void showConfig();
     void showSummary();
     void restorePreview(const QString &entryId);
+    void onLanguageChanged(const QString &lang);
 
     // Theme Management
     void checkForThemeChange();

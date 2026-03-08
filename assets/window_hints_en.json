@@ -1,0 +1,14 @@
+{
+  "resultWindow": {
+    "title": "Hint",
+    "text": "• Show screenshot card: {shotToggle}\n• Show original text: {viewToggle}\n• Enter edit mode: {edit}\n  • Bold: {bold}\n  • Underline: {underline}\n  • Highlight: {highlight}\n  • Exit: {exit}\n• Add tags: {tag}\n• Lock mode: 🔒\n  • Previous page: {prevPage}\n  • Next page: {nextPage}"
+  },
+  "archiveWindow": {
+    "title": "Hint",
+    "text": "• Show screenshot card: {shotToggle}\n• Show original text: {viewToggle}\n• Enter edit mode: {edit}\n  • Bold: {bold}\n  • Underline: {underline}\n  • Highlight: {highlight}\n  • Exit: {exit}\n• Batch selection: {batchSelect}\n  • Hold left mouse button to drag select\n• Quick delete: DD"
+  },
+  "ui": {
+    "dontShowAgain": "Don't show again",
+    "close": "Close"
+  }
+}

@@ -41,7 +41,7 @@ void ConfigDialog::setupArchiveTab()
     editLayout->addRow("Highlight Shortcut:", m_highlightHotkeyEdit);
 
     m_highlightMarkColorEdit = new QLineEdit(this);
-    m_highlightMarkColorEdit->setPlaceholderText("#ffeb3b80 æˆ– rgba(255,235,59,0.5) æˆ– 255,235,59,0.5");
+    m_highlightMarkColorEdit->setPlaceholderText("#ffeb3b80 or rgba(255,235,59,0.5) or 255,235,59,0.5");
     m_highlightMarkColorPreview = new QLabel(this);
     m_highlightMarkColorPreview->setFixedSize(18, 18);
     updateColorPreviewLabel(m_highlightMarkColorPreview, m_highlightMarkColorEdit->text());
@@ -56,7 +56,7 @@ void ConfigDialog::setupArchiveTab()
     editLayout->addRow("Highlight Color:", hl1w);
 
     m_highlightMarkColorDarkEdit = new QLineEdit(this);
-    m_highlightMarkColorDarkEdit->setPlaceholderText("#d4af3780 æˆ– rgba(212,175,55,0.5) æˆ– 212,175,55,0.5");
+    m_highlightMarkColorDarkEdit->setPlaceholderText("#d4af3780 or rgba(212,175,55,0.5) or 212,175,55,0.5");
     m_highlightMarkColorDarkPreview = new QLabel(this);
     m_highlightMarkColorDarkPreview->setFixedSize(18, 18);
     updateColorPreviewLabel(m_highlightMarkColorDarkPreview, m_highlightMarkColorDarkEdit->text());

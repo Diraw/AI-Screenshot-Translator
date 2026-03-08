@@ -11,6 +11,7 @@
 #include <QPushButton>
 #include <QShortcut>
 #include <QLineEdit>
+#include <QLabel>
 
 #include "TranslationEntry.h"
 
@@ -44,6 +45,7 @@ public:
 
     void setHistoryManager(HistoryManager *historyManager);
     void updateTheme(bool isDark);
+    void updateLanguage();
 
 signals:
     void restorePreviewRequested(const QString &entryId);
@@ -79,6 +81,9 @@ private:
     QPushButton *m_tagFilterBtn = nullptr;
     QPushButton *m_clearFilterBtn = nullptr;
     QLineEdit *m_searchEdit = nullptr; // Search by translation content
+    QLabel *m_fromLabel = nullptr;
+    QLabel *m_toLabel = nullptr;
+    QLabel *m_searchLabel = nullptr;
     QStringList m_selectedTags;
     HistoryManager *m_historyManager = nullptr;
 

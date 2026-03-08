@@ -385,6 +385,8 @@ void App::presentConfigDialog(bool allowToggle, bool focusGlobalHotkeys, bool fo
         AppConfig cfg = m_configManager.getConfig();
         updateConfig(cfg); });
 
+    connect(dlg, &ConfigDialog::languageChanged, this, &App::onLanguageChanged);
+
     // Save geometry when dialog closes naturally (X button)
     connect(dlg, &QDialog::finished, this, [this, dlg]()
             {
@@ -406,5 +408,35 @@ void App::presentConfigDialog(bool allowToggle, bool focusGlobalHotkeys, bool fo
             dlg->show();
             dlg->raise();
             dlg->activateWindow(); });
+    }
+}
+
+void App::onLanguageChanged(const QString &lang)
+{
+    Q_UNUSED(lang);
+    
+    // Update SummaryWindow language
+    if (m_summaryWindow)
+    {
+        m_summaryWindow->updateLanguage();
+    }
+    
+    // Update all ResultWindows
+    for (auto w : m_activeWindows)
+    {
+        if (auto rw = qobject_cast<ResultWindow*>(w.data()))
+        {
+            rw->updateLanguage();
+        }
+        else if (auto pc = qobject_cast<PreviewCard*>(w.data()))
+        {
+            pc->updateLanguage();
+        }
+    }
+    
+    // Update tray menu
+    if (m_trayMenu)
+    {
+        setupTray();
     }
 }

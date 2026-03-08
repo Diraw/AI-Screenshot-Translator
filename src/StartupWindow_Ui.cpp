@@ -1,6 +1,7 @@
 #include "StartupWindow.h"
 
 #include "ThemeUtils.h"
+#include "TranslationManager.h"
 
 #include <QColor>
 #include <QCoreApplication>
@@ -65,10 +66,15 @@ static QString prettyHotkey(QString s)
 static QString loadPrivacyPolicyMarkdown()
 {
     const QString baseDir = QCoreApplication::applicationDirPath();
+    
+    // Determine language suffix
+    QString lang = TranslationManager::instance().getLanguage();
+    QString langSuffix = (lang == "en") ? "_en" : "";
+    
     const QStringList candidates = {
-        QDir::cleanPath(baseDir + "/assets/privacy_policy.md"),
-        QDir::cleanPath(baseDir + "/../assets/privacy_policy.md"),
-        QDir::cleanPath(baseDir + "/../../assets/privacy_policy.md"),
+        QDir::cleanPath(baseDir + "/assets/privacy_policy" + langSuffix + ".md"),
+        QDir::cleanPath(baseDir + "/../assets/privacy_policy" + langSuffix + ".md"),
+        QDir::cleanPath(baseDir + "/../../assets/privacy_policy" + langSuffix + ".md"),
     };
 
     for (const QString &path : candidates)
@@ -164,11 +170,11 @@ void StartupWindow::addFooterRow(QVBoxLayout *root)
     privacyRow->setSpacing(4);
     privacyRow->addStretch();
 
-    m_privacyBtn = new QPushButton(formatText(uiString("buttons.privacy", QStringLiteral("éšç§åè®®"))), this);
+    m_privacyBtn = new QPushButton(formatText(uiString("buttons.privacy", QStringLiteral("Privacy Policy"))), this);
     connect(m_privacyBtn, &QPushButton::clicked, this, &StartupWindow::openPrivacyPolicy);
     privacyRow->addWidget(m_privacyBtn);
 
-    const QString hint = uiString("hint", QStringLiteral("æç¤ºï¼šç‚¹å‡»ç©ºç™½å¤„æˆ–æŒ‰ä»»æ„é”®ç»§ç»­"));
+    const QString hint = uiString("hint", QStringLiteral("Click blank area or press any key to continue"));
     m_hintLabel = new QLabel(formatText(hint), this);
     m_hintLabel->setWordWrap(false);
     QFont hintFont = m_hintLabel->font();
@@ -221,7 +227,11 @@ void StartupWindow::loadUiConfig()
 {
     m_uiConfig = QJsonObject();
 
-    const QString path = QCoreApplication::applicationDirPath() + "/assets/startup_window.json";
+    // Determine language-specific config file
+    QString lang = TranslationManager::instance().getLanguage();
+    QString langSuffix = (lang == "en") ? "_en" : "";
+    
+    const QString path = QCoreApplication::applicationDirPath() + "/assets/startup_window" + langSuffix + ".json";
     QFile f(path);
     if (f.open(QIODevice::ReadOnly | QIODevice::Text))
     {
@@ -235,13 +245,13 @@ void StartupWindow::loadUiConfig()
     m_updateApiUrl = uiString("repoApiLatest", QStringLiteral("https://api.github.com/repos/Diraw/AI-Screenshot-Translator/releases/latest"));
     m_repoUrl = uiString("repoUrl", QString::fromUtf8(APP_REPO_URL));
 
-    m_updateNotChecked = uiString("update.statusNotChecked", QStringLiteral("æ›´æ–°ï¼šæœªæ£€æŸ¥"));
-    m_updateChecking = uiString("update.statusChecking", QStringLiteral("æ›´æ–°ï¼šæ£€æŸ¥ä¸­..."));
-    m_updateNetworkError = uiString("update.statusNetworkError", QStringLiteral("æ›´æ–°ï¼šæ£€æŸ¥å¤±è´¥ï¼ˆç½‘ç»œé”™è¯¯ï¼‰"));
-    m_updateParseError = uiString("update.statusParseError", QStringLiteral("æ›´æ–°ï¼šæ£€æŸ¥å¤±è´¥ï¼ˆè§£æžé”™è¯¯ï¼‰"));
-    m_updateNoVersion = uiString("update.statusNoVersion", QStringLiteral("æ›´æ–°ï¼šæœªèŽ·å–åˆ°ç‰ˆæœ¬ä¿¡æ¯"));
-    m_updateLatestTpl = uiString("update.statusLatest", QStringLiteral("æ›´æ–°ï¼šå·²æ˜¯æœ€æ–°ï¼ˆ{latest}ï¼‰"));
-    m_updateNewTpl = uiString("update.statusNew", QStringLiteral("æ›´æ–°ï¼šå‘çŽ°æ–°ç‰ˆæœ¬ï¼ˆ{latest}ï¼‰"));
+    m_updateNotChecked = uiString("update.statusNotChecked", QStringLiteral("Update: Not checked"));
+    m_updateChecking = uiString("update.statusChecking", QStringLiteral("Update: Checking..."));
+    m_updateNetworkError = uiString("update.statusNetworkError", QStringLiteral("Update: Check failed (network error)"));
+    m_updateParseError = uiString("update.statusParseError", QStringLiteral("Update: Check failed (parse error)"));
+    m_updateNoVersion = uiString("update.statusNoVersion", QStringLiteral("Update: No version info obtained"));
+    m_updateLatestTpl = uiString("update.statusLatest", QStringLiteral("Update: Already latest ({latest})"));
+    m_updateNewTpl = uiString("update.statusNew", QStringLiteral("Update: New version found ({latest})"));
 }
 
 QString StartupWindow::uiString(const QString &path, const QString &fallback) const
@@ -280,10 +290,10 @@ QString StartupWindow::formatText(QString text) const
 void StartupWindow::openPrivacyPolicy()
 {
     const QString privacyTitle = uiString("privacyDialog.title",
-                                          uiString("buttons.privacy", QStringLiteral("éšç§åè®®")));
+                                          uiString("buttons.privacy", QStringLiteral("Privacy Policy")));
     const QString privacyMissingText = uiString("privacyDialog.missingFile",
-                                                QStringLiteral("æœªæ‰¾åˆ°éšç§åè®®æ–‡ä»¶ã€‚"));
-    const QString closeText = uiString("buttons.close", QStringLiteral("å…³é—­"));
+                                                QStringLiteral("Privacy policy file not found."));
+    const QString closeText = uiString("buttons.close", QStringLiteral("Close"));
 
     const QString markdown = loadPrivacyPolicyMarkdown();
     if (markdown.trimmed().isEmpty())

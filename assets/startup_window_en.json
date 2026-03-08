@@ -1,0 +1,29 @@
+{
+  "windowTitle": "AI Screenshot Translator",
+  "version": "1.0.3 alpha",
+  "versionFormat": "Version: {version}",
+  "copyright": "Copyright © 2026 Diraw",
+  "hotkeysText": "Tips:\n• Screenshot hotkey: {shot}\n• Open archive window: {view}\n",
+  "hint": "Click blank area or press any key to close",
+  "buttons": {
+    "check": "Check Update",
+    "open": "Open Release Page",
+    "privacy": "Privacy Policy",
+    "close": "Close"
+  },
+  "privacyDialog": {
+    "title": "Privacy Policy",
+    "missingFile": "Privacy policy file not found."
+  },
+  "update": {
+    "statusNotChecked": "Update: Not checked",
+    "statusChecking": "Update: Checking...",
+    "statusNetworkError": "Update: Check failed (network error)",
+    "statusParseError": "Update: Check failed (parse error)",
+    "statusNoVersion": "Update: No version info obtained",
+    "statusLatest": "Update: Already latest ({latest})",
+    "statusNew": "Update: New version found ({latest})"
+  },
+  "repoApiLatest": "https://api.github.com/repos/Diraw/AI-Screenshot-Translator/releases/latest",
+  "repoUrl": "https://github.com/Diraw/AI-Screenshot-Translator/releases"
+}

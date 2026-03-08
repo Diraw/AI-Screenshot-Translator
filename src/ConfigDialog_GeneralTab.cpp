@@ -27,7 +27,10 @@ void ConfigDialog::setupGeneralTab()
 
         AppConfig cfg = m_configManager->getConfig();
         cfg.language = lang;
-        m_configManager->setConfig(cfg); });
+        m_configManager->setConfig(cfg);
+        
+        // Notify App to update all windows
+        emit languageChanged(lang); });
 
     m_screenCombo = new QComboBox(this);
     const QList<QScreen *> screens = QGuiApplication::screens();
@@ -90,7 +93,7 @@ void ConfigDialog::setupGeneralTab()
     layout->addRow("Prompt:", m_promptEdit);
 
     m_proxyUrlEdit = new QLineEdit(this);
-    m_proxyUrlEdit->setPlaceholderText("ä¾‹å¦‚ http://127.0.0.1:1080 æˆ– socks5://127.0.0.1:1080");
+    m_proxyUrlEdit->setPlaceholderText("e.g., http://127.0.0.1:1080 or socks5://127.0.0.1:1080");
     m_useProxyCheck = new QCheckBox(this);
     m_proxyLabel = new QLabel(this);
     m_proxyUrlEdit->setPlaceholderText(TranslationManager::instance().tr("proxy_placeholder"));
@@ -102,13 +105,13 @@ void ConfigDialog::setupGeneralTab()
 
     m_storagePathEdit = new QLineEdit(this);
     refreshStoragePathPlaceholder();
-    auto *browseBtn = new QPushButton("Browse...", this);
-    connect(browseBtn, &QPushButton::clicked, this, &ConfigDialog::browseForStoragePath);
+    m_browseBtn = new QPushButton(TranslationManager::instance().tr("btn_browse"), this);
+    connect(m_browseBtn, &QPushButton::clicked, this, &ConfigDialog::browseForStoragePath);
 
     auto *storageLayout = new QHBoxLayout();
     storageLayout->addWidget(m_storagePathEdit);
-    storageLayout->addWidget(browseBtn);
-    layout->addRow("Storage Path:", storageLayout);
+    storageLayout->addWidget(m_browseBtn);
+    layout->addRow(TranslationManager::instance().tr("lbl_storage"), storageLayout);
 
     m_showPreviewCheck = new QCheckBox("Show Preview Card after Screenshot", this);
     layout->addRow(m_showPreviewCheck);

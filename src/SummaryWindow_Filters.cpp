@@ -82,11 +82,11 @@ void SummaryWindow::setupFilterUI()
     filtersLayout->setSpacing(2);
     filtersLayout->setAlignment(Qt::AlignVCenter);
 
-    QLabel *fromLabel = new QLabel(TranslationManager::instance().tr("filter_from_date") + ":", this);
-    fromLabel->setProperty("role", "caption");
-    fromLabel->setAlignment(Qt::AlignVCenter);
-    fromLabel->setMinimumHeight(controlHeight);
-    filtersLayout->addWidget(fromLabel);
+    m_fromLabel = new QLabel(TranslationManager::instance().tr("filter_from_date") + ":", this);
+    m_fromLabel->setProperty("role", "caption");
+    m_fromLabel->setAlignment(Qt::AlignVCenter);
+    m_fromLabel->setMinimumHeight(controlHeight);
+    filtersLayout->addWidget(m_fromLabel);
 
     m_fromDateEdit = new QDateEdit(this);
     m_fromDateEdit->setObjectName("fromDateEdit");
@@ -98,11 +98,11 @@ void SummaryWindow::setupFilterUI()
     m_fromDateEdit->setFocusPolicy(Qt::ClickFocus);
     filtersLayout->addWidget(m_fromDateEdit);
 
-    QLabel *toLabel = new QLabel(TranslationManager::instance().tr("filter_to_date") + ":", this);
-    toLabel->setProperty("role", "caption");
-    toLabel->setAlignment(Qt::AlignVCenter);
-    toLabel->setMinimumHeight(controlHeight);
-    filtersLayout->addWidget(toLabel);
+    m_toLabel = new QLabel(TranslationManager::instance().tr("filter_to_date") + ":", this);
+    m_toLabel->setProperty("role", "caption");
+    m_toLabel->setAlignment(Qt::AlignVCenter);
+    m_toLabel->setMinimumHeight(controlHeight);
+    filtersLayout->addWidget(m_toLabel);
 
     m_toDateEdit = new QDateEdit(this);
     m_toDateEdit->setObjectName("toDateEdit");
@@ -131,11 +131,11 @@ void SummaryWindow::setupFilterUI()
     filtersLayout->addWidget(m_clearFilterBtn);
 
     // Search by translation content
-    QLabel *searchLabel = new QLabel(TranslationManager::instance().tr("filter_search") + ":", this);
-    searchLabel->setProperty("role", "caption");
-    searchLabel->setAlignment(Qt::AlignVCenter);
-    searchLabel->setMinimumHeight(controlHeight);
-    filtersLayout->addWidget(searchLabel);
+    m_searchLabel = new QLabel(TranslationManager::instance().tr("filter_search") + ":", this);
+    m_searchLabel->setProperty("role", "caption");
+    m_searchLabel->setAlignment(Qt::AlignVCenter);
+    m_searchLabel->setMinimumHeight(controlHeight);
+    filtersLayout->addWidget(m_searchLabel);
 
     m_searchEdit = new QLineEdit(this);
     m_searchEdit->setObjectName("searchEdit");
@@ -451,4 +451,55 @@ void SummaryWindow::updateTheme(bool isDark)
             m_filterToolbar->setStyleSheet(QString("QToolBar#archiveFilterToolbar{background:%1;border:none;border-bottom:1px solid %2;}").arg(bg, border));
         }
     }
+}
+
+void SummaryWindow::updateLanguage()
+{
+    // Update filter labels
+    if (m_fromLabel)
+        m_fromLabel->setText(TranslationManager::instance().tr("filter_from_date") + ":");
+    if (m_toLabel)
+        m_toLabel->setText(TranslationManager::instance().tr("filter_to_date") + ":");
+    if (m_searchLabel)
+        m_searchLabel->setText(TranslationManager::instance().tr("filter_search") + ":");
+    
+    // Update buttons
+    if (m_tagFilterBtn)
+    {
+        if (m_selectedTags.isEmpty())
+            m_tagFilterBtn->setText(TranslationManager::instance().tr("filter_all_tags"));
+        else
+        {
+            QString text = m_selectedTags.join(", ");
+            if (text.size() > 28) text = text.left(28) + "...";
+            m_tagFilterBtn->setText(text);
+        }
+    }
+    if (m_clearFilterBtn)
+        m_clearFilterBtn->setText(TranslationManager::instance().tr("filter_clear"));
+    
+    // Update batch buttons
+    if (m_selectionModeBtn)
+    {
+        const QString key = m_selectionMode ? "btn_cancel_selection_mode" : "btn_selection_mode";
+        m_selectionModeBtn->setText(TranslationManager::instance().tr(key));
+    }
+    if (m_selectAllBtn)
+    {
+        QString key = m_allSelected ? "btn_deselect_all" : "btn_select_all";
+        m_selectAllBtn->setText(TranslationManager::instance().tr(key));
+    }
+    if (m_batchDeleteBtn)
+        m_batchDeleteBtn->setText(TranslationManager::instance().tr("btn_batch_delete"));
+    if (m_batchAddTagBtn)
+        m_batchAddTagBtn->setText(TranslationManager::instance().tr("btn_batch_add_tag"));
+    if (m_batchRemoveTagBtn)
+        m_batchRemoveTagBtn->setText(TranslationManager::instance().tr("btn_batch_remove_tag"));
+    
+    // Update search placeholder
+    if (m_searchEdit)
+        m_searchEdit->setPlaceholderText(TranslationManager::instance().tr("filter_search_placeholder"));
+    
+    // Refresh window title
+    setWindowTitle(TranslationManager::instance().tr("summary_title"));
 }

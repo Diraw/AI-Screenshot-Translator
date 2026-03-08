@@ -532,3 +532,13 @@ ResultWindow::~ResultWindow()
 #endif
   qDebug() << "[RW] dtor this=" << (void *)this;
 }
+
+void ResultWindow::updateLanguage()
+{
+    // Update window title
+    setWindowTitle(TranslationManager::instance().tr("result_window_title"));
+    
+    // Update toolbar tooltips
+    if (m_lockAction)
+        m_lockAction->setToolTip(tr("Lock Window"));
+}

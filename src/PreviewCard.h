@@ -19,6 +19,7 @@ public:
     void setBorderColor(const QString &colorStr);
     void setUseBorder(bool use);
     void setImage(const QPixmap &pixmap);
+    void updateLanguage() {}
 
 signals:
     void closed();

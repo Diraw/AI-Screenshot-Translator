@@ -48,12 +48,8 @@ void ConfigDialog::retranslateUi()
         m_showPreviewCheck->setText(tm.tr("chk_preview"));
         m_showResultCheck->setText(tm.tr("chk_result"));
 
-        const QList<QPushButton *> btns = m_generalTab->findChildren<QPushButton *>();
-        for (auto *b : btns)
-        {
-            if (b->text().contains("Browse") || b->text().contains("æµè§ˆ"))
-                b->setText(tm.tr("btn_browse"));
-        }
+        if (m_browseBtn)
+            m_browseBtn->setText(tm.tr("btn_browse"));
     }
 
     QGroupBox *grpCard = m_transTab->findChild<QGroupBox *>("grpCard");

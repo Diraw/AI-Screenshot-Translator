@@ -1,6 +1,7 @@
 #include "HintPopup.h"
 
 #include "ConfigManager.h"
+#include "TranslationManager.h"
 
 #include "ThemeUtils.h"
 
@@ -175,7 +176,12 @@ QString HintPopup::formatHintText(QString text, const AppConfig &cfg)
 
 QJsonObject HintPopup::loadHintsJson()
 {
-    const QString path = QCoreApplication::applicationDirPath() + "/assets/window_hints.json";
+    // Load language-specific hints file
+    QString lang = TranslationManager::instance().getLanguage();
+    if (lang != "en" && lang != "zh")
+        lang = "zh"; // Default to Chinese for other languages
+    
+    const QString path = QCoreApplication::applicationDirPath() + "/assets/window_hints_" + lang + ".json";
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
         return QJsonObject();
@@ -306,10 +312,10 @@ void HintPopup::maybeShow(Kind kind, QWidget *parentWindow, const AppConfig &cfg
     const QJsonObject root = loadHintsJson();
     const QString basePath = jsonPathForKind(kind);
 
-    const QString title = jsonString(root, basePath + ".title", QStringLiteral("提示"));
-    const QString rawText = jsonString(root, basePath + ".text", QStringLiteral("提示："));
-    const QString dontShow = jsonString(root, QStringLiteral("ui.dontShowAgain"), QStringLiteral("不再提示"));
-    const QString closeText = jsonString(root, QStringLiteral("ui.close"), QStringLiteral("关闭"));
+    const QString title = jsonString(root, basePath + ".title", QStringLiteral("Hint"));
+    const QString rawText = jsonString(root, basePath + ".text", QStringLiteral("Hint:"));
+    const QString dontShow = jsonString(root, QStringLiteral("ui.dontShowAgain"), QStringLiteral("Don't show again"));
+    const QString closeText = jsonString(root, QStringLiteral("ui.close"), QStringLiteral("Close"));
 
     HintPopup *dlg = new HintPopup(parentWindow);
     dlg->setAttribute(Qt::WA_DeleteOnClose);

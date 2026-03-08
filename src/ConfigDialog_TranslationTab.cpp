@@ -17,7 +17,7 @@ void ConfigDialog::setupTranslationTab()
     cardLayout->addRow("Zoom Sensitivity:", m_zoomSensitivitySpin);
 
     m_cardBorderColorEdit = new QLineEdit(this);
-    m_cardBorderColorEdit->setPlaceholderText("R,G,B,A (e.g., 100,100,100,128) æˆ– rgba(100,100,100,0.5)");
+    m_cardBorderColorEdit->setPlaceholderText("R,G,B,A (e.g., 100,100,100,128) or rgba(100,100,100,0.5)");
     m_useBorderCheck = new QCheckBox(this);
     m_lblCardBorderColor = new QLabel(this);
 

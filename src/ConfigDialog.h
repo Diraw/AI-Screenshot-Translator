@@ -57,6 +57,7 @@ private slots:
 
 signals:
     void saved();
+    void languageChanged(const QString &lang);
 
 private:
     ConfigManager *m_configManager;
@@ -157,6 +158,7 @@ private:
     QLineEdit *m_quitHotkeyEdit;
 
     QLineEdit *m_storagePathEdit;
+    QPushButton *m_browseBtn = nullptr;
 
     void loadFromConfig();
     void updateProfileList();
