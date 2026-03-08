@@ -75,6 +75,16 @@ void ConfigDialog::loadFromConfig()
     m_tagHotkeyEdit->setText(cfg.tagHotkey);
     m_retranslateHotkeyEdit->setText(cfg.retranslateHotkey);
 
+    // Language selection
+    for (int i = 0; i < m_languageCombo->count(); ++i)
+    {
+        if (m_languageCombo->itemData(i).toString() == cfg.language)
+        {
+            m_languageCombo->setCurrentIndex(i);
+            break;
+        }
+    }
+
     // Screen selection
     for (int i = 0; i < m_screenCombo->count(); ++i)
     {
