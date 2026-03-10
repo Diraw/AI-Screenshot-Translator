@@ -2,6 +2,9 @@
 
 #include "TranslationManager.h"
 
+#include <QCoreApplication>
+#include <QDir>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -98,6 +101,31 @@ static QJsonValue substituteTemplateTokens(const QJsonValue &value, const QHash<
     }
 
     return value;
+}
+
+static QString loadAdvancedApiTestImageBase64()
+{
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QString candidatePaths[] = {
+        QDir::cleanPath(appDir + "/assets/test.png"),
+        QDir::cleanPath(appDir + "/../assets/test.png"),
+        QDir::cleanPath(appDir + "/../../assets/test.png"),
+        QDir::cleanPath(QDir::currentPath() + "/assets/test.png"),
+    };
+
+    for (const QString &path : candidatePaths)
+    {
+        QFile f(path);
+        if (!f.exists() || !f.open(QIODevice::ReadOnly))
+            continue;
+
+        const QByteArray bytes = f.readAll();
+        if (!bytes.isEmpty())
+            return QString::fromLatin1(bytes.toBase64());
+    }
+
+    // Fallback to a small valid PNG if assets/test.png is unavailable.
+    return QStringLiteral("iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAMElEQVR4nGK68+H//w//iScZ/3/4f5eBQZmBgUiSiSTVygwMozaM2jBgNgACAAD//8tKvDmEFTFvAAAAAElFTkSuQmCC");
 }
 
 QString ConfigDialog::defaultEndpointForProvider(const QString &provider) const
@@ -656,8 +684,7 @@ void ConfigDialog::onTestAdvancedApi()
         {"temperature", QString::number(root.value("temperature").toDouble(0.2), 'g', 6)},
         {"top_p", QString::number(root.value("top_p").toDouble(1.0), 'g', 6)},
         {"max_tokens", QString::number(root.value("max_tokens").toInt(1024))},
-        // 16x16 PNG to satisfy providers that reject tiny images (e.g., 1x1).
-        {"base64_image", "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1+jfqAAAAQElEQVR42mNk+M+ABzDhkxy50MDAwMDA8J8BiwKQhA0MDAwMDBQYGBj+g2EwGg0j0MDAwMDAwEA0GmAwGQ0AAAW7B8Q8n6fWAAAAAElFTkSuQmCC"},
+        {"base64_image", loadAdvancedApiTestImageBase64()},
     };
 
     if (provider == "openai" && !apiKey.isEmpty())
