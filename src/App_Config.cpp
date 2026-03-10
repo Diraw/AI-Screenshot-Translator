@@ -254,6 +254,10 @@ void App::checkHotkeyRegistrationHealth()
 
 void App::showConfig()
 {
+    // Track config dialog open
+    if (m_analytics)
+        m_analytics->trackConfigDialogOpened();
+
     presentConfigDialog(true, false, false);
 }
 
@@ -413,8 +417,10 @@ void App::presentConfigDialog(bool allowToggle, bool focusGlobalHotkeys, bool fo
 
 void App::onLanguageChanged(const QString &lang)
 {
-    Q_UNUSED(lang);
-    
+    // Track language change
+    if (m_analytics)
+        m_analytics->trackLanguageChanged(lang);
+
     // Update SummaryWindow language
     if (m_summaryWindow)
     {

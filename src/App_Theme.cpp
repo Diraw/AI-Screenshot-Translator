@@ -114,7 +114,13 @@ void App::checkForThemeChange()
     bool currentDark = ThemeUtils::isSystemDark();
     if (currentDark != m_lastTopBarDark)
     {
-        qDebug() << "Theme change detected: " << (currentDark ? "Dark" : "Light");
+        QString themeName = currentDark ? QString("dark") : QString("light");
+        qDebug() << "Theme change detected: " << themeName;
+        
+        // Track theme change
+        if (m_analytics)
+            m_analytics->trackThemeChanged(themeName);
+        
         m_lastTopBarDark = currentDark;
         updateAllWindowThemes(currentDark);
     }

@@ -19,6 +19,10 @@
 
 void App::showSummary()
 {
+    // Track summary window open
+    if (m_analytics)
+        m_analytics->trackSummaryWindowOpened();
+
     if (m_summaryWindow)
     {
         if (m_summaryWindow->isVisible())
@@ -182,6 +186,11 @@ void App::showResult(const QString &entryId)
 
     connect(window, &ResultWindow::tagsUpdated, this, [this](const QString &id, const QStringList &tags)
             { m_historyManager.updateEntryTags(id, tags); });
+
+    connect(window, &ResultWindow::lockStateChanged, this, [this](bool locked)
+            {
+        if (m_analytics)
+            m_analytics->trackResultWindowLocked(locked); });
 }
 
 void App::onResultWindowScreenshotRequested(const QString &entryId, const QString &base64)
@@ -356,6 +365,10 @@ void App::restorePreview(const QString &entryId)
 
 void App::onRetranslateRequested(const QString &base64Image)
 {
+    // Track retranslation
+    if (m_analytics)
+        m_analytics->trackRetranslation();
+
     if (base64Image.isEmpty())
     {
         qWarning() << "[App] onRetranslateRequested: empty base64 image";
@@ -401,6 +414,10 @@ void App::onRetranslateRequested(const QString &base64Image)
 
     m_apiClient->configure(cfg.apiKey, cfg.baseUrl, cfg.modelName, provider, cfg.useProxy,
                            cfg.proxyUrl, cfg.endpointPath, cfg.useAdvancedApiMode, cfg.advancedApiTemplate);
+
+    // Track translation started (retranslation)
+    if (m_analytics)
+        m_analytics->trackTranslationStarted(cfg.apiProvider, cfg.useAdvancedApiMode);
 
     // Store entryId in heap to pass as context
     QByteArray *contextData = new QByteArray(entryId.toUtf8());

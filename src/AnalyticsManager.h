@@ -19,6 +19,17 @@ public:
     void startDelayed(int delayMs);
     void stop();
 
+    // Feature usage tracking
+    void trackScreenshotTriggered();
+    void trackTranslationStarted(const QString &provider, bool useAdvancedApi);
+    void trackTranslationCompleted(const QString &provider, bool success, int durationMs);
+    void trackRetranslation();
+    void trackConfigDialogOpened();
+    void trackSummaryWindowOpened();
+    void trackResultWindowLocked(bool locked);
+    void trackThemeChanged(const QString &theme);
+    void trackLanguageChanged(const QString &language);
+
 private:
     void startNow();
     void sendStart();

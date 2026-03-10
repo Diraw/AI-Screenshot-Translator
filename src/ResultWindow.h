@@ -63,6 +63,7 @@ signals:
     void contentUpdated(const QString &newMarkdown);                          // Legacy Signal
     void contentUpdatedWithId(const QString &id, const QString &newMarkdown); // Signal for persistence with ID
     void tagsUpdated(const QString &id, const QStringList &tags);             // Signal for tag updates
+    void lockStateChanged(bool locked);                                       // Signal for lock state changes
 
 protected:
     void closeEvent(QCloseEvent *event) override;

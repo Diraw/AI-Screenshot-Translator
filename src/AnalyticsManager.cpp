@@ -180,6 +180,84 @@ void AnalyticsManager::sendEnd()
     m_client->trackEvent("session_end", data, "/ai-screenshot-translator/app", appTitle());
 }
 
+// Feature usage tracking implementations
+void AnalyticsManager::trackScreenshotTriggered()
+{
+    if (!m_started || !m_enabled)
+        return;
+    m_client->trackEvent("screenshot_triggered", QJsonObject(), "/ai-screenshot-translator/feature", appTitle());
+}
+
+void AnalyticsManager::trackTranslationStarted(const QString &provider, bool useAdvancedApi)
+{
+    if (!m_started || !m_enabled)
+        return;
+    QJsonObject data;
+    data["provider"] = provider.isEmpty() ? QString("unknown") : provider;
+    data["advanced_api"] = useAdvancedApi;
+    m_client->trackEvent("translation_started", data, "/ai-screenshot-translator/feature", appTitle());
+}
+
+void AnalyticsManager::trackTranslationCompleted(const QString &provider, bool success, int durationMs)
+{
+    if (!m_started || !m_enabled)
+        return;
+    QJsonObject data;
+    data["provider"] = provider.isEmpty() ? QString("unknown") : provider;
+    data["success"] = success;
+    if (durationMs > 0)
+        data["duration_ms"] = durationMs;
+    m_client->trackEvent("translation_completed", data, "/ai-screenshot-translator/feature", appTitle());
+}
+
+void AnalyticsManager::trackRetranslation()
+{
+    if (!m_started || !m_enabled)
+        return;
+    m_client->trackEvent("retranslation_triggered", QJsonObject(), "/ai-screenshot-translator/feature", appTitle());
+}
+
+void AnalyticsManager::trackConfigDialogOpened()
+{
+    if (!m_started || !m_enabled)
+        return;
+    m_client->trackEvent("config_dialog_opened", QJsonObject(), "/ai-screenshot-translator/ui", appTitle());
+}
+
+void AnalyticsManager::trackSummaryWindowOpened()
+{
+    if (!m_started || !m_enabled)
+        return;
+    m_client->trackEvent("summary_window_opened", QJsonObject(), "/ai-screenshot-translator/ui", appTitle());
+}
+
+void AnalyticsManager::trackResultWindowLocked(bool locked)
+{
+    if (!m_started || !m_enabled)
+        return;
+    QJsonObject data;
+    data["locked"] = locked;
+    m_client->trackEvent("result_window_lock_changed", data, "/ai-screenshot-translator/ui", appTitle());
+}
+
+void AnalyticsManager::trackThemeChanged(const QString &theme)
+{
+    if (!m_started || !m_enabled)
+        return;
+    QJsonObject data;
+    data["theme"] = theme.isEmpty() ? QString("unknown") : theme;
+    m_client->trackEvent("theme_changed", data, "/ai-screenshot-translator/preference", appTitle());
+}
+
+void AnalyticsManager::trackLanguageChanged(const QString &language)
+{
+    if (!m_started || !m_enabled)
+        return;
+    QJsonObject data;
+    data["language"] = language.isEmpty() ? QString("unknown") : language;
+    m_client->trackEvent("language_changed", data, "/ai-screenshot-translator/preference", appTitle());
+}
+
 QString AnalyticsManager::loadOrCreateDistinctId()
 {
     // Prefer explicit client_uuid in .env; otherwise create a persistent UUID under AppData.

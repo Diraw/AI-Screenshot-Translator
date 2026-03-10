@@ -15,6 +15,10 @@
 
 void App::onScreenshotRequested()
 {
+    // Track screenshot trigger
+    if (m_analytics)
+        m_analytics->trackScreenshotTriggered();
+
     // If screenshot tool is active, close it (cancel)
     if (m_activeScreenshotTool)
     {
@@ -137,6 +141,10 @@ void App::onScreenshotCaptured(const QPixmap &pixmap, const QRect &rect)
 
         m_apiClient->configure(cfg.apiKey, cfg.baseUrl, cfg.modelName, provider, cfg.useProxy,
                        cfg.proxyUrl, cfg.endpointPath, cfg.useAdvancedApiMode, cfg.advancedApiTemplate);
+
+        // Track translation started
+        if (m_analytics)
+            m_analytics->trackTranslationStarted(cfg.apiProvider, cfg.useAdvancedApiMode);
 
         // Store entryId in heap to pass as context
         QByteArray *contextData = new QByteArray(entryId.toUtf8());

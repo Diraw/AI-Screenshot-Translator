@@ -323,6 +323,7 @@ void ResultWindow::toggleLock()
   setWindowFlags(m_isLocked ? (windowFlags() | Qt::WindowStaysOnTopHint) : (windowFlags() & ~Qt::WindowStaysOnTopHint));
   show();
 #endif
+  emit lockStateChanged(m_isLocked);
 }
 void ResultWindow::resizeEvent(QResizeEvent *event)
 {
