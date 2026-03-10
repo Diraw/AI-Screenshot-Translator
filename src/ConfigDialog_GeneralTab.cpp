@@ -180,7 +180,7 @@ void ConfigDialog::setupAdvancedApiTab()
 
     auto *testRow = new QHBoxLayout();
     m_testAdvancedApiBtn = new QPushButton("测试 JSON 与 API 连通性", this);
-    m_pickAdvancedJsonFieldsBtn = new QPushButton(QStringLiteral("\u89e3\u6790\u5e76\u9009\u62e9 JSON \u5b57\u6bb5"), this);
+    m_pickAdvancedJsonFieldsBtn = new QPushButton(TranslationManager::instance().tr("btn_select_json_fields"), this);
     m_pickAdvancedJsonFieldsBtn->setEnabled(false);
     testRow->addWidget(m_testAdvancedApiBtn, 0);
     testRow->addWidget(m_pickAdvancedJsonFieldsBtn, 0);

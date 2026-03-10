@@ -148,7 +148,7 @@ void ConfigDialog::retranslateUi()
     if (m_testAdvancedApiBtn)
         m_testAdvancedApiBtn->setText(QStringLiteral("测试 JSON 与 API 连通性"));
     if (m_pickAdvancedJsonFieldsBtn)
-        m_pickAdvancedJsonFieldsBtn->setText(QStringLiteral("\u89e3\u6790\u5e76\u9009\u62e9 JSON \u5b57\u6bb5"));
+        m_pickAdvancedJsonFieldsBtn->setText(tm.tr("btn_select_json_fields"));
     updateAdvancedTemplateStatusLabel();
 
     QGroupBox *grpShortcuts = m_otherTab->findChild<QGroupBox *>("grpShortcuts");

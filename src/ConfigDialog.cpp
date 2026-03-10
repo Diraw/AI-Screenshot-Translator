@@ -892,10 +892,12 @@ void ConfigDialog::onTestAdvancedApi()
 
 void ConfigDialog::onPickAdvancedJsonFields()
 {
+    TranslationManager &tm = TranslationManager::instance();
+
     if (!m_hasLastAdvancedApiTestJson || m_lastAdvancedApiTestJson.isNull())
     {
         if (m_advancedApiResultEdit)
-            m_advancedApiResultEdit->appendPlainText("\nNo successful JSON test response available.");
+            m_advancedApiResultEdit->appendPlainText(QString("\n%1").arg(tm.tr("adv_json_no_test_response")));
         return;
     }
 
@@ -904,7 +906,7 @@ void ConfigDialog::onPickAdvancedJsonFields()
     if (!parseAdvancedTemplateJson(templateRoot, parseErr))
     {
         if (m_advancedApiResultEdit)
-            m_advancedApiResultEdit->appendPlainText(QString("\nTemplate parse failed: %1").arg(parseErr));
+            m_advancedApiResultEdit->appendPlainText(QString("\n%1").arg(tm.tr("adv_json_template_parse_failed").arg(parseErr)));
         return;
     }
 
@@ -920,16 +922,16 @@ void ConfigDialog::onPickAdvancedJsonFields()
     if (candidatePaths.isEmpty())
     {
         if (m_advancedApiResultEdit)
-            m_advancedApiResultEdit->appendPlainText("\nNo selectable JSON fields found in last test response.");
+            m_advancedApiResultEdit->appendPlainText(QString("\n%1").arg(tm.tr("adv_json_no_selectable_fields")));
         return;
     }
 
     QDialog picker(this);
-    picker.setWindowTitle("Select JSON Fields");
+    picker.setWindowTitle(tm.tr("adv_json_picker_title"));
     picker.resize(760, 520);
 
     auto *layout = new QVBoxLayout(&picker);
-    auto *hint = new QLabel("Select fields to prepend on top of each advanced API translation result.", &picker);
+    auto *hint = new QLabel(tm.tr("adv_json_picker_hint"), &picker);
     hint->setWordWrap(true);
     layout->addWidget(hint);
 
@@ -950,8 +952,8 @@ void ConfigDialog::onPickAdvancedJsonFields()
     layout->addWidget(list, 1);
 
     auto *quickRow = new QHBoxLayout();
-    auto *selectAllBtn = new QPushButton("Select All", &picker);
-    auto *clearBtn = new QPushButton("Clear", &picker);
+    auto *selectAllBtn = new QPushButton(tm.tr("btn_select_all"), &picker);
+    auto *clearBtn = new QPushButton(tm.tr("btn_clear"), &picker);
     quickRow->addWidget(selectAllBtn, 0);
     quickRow->addWidget(clearBtn, 0);
     quickRow->addStretch(1);
@@ -962,6 +964,10 @@ void ConfigDialog::onPickAdvancedJsonFields()
             { list->clearSelection(); });
 
     auto *box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &picker);
+    if (QPushButton *okBtn = box->button(QDialogButtonBox::Ok))
+        okBtn->setText(tm.tr("ok"));
+    if (QPushButton *cancelBtn = box->button(QDialogButtonBox::Cancel))
+        cancelBtn->setText(tm.tr("cancel"));
     connect(box, &QDialogButtonBox::accepted, &picker, &QDialog::accept);
     connect(box, &QDialogButtonBox::rejected, &picker, &QDialog::reject);
     layout->addWidget(box);
@@ -997,7 +1003,7 @@ void ConfigDialog::onPickAdvancedJsonFields()
     updateAdvancedTemplateStatusLabel();
 
     if (m_advancedApiResultEdit)
-        m_advancedApiResultEdit->appendPlainText(QString("\nSelected debug fields: %1").arg(selectedFields.size()));
+        m_advancedApiResultEdit->appendPlainText(tm.tr("adv_json_selected_count").arg(selectedFields.size()));
 }
 
 ConfigDialog::~ConfigDialog() = default;
