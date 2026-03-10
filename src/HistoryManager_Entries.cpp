@@ -20,7 +20,12 @@ void HistoryManager::saveEntry(const TranslationEntry &entry)
     // Entry has originalBase64. Convert to Image and save.
     QByteArray bytes = QByteArray::fromBase64(entry.originalBase64.toLatin1());
     QImage img;
-    img.loadFromData(bytes);
+    if (!img.loadFromData(bytes) || img.isNull())
+    {
+        qWarning() << "HistoryManager::saveEntry skipped: invalid image payload for entry" << entry.id;
+        m_ignoreNextChange = false;
+        return;
+    }
 
     // User Request: Use timestamp for filename to allow sorting/deletion
     QString timeStr = entry.timestamp.toString("yyyyMMdd_HHmmss_zzz");
@@ -34,7 +39,12 @@ void HistoryManager::saveEntry(const TranslationEntry &entry)
         fullImgPath = getImagesPath() + "/" + imgFilename;
     }
 
-    img.save(fullImgPath, "PNG");
+    if (!img.save(fullImgPath, "PNG"))
+    {
+        qWarning() << "HistoryManager::saveEntry failed to write image:" << fullImgPath;
+        m_ignoreNextChange = false;
+        return;
+    }
 
     // 2. Load existing JSON
     QFile file(getJsonPath());
@@ -321,6 +331,7 @@ bool HistoryManager::updateEntryContent(const QString &id, const QString &newMar
     QFile file(getJsonPath());
     if (!file.exists() || !file.open(QIODevice::ReadOnly))
     {
+        m_ignoreNextChange = false;
         return false;
     }
 
@@ -328,7 +339,10 @@ bool HistoryManager::updateEntryContent(const QString &id, const QString &newMar
     file.close();
 
     if (!doc.isArray())
+    {
+        m_ignoreNextChange = false;
         return false;
+    }
 
     QJsonArray array = doc.array();
     bool found = false;

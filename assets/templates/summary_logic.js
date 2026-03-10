@@ -32,6 +32,93 @@ function updateStatus(mode) {
    }
 }
 
+function isSafeUrl(url, allowDataImage) {
+   var v = (url || '').trim().toLowerCase();
+   if (!v) return true;
+   if (v.indexOf('javascript:') === 0 || v.indexOf('vbscript:') === 0) return false;
+   if (v.indexOf('data:') === 0) return !!allowDataImage && v.indexOf('data:image/') === 0;
+   return (
+      v.indexOf('http://') === 0 ||
+      v.indexOf('https://') === 0 ||
+      v.indexOf('mailto:') === 0 ||
+      v.indexOf('tel:') === 0 ||
+      v.indexOf('#') === 0 ||
+      v.indexOf('/') === 0 ||
+      v.indexOf('./') === 0 ||
+      v.indexOf('../') === 0
+   );
+}
+
+function sanitizeRenderedHtml(html) {
+   var template = document.createElement('template');
+   template.innerHTML = html || '';
+
+   var allowedTags = {
+      A:1, B:1, BLOCKQUOTE:1, BR:1, CODE:1, DEL:1, DIV:1, EM:1,
+      H1:1, H2:1, H3:1, H4:1, H5:1, H6:1, HR:1, I:1, IMG:1, LI:1,
+      MARK:1, OL:1, P:1, PRE:1, S:1, SPAN:1, STRONG:1, SUB:1, SUP:1,
+      TABLE:1, TBODY:1, TD:1, TH:1, THEAD:1, TR:1, U:1, UL:1
+   };
+   var blockedTags = { SCRIPT:1, STYLE:1, IFRAME:1, OBJECT:1, EMBED:1, LINK:1, META:1 };
+   var globalAttrs = { 'class':1, 'title':1, 'aria-label':1, 'aria-hidden':1 };
+
+   function clean(parent) {
+      var node = parent.firstChild;
+      while (node) {
+         var next = node.nextSibling;
+
+         if (node.nodeType === 1) {
+            var tag = node.tagName.toUpperCase();
+            if (blockedTags[tag]) {
+               node.remove();
+               node = next;
+               continue;
+            }
+            if (!allowedTags[tag]) {
+               while (node.firstChild) parent.insertBefore(node.firstChild, node);
+               node.remove();
+               node = next;
+               continue;
+            }
+
+            var attrs = Array.prototype.slice.call(node.attributes || []);
+            for (var i = 0; i < attrs.length; i++) {
+               var name = attrs[i].name;
+               var lower = name.toLowerCase();
+               var value = attrs[i].value || '';
+               var keep = !!globalAttrs[lower];
+
+               if (tag === 'A' && (lower === 'href' || lower === 'target' || lower === 'rel')) keep = true;
+               if (tag === 'IMG' && (lower === 'src' || lower === 'alt')) keep = true;
+               if ((tag === 'CODE' || tag === 'PRE' || tag === 'SPAN' || tag === 'DIV' || tag === 'P') && lower === 'class') keep = true;
+
+               if (lower.indexOf('on') === 0 || lower === 'style' || lower === 'srcdoc') keep = false;
+               if ((lower === 'href' || lower === 'src') && keep) {
+                  var allowDataImage = tag === 'IMG' && lower === 'src';
+                  if (!isSafeUrl(value, allowDataImage)) keep = false;
+               }
+
+               if (!keep) node.removeAttribute(name);
+            }
+
+            if (tag === 'A') {
+               var href = (node.getAttribute('href') || '').trim();
+               if (href) node.setAttribute('rel', 'noopener noreferrer');
+            }
+
+            clean(node);
+         } else if (node.nodeType === 8) {
+            node.remove();
+         }
+
+         node = next;
+      }
+   }
+
+   clean(template.content || template);
+   return template.innerHTML;
+}
+
 function protectMathJs(text) {
    var blocks = [];
    var counter = 0;
@@ -97,6 +184,7 @@ function renderContent(id, markdownOverride) {
     
     // Step 3: Parse markdown
     var html = marked.parse(p.text);
+    html = sanitizeRenderedHtml(html);
     
     // Step 4: Restore protected math blocks (reverse order to avoid prefix collisions, e.g., PH1 vs PH10)
     for (var r = p.blocks.length - 1; r >= 0; r--) {
@@ -493,4 +581,3 @@ document.addEventListener('mouseup', function(e){
         selectionRectEl = null;
     }
 });
- </script>

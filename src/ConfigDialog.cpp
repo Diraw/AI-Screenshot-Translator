@@ -650,44 +650,47 @@ void ConfigDialog::onTestConnection()
         root["max_tokens"] = 1;
         payload = QJsonDocument(root).toJson(QJsonDocument::Compact);
 
-        m_testReply = m_testNam->post(req, payload);
-    }
-    else
-    {
-        m_testReply = m_testNam->get(req);
-    }
+        QNetworkReply *issuedReply = m_testNam->post(req, payload);
+        m_testReply = issuedReply;
+        QPointer<QNetworkReply> activeReply = issuedReply;
 
-    QTimer *timeoutTimer = new QTimer(this);
-    timeoutTimer->setSingleShot(true);
-    timeoutTimer->setInterval(8000);
-    connect(timeoutTimer, &QTimer::timeout, this, [this]()
-            {
-        if (m_testReply)
-            m_testReply->abort(); });
-    timeoutTimer->start();
+        QTimer *timeoutTimer = new QTimer(this);
+        timeoutTimer->setSingleShot(true);
+        timeoutTimer->setInterval(8000);
+        connect(timeoutTimer, &QTimer::timeout, this, [activeReply]()
+                {
+        if (activeReply && activeReply->isRunning())
+            activeReply->abort(); });
+        timeoutTimer->start();
 
-    connect(m_testReply, &QNetworkReply::finished, this, [this, timeoutTimer]()
-            {
+        connect(issuedReply, &QNetworkReply::finished, this, [this, timeoutTimer, activeReply]()
+                {
         TranslationManager &tm = TranslationManager::instance();
         timeoutTimer->stop();
         timeoutTimer->deleteLater();
 
-        QPointer<QNetworkReply> reply = m_testReply;
-        m_testReply = nullptr;
+        if (!activeReply)
+            return;
+
+        const bool isLatestReply = (m_testReply == activeReply);
+        if (isLatestReply)
+            m_testReply = nullptr;
+        if (!isLatestReply)
+        {
+            activeReply->deleteLater();
+            return;
+        }
 
         if (m_testConnectionBtn)
             m_testConnectionBtn->setEnabled(true);
 
-        if (!reply)
-            return;
-
-        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        const QByteArray body = reply->readAll();
+        const int status = activeReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const QByteArray body = activeReply->readAll();
 
         const bool okHttp = (status >= 200 && status < 300) || status == 401 || status == 403 || status == 405;
-        if ((reply->error() == QNetworkReply::NoError || reply->error() == QNetworkReply::ContentOperationNotPermittedError) && okHttp)
+        if ((activeReply->error() == QNetworkReply::NoError || activeReply->error() == QNetworkReply::ContentOperationNotPermittedError) && okHttp)
         {
-            QMessageBox::information(this, tm.tr("test_title"), tm.tr("test_ok").arg(reply->url().toString()));
+            QMessageBox::information(this, tm.tr("test_title"), tm.tr("test_ok").arg(activeReply->url().toString()));
         }
         else if (status == 401 || status == 403)
         {
@@ -695,12 +698,72 @@ void ConfigDialog::onTestConnection()
         }
         else
         {
-            const QString err = reply->errorString();
+            const QString err = activeReply->errorString();
             const QString bodyPreview = QString::fromUtf8(body.left(800));
             QMessageBox::warning(this, tm.tr("test_title"), tm.tr("test_failed").arg(status).arg(err).arg(bodyPreview));
         }
 
-        reply->deleteLater(); });
+        activeReply->deleteLater(); });
+        return;
+    }
+    else
+    {
+        QNetworkReply *issuedReply = m_testNam->get(req);
+        m_testReply = issuedReply;
+        QPointer<QNetworkReply> activeReply = issuedReply;
+
+        QTimer *timeoutTimer = new QTimer(this);
+        timeoutTimer->setSingleShot(true);
+        timeoutTimer->setInterval(8000);
+        connect(timeoutTimer, &QTimer::timeout, this, [activeReply]()
+                {
+        if (activeReply && activeReply->isRunning())
+            activeReply->abort(); });
+        timeoutTimer->start();
+
+        connect(issuedReply, &QNetworkReply::finished, this, [this, timeoutTimer, activeReply]()
+                {
+        TranslationManager &tm = TranslationManager::instance();
+        timeoutTimer->stop();
+        timeoutTimer->deleteLater();
+
+        if (!activeReply)
+            return;
+
+        const bool isLatestReply = (m_testReply == activeReply);
+        if (isLatestReply)
+            m_testReply = nullptr;
+        if (!isLatestReply)
+        {
+            activeReply->deleteLater();
+            return;
+        }
+
+        if (m_testConnectionBtn)
+            m_testConnectionBtn->setEnabled(true);
+
+        const int status = activeReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const QByteArray body = activeReply->readAll();
+
+        const bool okHttp = (status >= 200 && status < 300) || status == 401 || status == 403 || status == 405;
+        if ((activeReply->error() == QNetworkReply::NoError || activeReply->error() == QNetworkReply::ContentOperationNotPermittedError) && okHttp)
+        {
+            QMessageBox::information(this, tm.tr("test_title"), tm.tr("test_ok").arg(activeReply->url().toString()));
+        }
+        else if (status == 401 || status == 403)
+        {
+            QMessageBox::warning(this, tm.tr("test_title"), tm.tr("test_auth_failed").arg(status));
+        }
+        else
+        {
+            const QString err = activeReply->errorString();
+            const QString bodyPreview = QString::fromUtf8(body.left(800));
+            QMessageBox::warning(this, tm.tr("test_title"), tm.tr("test_failed").arg(status).arg(err).arg(bodyPreview));
+        }
+
+        activeReply->deleteLater(); });
+        return;
+    }
 }
 
 void ConfigDialog::onTestAdvancedApi()
@@ -836,37 +899,47 @@ void ConfigDialog::onTestAdvancedApi()
     if (m_testAdvancedApiBtn)
         m_testAdvancedApiBtn->setEnabled(false);
 
-    m_testReply = m_testNam->post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
+    QNetworkReply *issuedReply = m_testNam->post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
+    m_testReply = issuedReply;
+    QPointer<QNetworkReply> activeReply = issuedReply;
 
     QTimer *timeoutTimer = new QTimer(this);
     timeoutTimer->setSingleShot(true);
     timeoutTimer->setInterval(8000);
-    connect(timeoutTimer, &QTimer::timeout, this, [this]()
+    connect(timeoutTimer, &QTimer::timeout, this, [activeReply]()
             {
-        if (m_testReply)
-            m_testReply->abort(); });
+        if (activeReply && activeReply->isRunning())
+            activeReply->abort(); });
     timeoutTimer->start();
 
-    connect(m_testReply, &QNetworkReply::finished, this, [this, timeoutTimer]()
+    connect(issuedReply, &QNetworkReply::finished, this, [this, timeoutTimer, activeReply]()
             {
         timeoutTimer->stop();
         timeoutTimer->deleteLater();
 
-        QPointer<QNetworkReply> reply = m_testReply;
-        m_testReply = nullptr;
-        if (m_testAdvancedApiBtn)
-            m_testAdvancedApiBtn->setEnabled(true);
-        if (!reply)
+        if (!activeReply)
             return;
 
-        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        const QByteArray body = reply->readAll();
+        const bool isLatestReply = (m_testReply == activeReply);
+        if (isLatestReply)
+            m_testReply = nullptr;
+        if (!isLatestReply)
+        {
+            activeReply->deleteLater();
+            return;
+        }
+
+        if (m_testAdvancedApiBtn)
+            m_testAdvancedApiBtn->setEnabled(true);
+
+        const int status = activeReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const QByteArray body = activeReply->readAll();
         QString output = QString("HTTP %1").arg(status);
-        if (status == 0 || reply->error() != QNetworkReply::NoError)
+        if (status == 0 || activeReply->error() != QNetworkReply::NoError)
         {
             output += QString("\nNetwork Error (%1): %2")
-                          .arg(static_cast<int>(reply->error()))
-                          .arg(reply->errorString());
+                          .arg(static_cast<int>(activeReply->error()))
+                          .arg(activeReply->errorString());
         }
         if (!body.isEmpty())
             output += QString("\n%1").arg(QString::fromUtf8(body));
@@ -887,7 +960,7 @@ void ConfigDialog::onTestAdvancedApi()
         }
         if (m_pickAdvancedJsonFieldsBtn)
             m_pickAdvancedJsonFieldsBtn->setEnabled((m_enableAdvancedApiCheck && m_enableAdvancedApiCheck->isChecked()) && m_hasLastAdvancedApiTestJson);
-        reply->deleteLater(); });
+        activeReply->deleteLater(); });
 }
 
 void ConfigDialog::onPickAdvancedJsonFields()

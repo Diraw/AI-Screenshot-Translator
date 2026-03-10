@@ -270,10 +270,10 @@ document.addEventListener('mousedown', function() {
     QString summaryLogic = loadAsset("templates/summary_logic.js");
     if (summaryLogic.isEmpty())
     {
-        // Ensure the <script> tag is closed even if the file is missing.
-        summaryLogic = "/* missing assets/templates/summary_logic.js */\n</script>";
+        summaryLogic = "/* missing assets/templates/summary_logic.js */";
     }
     html += summaryLogic;
+    html += "\n</script>";
 
     html += "</head><body class=\"__BODY_CLASS__\">";
     html = html.replace("__BODY_CLASS__", isDark ? "dark-mode" : "");
@@ -283,8 +283,6 @@ document.addEventListener('mousedown', function() {
     {
         initialEntries.append(makeEntryPayload(entry));
     }
-    html += "</head><body class=\"__BODY_CLASS__\">";
-    html = html.replace("__BODY_CLASS__", isDark ? "dark-mode" : "");
     html += "<div id='status-indicator'>MODE: VIEW</div>";
     html += "<script id='initial-entry-data' type='application/json'>";
     html += makeHtmlSafeJson(QJsonDocument(initialEntries));
