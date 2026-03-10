@@ -21,6 +21,11 @@ html, body {
   --link-color-visited: #0b0080;
   --link-color-dark: #78b7e6;
   --link-color-dark-visited: #78b7e6;
+
+  --sb-track: #ececec;
+  --sb-thumb: #9f9f9f;
+  --sb-thumb-hover: #8b8b8b;
+  --sb-corner: #ececec;
 }
 
 a { color: var(--link-color); }
@@ -126,6 +131,46 @@ body.dark-mode a:visited {
 body.dark-mode a:hover {
   color: var(--link-color-dark) !important;
   text-decoration: underline;
+}
+
+body.dark-mode {
+  --sb-track: #2a2a2a;
+  --sb-thumb: #7b7b7b;
+  --sb-thumb-hover: #929292;
+  --sb-corner: #2a2a2a;
+}
+
+#scroll_area,
+#debug_bar {
+  scrollbar-color: var(--sb-thumb) var(--sb-track);
+}
+
+#scroll_area::-webkit-scrollbar,
+#debug_bar::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+#scroll_area::-webkit-scrollbar-track,
+#debug_bar::-webkit-scrollbar-track {
+  background: var(--sb-track);
+}
+
+#scroll_area::-webkit-scrollbar-thumb,
+#debug_bar::-webkit-scrollbar-thumb {
+  background: var(--sb-thumb);
+  border-radius: 10px;
+  border: 2px solid var(--sb-track);
+}
+
+#scroll_area::-webkit-scrollbar-thumb:hover,
+#debug_bar::-webkit-scrollbar-thumb:hover {
+  background: var(--sb-thumb-hover);
+}
+
+#scroll_area::-webkit-scrollbar-corner,
+#debug_bar::-webkit-scrollbar-corner {
+  background: var(--sb-corner);
 }
 
 #debug_bar {
