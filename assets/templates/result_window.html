@@ -6,6 +6,8 @@
 <link rel='stylesheet' href='__CSS_KATEX__'>
 <style>
 html, body {
+  height: 100%;
+  margin: 0;
   background: #ffffff;
   color: #111111;
 }
@@ -28,10 +30,23 @@ a:hover { text-decoration: underline; }
 body {
   font-family: "Segoe UI", sans-serif;
   font-size: __FONT_SIZE__px;
+  overflow: hidden;
+}
+
+#main_shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+#scroll_area {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   padding: 20px;
   padding-top: 60px;
-  padding-bottom: 10px;
-  overflow-y: auto;
+  padding-bottom: 12px;
 }
 
 pre {
@@ -43,6 +58,7 @@ pre {
 }
 
 #content { line-height: 1.6; }
+#content > :first-child { margin-top: 0 !important; }
 
 #raw_view,
 #edit_view {
@@ -111,6 +127,33 @@ body.dark-mode a:hover {
   color: var(--link-color-dark) !important;
   text-decoration: underline;
 }
+
+#debug_bar {
+  flex: 0 0 auto;
+  border-top: 1px solid rgba(127, 127, 127, 0.35);
+  padding: 4px 10px 6px 10px;
+  min-height: 18px;
+  max-height: 96px;
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+#debug_lines {
+  white-space: pre;
+  font-family: Consolas, "SFMono-Regular", Menlo, Monaco, monospace;
+  font-size: 11px;
+  line-height: 1.25;
+  color: #555;
+}
+
+body.dark-mode #debug_bar {
+  border-top-color: rgba(255, 255, 255, 0.22);
+  background: transparent;
+}
+
+body.dark-mode #debug_lines {
+  color: #cfcfcf;
+}
 </style>
 <script src='__JS_MARKED__'></script>
 <script src='__JS_HL__'></script>
@@ -119,9 +162,14 @@ body.dark-mode a:hover {
 </head>
 <body>
 <div id='keytrap' tabindex='0' style='position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;'></div>
-<div id='content'><h3>Loading...</h3></div>
-<textarea id='edit_view'></textarea>
-<div id='raw_view'></div>
+<div id='main_shell'>
+  <div id='scroll_area'>
+    <div id='content'><h3>Loading...</h3></div>
+    <textarea id='edit_view'></textarea>
+    <div id='raw_view'></div>
+  </div>
+  <div id='debug_bar'><div id='debug_lines'>debug: -</div></div>
+</div>
 <script id="init-data" type="application/json">__INIT_JSON__</script>
 <script>
 __RESULT_LOGIC__

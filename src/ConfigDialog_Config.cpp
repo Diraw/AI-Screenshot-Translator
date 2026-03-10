@@ -9,6 +9,11 @@
 void ConfigDialog::loadFromConfig()
 {
     m_isLoadingConfig = true;
+    m_lastAdvancedApiTestJson = QJsonDocument();
+    m_hasLastAdvancedApiTestJson = false;
+    if (m_pickAdvancedJsonFieldsBtn)
+        m_pickAdvancedJsonFieldsBtn->setEnabled(false);
+
     AppConfig cfg = m_configManager->getConfig();
     m_apiKeyEdit->setText(cfg.apiKey);
     m_baseUrlEdit->setText(cfg.baseUrl);

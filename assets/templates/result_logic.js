@@ -13,6 +13,25 @@ try {
 function log(m) { if (window.chrome&&window.chrome.webview) window.chrome.webview.postMessage(JSON.stringify(["log", m])); }
 window.onerror = function(m,u,l,c,e) { log("JS ERR: "+m+" @ "+l+":"+c); };
 var EDIT = false;
+var CURRENT_DEBUG_INFO = '';
+
+function splitDebugFromMarkdown(md) {
+  var src = (typeof md === 'string') ? md : '';
+  var re = /^```(?:text)?\r?\n\[Advanced API Debug\]\r?\n([\s\S]*?)\r?\n```\s*\r?\n?/;
+  var m = src.match(re);
+  if (!m) return { md: src, debug: '' };
+  return { md: src.slice(m[0].length), debug: (m[1] || '').trim() };
+}
+
+function setDebugInfo(text) {
+  var el = document.getElementById('debug_lines');
+  if (!el) return;
+  var v = (text || '').trim();
+  if (!v) { el.textContent = 'debug: -'; return; }
+  var lines = v.split(/\r?\n/).filter(function(line){ return line.trim().length > 0; });
+  el.textContent = lines.length ? lines.join('\n') : 'debug: -';
+}
+
 function focusSink() {
   try {
     var kt = document.getElementById('keytrap');
@@ -24,11 +43,15 @@ function focusSink() {
     document.body.focus({ preventScroll: true });
   } catch(e) {}
 }
-function render(md) {
+function render(md, opts) {
+  var parsed = splitDebugFromMarkdown(md || '');
+  if (parsed.debug) CURRENT_DEBUG_INFO = parsed.debug;
+  else if (!(opts && opts.keepDebug)) CURRENT_DEBUG_INFO = '';
+  setDebugInfo(CURRENT_DEBUG_INFO);
   if (typeof marked==='undefined') return;
   // Step 1: Extract LaTeX from backticks (e.g., `$formula$` -> $formula$)
   // Only unwrap if the backticked content is a valid LaTeX expression (properly paired delimiters)
-  var text = md || '';
+  var text = parsed.md || '';
   text = text.replace(/`([^`]+)`/g, function(match, inner) {
     // Check if content is a complete LaTeX expression with properly paired delimiters
     // Match: $...$, $$...$$, \(...\), or \[...\]
@@ -107,17 +130,25 @@ window.updateContentFromNative = function(payload) {
 window.toggleSource = function() {
   if (EDIT) return;
   var c = document.getElementById('content'), r = document.getElementById('raw_view');
-  if (r.style.display==='none') { r.innerText = CUR_MD; r.style.display='block'; c.style.display='none'; if(window.cmd_updateStatus) window.cmd_updateStatus('raw'); }
+  var parsed = splitDebugFromMarkdown(CUR_MD);
+  if (r.style.display==='none') { r.innerText = parsed.md; r.style.display='block'; c.style.display='none'; if(window.cmd_updateStatus) window.cmd_updateStatus('raw'); }
   else { r.style.display='none'; c.style.display='block'; if(window.cmd_updateStatus) window.cmd_updateStatus('view'); focusSink(); }
 };
 window.toggleEdit = function() {
   var c = document.getElementById('content'), e = document.getElementById('edit_view'), r = document.getElementById('raw_view');
-  if (!EDIT) { EDIT=true; e.value=CUR_MD; e.style.display='block'; c.style.display='none'; r.style.display='none'; fitEditHeight(); e.focus(); if(window.cmd_updateStatus) window.cmd_updateStatus('edit'); }
+  if (!EDIT) {
+    EDIT=true;
+    var parsed = splitDebugFromMarkdown(CUR_MD);
+    if (parsed.debug) CURRENT_DEBUG_INFO = parsed.debug;
+    setDebugInfo(CURRENT_DEBUG_INFO);
+    e.value=parsed.md;
+    e.style.display='block'; c.style.display='none'; r.style.display='none'; fitEditHeight(); e.focus(); if(window.cmd_updateStatus) window.cmd_updateStatus('edit');
+  }
   else {
     EDIT=false;
     CUR_MD=e.value;
     if(window.cmd_updateContent) window.cmd_updateContent(CUR_MD);
-    render(CUR_MD);
+    render(CUR_MD, { keepDebug: true });
     c.style.display='block';
     setTimeout(function(){
       e.style.display='none';

@@ -180,7 +180,10 @@ void ConfigDialog::setupAdvancedApiTab()
 
     auto *testRow = new QHBoxLayout();
     m_testAdvancedApiBtn = new QPushButton("测试 JSON 与 API 连通性", this);
+    m_pickAdvancedJsonFieldsBtn = new QPushButton(QStringLiteral("\u89e3\u6790\u5e76\u9009\u62e9 JSON \u5b57\u6bb5"), this);
+    m_pickAdvancedJsonFieldsBtn->setEnabled(false);
     testRow->addWidget(m_testAdvancedApiBtn, 0);
+    testRow->addWidget(m_pickAdvancedJsonFieldsBtn, 0);
     testRow->addStretch(1);
     rootLayout->addLayout(testRow);
 
@@ -215,6 +218,7 @@ void ConfigDialog::setupAdvancedApiTab()
         } });
 
     connect(m_testAdvancedApiBtn, &QPushButton::clicked, this, &ConfigDialog::onTestAdvancedApi);
+    connect(m_pickAdvancedJsonFieldsBtn, &QPushButton::clicked, this, &ConfigDialog::onPickAdvancedJsonFields);
 
     m_tabWidget->addTab(m_advancedApiTab, "高级 API");
 }

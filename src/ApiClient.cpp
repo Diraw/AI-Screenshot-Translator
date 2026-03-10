@@ -9,6 +9,13 @@
 #include <QJsonParseError>
 #include <QStringList>
 
+struct JsonPathStep
+{
+    bool isIndex = false;
+    QString key;
+    int index = -1;
+};
+
 static QUrl joinBaseAndEndpoint(const QString &baseUrl, const QString &endpoint)
 {
     QUrl base = QUrl::fromUserInput(baseUrl.trimmed());
@@ -24,6 +31,155 @@ static QUrl joinBaseAndEndpoint(const QString &baseUrl, const QString &endpoint)
         ep.remove(0, 1);
 
     return base.resolved(QUrl(ep));
+}
+
+static QStringList parseAdvancedDebugFields(const QString &advancedTemplate)
+{
+    QStringList fields;
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(advancedTemplate.toUtf8(), &err);
+    if (doc.isNull() || !doc.isObject() || err.error != QJsonParseError::NoError)
+        return fields;
+
+    const QJsonArray arr = doc.object().value("debug_fields").toArray();
+    for (const QJsonValue &v : arr)
+    {
+        const QString path = v.toString().trimmed();
+        if (!path.isEmpty())
+            fields.append(path);
+    }
+    fields.removeDuplicates();
+    return fields;
+}
+
+static bool parseJsonPathSteps(const QString &path, QList<JsonPathStep> &outSteps)
+{
+    outSteps.clear();
+    const QString s = path.trimmed();
+    if (s.isEmpty())
+        return false;
+
+    int i = 0;
+    const int n = s.size();
+    while (i < n)
+    {
+        if (s.at(i) == '.')
+        {
+            ++i;
+            continue;
+        }
+
+        if (s.at(i) == '[')
+        {
+            const int close = s.indexOf(']', i + 1);
+            if (close <= i + 1)
+                return false;
+            bool ok = false;
+            const int idx = s.mid(i + 1, close - i - 1).toInt(&ok);
+            if (!ok || idx < 0)
+                return false;
+
+            JsonPathStep step;
+            step.isIndex = true;
+            step.index = idx;
+            outSteps.append(step);
+            i = close + 1;
+            continue;
+        }
+
+        int j = i;
+        while (j < n && s.at(j) != '.' && s.at(j) != '[')
+            ++j;
+        const QString key = s.mid(i, j - i).trimmed();
+        if (key.isEmpty())
+            return false;
+
+        JsonPathStep step;
+        step.isIndex = false;
+        step.key = key;
+        outSteps.append(step);
+        i = j;
+    }
+
+    return !outSteps.isEmpty();
+}
+
+static bool resolveJsonPath(const QJsonValue &rootValue, const QString &path, QJsonValue &outValue)
+{
+    QList<JsonPathStep> steps;
+    if (!parseJsonPathSteps(path, steps))
+        return false;
+
+    QJsonValue cur = rootValue;
+    for (const JsonPathStep &step : steps)
+    {
+        if (step.isIndex)
+        {
+            if (!cur.isArray())
+                return false;
+            const QJsonArray arr = cur.toArray();
+            if (step.index < 0 || step.index >= arr.size())
+                return false;
+            cur = arr.at(step.index);
+        }
+        else
+        {
+            if (!cur.isObject())
+                return false;
+            const QJsonObject obj = cur.toObject();
+            if (!obj.contains(step.key))
+                return false;
+            cur = obj.value(step.key);
+        }
+    }
+
+    outValue = cur;
+    return true;
+}
+
+static QString toDebugValueString(const QJsonValue &value)
+{
+    if (value.isString())
+        return value.toString();
+    if (value.isBool())
+        return value.toBool() ? "true" : "false";
+    if (value.isDouble())
+        return QString::number(value.toDouble(), 'g', 15);
+    if (value.isNull() || value.isUndefined())
+        return "null";
+    if (value.isObject())
+        return QString::fromUtf8(QJsonDocument(value.toObject()).toJson(QJsonDocument::Compact));
+    if (value.isArray())
+        return QString::fromUtf8(QJsonDocument(value.toArray()).toJson(QJsonDocument::Compact));
+    return {};
+}
+
+static QString buildAdvancedDebugHeader(const QJsonObject &responseRoot, const QString &advancedTemplate)
+{
+    const QStringList fields = parseAdvancedDebugFields(advancedTemplate);
+    if (fields.isEmpty())
+        return {};
+
+    QStringList lines;
+    lines.reserve(fields.size() + 1);
+    lines << "[Advanced API Debug]";
+
+    for (const QString &path : fields)
+    {
+        QJsonValue value;
+        QString valueText;
+        if (resolveJsonPath(responseRoot, path, value))
+            valueText = toDebugValueString(value);
+        else
+            valueText = "<missing>";
+
+        valueText.replace('\n', ' ');
+        if (valueText.size() > 200)
+            valueText = valueText.left(197) + "...";
+        lines << QString("%1 = %2").arg(path, valueText);
+    }
+
+    return QString("```text\n%1\n```\n\n").arg(lines.join('\n'));
 }
 
 ApiClient::ApiClient(QObject *parent) : QObject(parent)
@@ -260,6 +416,13 @@ void ApiClient::onReplyFinished(QNetworkReply *reply)
         qWarning() << "ApiClient: Parsed content is empty. Check parser logic.";
         emit error("Failed to extract content from API response", context);
         return;
+    }
+
+    if (m_useAdvancedApi)
+    {
+        const QString debugHeader = buildAdvancedDebugHeader(root, m_advancedApiTemplate);
+        if (!debugHeader.isEmpty())
+            content.prepend(debugHeader);
     }
 
     emit success(content, originalBase64, originalPrompt, context);

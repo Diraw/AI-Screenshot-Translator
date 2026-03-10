@@ -17,6 +17,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPointer>
+#include <QJsonDocument>
 #include <QJsonObject>
 
 #include "ConfigManager.h"
@@ -89,6 +90,7 @@ private:
     void ensureAdvancedProviderOption(bool enabled);
     void resetAdvancedApiToDefault();
     void onTestAdvancedApi();
+    void onPickAdvancedJsonFields();
     bool parseAdvancedTemplateJson(QJsonObject &outRoot, QString &outError) const;
     bool m_isLoadingConfig = false;
     bool m_isSyncingAdvanced = false;
@@ -185,7 +187,10 @@ private:
     QLabel *m_advancedTemplateStatusLabel = nullptr;
     QPlainTextEdit *m_advancedApiTemplateEdit = nullptr;
     QPushButton *m_testAdvancedApiBtn = nullptr;
+    QPushButton *m_pickAdvancedJsonFieldsBtn = nullptr;
     QPlainTextEdit *m_advancedApiResultEdit = nullptr;
+    QJsonDocument m_lastAdvancedApiTestJson;
+    bool m_hasLastAdvancedApiTestJson = false;
 
     void loadFromConfig();
     void updateProfileList();
