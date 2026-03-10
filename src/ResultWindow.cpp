@@ -242,7 +242,11 @@ ResultWindow::ResultWindow(QWidget *parent) : QWidget(parent)
   connect(m_webView.get(), &EmbedWebView::ready, this, [this]()
           {
         setUpdatesEnabled(true);
-        m_webView->setSize(width(), height());
+        constexpr int kToolbarHeight = 46;
+        const int webH = qMax(0, height() - kToolbarHeight);
+        if (m_webContainer)
+            m_webContainer->setGeometry(0, kToolbarHeight, width(), webH);
+        m_webView->setSize(width(), webH);
         // Apply initial theme
     updateTheme(ThemeUtils::isSystemDark());
     requestFocusToWeb(false); });
@@ -322,13 +326,15 @@ void ResultWindow::toggleLock()
 }
 void ResultWindow::resizeEvent(QResizeEvent *event)
 {
+  constexpr int kToolbarHeight = 46;
+  const int webH = qMax(0, height() - kToolbarHeight);
   if (m_webContainer)
-    m_webContainer->setGeometry(0, 0, width(), height());
+    m_webContainer->setGeometry(0, kToolbarHeight, width(), webH);
   if (m_webView)
-    m_webView->setSize(width(), height());
+    m_webView->setSize(width(), webH);
   if (m_toolBar)
   {
-    m_toolBar->setGeometry(0, 0, width(), 46);
+    m_toolBar->setGeometry(0, 0, width(), kToolbarHeight);
     m_toolBar->raise();
     updateToolbarResponsive();
   }

@@ -50,7 +50,7 @@ body {
   min-height: 0;
   overflow-y: auto;
   padding: 20px;
-  padding-top: 60px;
+  padding-top: 20px;
   padding-bottom: 12px;
 }
 
@@ -154,6 +154,11 @@ body.dark-mode {
 #scroll_area::-webkit-scrollbar-track,
 #debug_bar::-webkit-scrollbar-track {
   background: var(--sb-track);
+}
+
+/* Keep scrollbar caps visually clear from the top toolbar edge. */
+#scroll_area::-webkit-scrollbar-track {
+  margin-top: 8px;
 }
 
 #scroll_area::-webkit-scrollbar-thumb,
