@@ -13,8 +13,10 @@ void ConfigDialog::retranslateUi()
 
     setWindowTitle(tm.tr("settings_title"));
 
-    m_tabWidget->setTabText(0, tm.tr("tab_general"));
-    m_tabWidget->setTabText(1, tm.tr("tab_translation"));
+    if (m_generalTab)
+        m_tabWidget->setTabText(m_tabWidget->indexOf(m_generalTab), tm.tr("tab_general"));
+    if (m_transTab)
+        m_tabWidget->setTabText(m_tabWidget->indexOf(m_transTab), tm.tr("tab_translation"));
 
     auto updateLabel = [&](QFormLayout *layout, int row, const QString &key)
     {
@@ -23,7 +25,7 @@ void ConfigDialog::retranslateUi()
             l->setText(tm.tr(key));
     };
 
-    QFormLayout *gLayout = qobject_cast<QFormLayout *>(m_generalTab->layout());
+    QFormLayout *gLayout = m_generalFormLayout;
     if (gLayout)
     {
         updateLabel(gLayout, 0, "lbl_language");
@@ -84,7 +86,8 @@ void ConfigDialog::retranslateUi()
         }
     }
 
-    m_tabWidget->setTabText(2, tm.tr("tab_archive_interface"));
+    if (m_archiveTab)
+        m_tabWidget->setTabText(m_tabWidget->indexOf(m_archiveTab), tm.tr("tab_archive_interface"));
 
     QGroupBox *grpView = m_archiveTab->findChild<QGroupBox *>("grpView");
     if (grpView)
@@ -133,7 +136,18 @@ void ConfigDialog::retranslateUi()
         }
     }
 
-    m_tabWidget->setTabText(3, tm.tr("tab_other"));
+    if (m_otherTab)
+        m_tabWidget->setTabText(m_tabWidget->indexOf(m_otherTab), tm.tr("tab_other"));
+
+    if (m_advancedApiTab)
+        m_tabWidget->setTabText(m_tabWidget->indexOf(m_advancedApiTab), QStringLiteral("高级 API"));
+    if (m_enableAdvancedApiCheck)
+        m_enableAdvancedApiCheck->setText(QStringLiteral("开启高级 API 模式"));
+    if (m_deleteAdvancedApiConfigBtn)
+        m_deleteAdvancedApiConfigBtn->setText(QStringLiteral("删除高级 API 配置"));
+    if (m_testAdvancedApiBtn)
+        m_testAdvancedApiBtn->setText(QStringLiteral("测试 JSON 与 API 连通性"));
+    updateAdvancedTemplateStatusLabel();
 
     QGroupBox *grpShortcuts = m_otherTab->findChild<QGroupBox *>("grpShortcuts");
     if (grpShortcuts)

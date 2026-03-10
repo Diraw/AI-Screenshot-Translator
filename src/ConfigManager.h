@@ -21,6 +21,9 @@ struct AppConfig
     QString proxyUrl;
     bool useProxy = false;
     QString apiProvider = "openai"; // "openai", "gemini", "claude"
+    bool useAdvancedApiMode = false;
+    QString advancedApiTemplate;
+    bool advancedApiCustomized = false;
 
     // Localization
     QString language = "zh"; // Default to Chinese as requested
@@ -74,7 +77,7 @@ struct AppConfig
     // Configurable Nav Hotkeys
     QString prevResultShortcut = "z";
     QString nextResultShortcut = "x";
-    QString tagHotkey = "t"; // New: Tag Dialog Hotkey
+    QString tagHotkey = "t";         // New: Tag Dialog Hotkey
     QString retranslateHotkey = "f"; // Retranslate shortcut (default: F)
 
     // Quit Hotkey
@@ -93,7 +96,7 @@ public:
     static QString defaultStoragePath();
     static QString resolveStoragePath(const QString &path);
     static QString resolveWritableStoragePath(const QString &path, bool *usedFallback = nullptr,
-                                             QString *errorMessage = nullptr);
+                                              QString *errorMessage = nullptr);
     static bool ensureWritableDirectory(const QString &path, QString *errorMessage = nullptr);
 
     ConfigManager();

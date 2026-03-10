@@ -4,11 +4,12 @@
 
 void ConfigDialog::setupProfileSection(QVBoxLayout *mainLayout)
 {
-    auto *profileGroup = new QGroupBox("Profiles", this);
-    auto *profileMainLayout = new QHBoxLayout(profileGroup);
+    m_profileGroup = new QGroupBox("Profiles", this);
+    auto *profileMainLayout = new QHBoxLayout(m_profileGroup);
 
     m_profileList = new QListWidget(this);
     m_profileList->setFixedHeight(60);
+    m_profileList->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     connect(m_profileList, &QListWidget::currentTextChanged, this, &ConfigDialog::onProfileChanged);
 
     m_newProfileBtn = new QPushButton("New", this);
@@ -41,8 +42,11 @@ void ConfigDialog::setupProfileSection(QVBoxLayout *mainLayout)
 
     profileMainLayout->addWidget(m_profileList, 1);
     profileMainLayout->addLayout(buttonGrid);
+    profileMainLayout->setStretch(0, 1);
+    profileMainLayout->setStretch(1, 0);
 
-    mainLayout->addWidget(profileGroup);
+    m_profileGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    mainLayout->addWidget(m_profileGroup);
 }
 
 void ConfigDialog::setupActionButtons(QVBoxLayout *mainLayout)

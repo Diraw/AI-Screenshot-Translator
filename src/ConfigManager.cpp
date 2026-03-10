@@ -509,6 +509,15 @@ void ConfigManager::parseJson(const QJsonObject &root)
         m_config.proxyUrl = api["proxy"].toString();
         m_config.useProxy = api["use_proxy"].toBool(false);
         m_config.apiProvider = api["provider"].toString("openai");
+        m_config.useAdvancedApiMode = api["use_advanced_mode"].toBool(false);
+        m_config.advancedApiTemplate = api["advanced_template"].toString();
+        m_config.advancedApiCustomized = api["advanced_customized"].toBool(false);
+
+        // Backward compatibility: support legacy top-level advanced_api object.
+        if (m_config.advancedApiTemplate.trimmed().isEmpty() && root.contains("advanced_api") && root["advanced_api"].isObject())
+        {
+            m_config.advancedApiTemplate = QString::fromUtf8(QJsonDocument(root["advanced_api"].toObject()).toJson(QJsonDocument::Indented));
+        }
 
         // Backward-compatible default endpoint (avoid duplicating /v1)
         if (m_config.endpointPath.trimmed().isEmpty())
@@ -601,6 +610,10 @@ QJsonObject ConfigManager::toJson() const
     api["model"] = m_config.modelName;
     api["prompt_text"] = m_config.promptText;
     api["provider"] = m_config.apiProvider;
+    api["use_advanced_mode"] = m_config.useAdvancedApiMode;
+    api["advanced_customized"] = m_config.advancedApiCustomized;
+    if (!m_config.advancedApiTemplate.trimmed().isEmpty())
+        api["advanced_template"] = m_config.advancedApiTemplate;
     if (!m_config.proxyUrl.isEmpty())
     {
         api["proxy"] = m_config.proxyUrl;

@@ -5,6 +5,7 @@
 #include <QPushButton>
 #include <QLineEdit>
 #include <QTextEdit>
+#include <QPlainTextEdit>
 #include <QSpinBox>
 #include <QDoubleSpinBox>
 #include <QCheckBox>
@@ -16,6 +17,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPointer>
+#include <QJsonObject>
 
 #include "ConfigManager.h"
 
@@ -71,16 +73,31 @@ private:
     void setupTranslationTab();
     void setupArchiveTab();
     void setupOtherTab();
+    void setupAdvancedApiTab();
     void setupActionButtons(QVBoxLayout *mainLayout);
     bool tryParseColorText(QString text, QColor &out) const;
     void updateColorPreviewLabel(QLabel *label, const QString &text) const;
     void browseForStoragePath();
     bool validateStoragePathInput(const QString &pathText, QString *resolvedPath = nullptr);
     void refreshStoragePathPlaceholder();
+    QString buildAdvancedTemplateFromRegular(const QString &provider) const;
+    QString normalizeProviderForAdvancedTemplate(const QString &provider) const;
+    void syncAdvancedTemplateFromRegular();
+    void syncRegularFieldsFromAdvancedTemplate();
+    void updateAdvancedApiUiState();
+    void updateAdvancedTemplateStatusLabel();
+    void ensureAdvancedProviderOption(bool enabled);
+    void resetAdvancedApiToDefault();
+    void onTestAdvancedApi();
+    bool parseAdvancedTemplateJson(QJsonObject &outRoot, QString &outError) const;
     bool m_isLoadingConfig = false;
+    bool m_isSyncingAdvanced = false;
+    bool m_advancedTemplateDetached = false;
     QString m_lastAutoEndpoint;
+    QString m_lastRegularProvider = "openai";
 
     // Profile UI
+    QGroupBox *m_profileGroup = nullptr;
     QListWidget *m_profileList;
     QPushButton *m_newProfileBtn;
     QPushButton *m_deleteProfileBtn;
@@ -126,9 +143,11 @@ private:
     QTabWidget *m_tabWidget;
     // Tabs
     QWidget *m_generalTab;
+    QFormLayout *m_generalFormLayout = nullptr;
     QWidget *m_transTab;   // Translation Window
     QWidget *m_archiveTab; // Archive Window
     QWidget *m_otherTab;   // Other
+    QWidget *m_advancedApiTab = nullptr;
     // Deprecated m_advTab variable to be removed or reused for one of these, removing to avoid confusion
 
     // Translation Tab UI
@@ -159,6 +178,14 @@ private:
 
     QLineEdit *m_storagePathEdit;
     QPushButton *m_browseBtn = nullptr;
+
+    // Advanced API Tab UI
+    QCheckBox *m_enableAdvancedApiCheck = nullptr;
+    QPushButton *m_deleteAdvancedApiConfigBtn = nullptr;
+    QLabel *m_advancedTemplateStatusLabel = nullptr;
+    QPlainTextEdit *m_advancedApiTemplateEdit = nullptr;
+    QPushButton *m_testAdvancedApiBtn = nullptr;
+    QPlainTextEdit *m_advancedApiResultEdit = nullptr;
 
     void loadFromConfig();
     void updateProfileList();

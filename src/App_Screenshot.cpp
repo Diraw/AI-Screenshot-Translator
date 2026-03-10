@@ -34,16 +34,14 @@ void App::onScreenshotRequested()
         {
             m_activeScreenshotTool = nullptr;
         }
-        sw->deleteLater();
-    });
+        sw->deleteLater(); });
     connect(sw, &ScreenshotTool::cancelled, this, [this]()
             {
         if (m_activeScreenshotTool)
         {
             m_activeScreenshotTool->deleteLater();
             m_activeScreenshotTool = nullptr;
-        }
-    });
+        } });
     connect(sw, &ScreenshotTool::destroyed, this, [this]()
             { m_activeScreenshotTool = nullptr; });
 
@@ -88,7 +86,7 @@ void App::onScreenshotCaptured(const QPixmap &pixmap, const QRect &rect)
     }
 
     // 2. Call API (If enabled)
-    if (cfg.apiKey.isEmpty())
+    if (!cfg.useAdvancedApiMode && cfg.apiKey.isEmpty())
         return;
 
     qDebug() << "App: Starting async screenshot processing needed for API";
@@ -137,7 +135,8 @@ void App::onScreenshotCaptured(const QPixmap &pixmap, const QRect &rect)
         if (providerStr == "gemini") provider = ApiProvider::Gemini;
         else if (providerStr == "claude") provider = ApiProvider::Claude;
 
-        m_apiClient->configure(cfg.apiKey, cfg.baseUrl, cfg.modelName, provider, cfg.useProxy, cfg.proxyUrl, cfg.endpointPath);
+        m_apiClient->configure(cfg.apiKey, cfg.baseUrl, cfg.modelName, provider, cfg.useProxy,
+                       cfg.proxyUrl, cfg.endpointPath, cfg.useAdvancedApiMode, cfg.advancedApiTemplate);
 
         // Store entryId in heap to pass as context
         QByteArray *contextData = new QByteArray(entryId.toUtf8());

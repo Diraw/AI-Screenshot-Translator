@@ -5,12 +5,14 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QHash>
 #include <QMessageBox>
 #include <QNetworkAccessManager>
 #include <QNetworkProxy>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPointer>
+#include <QSignalBlocker>
 #include <QTcpSocket>
 #include <QTimer>
 #include <QUrl>
@@ -58,6 +60,46 @@ static QUrl joinBaseAndEndpointUi(const QString &baseUrl, const QString &endpoin
     return base.resolved(QUrl(ep));
 }
 
+static QJsonValue substituteTemplateTokens(const QJsonValue &value, const QHash<QString, QString> &tokens)
+{
+    if (value.isString())
+    {
+        const QString raw = value.toString();
+        const QString trimmed = raw.trimmed();
+
+        // Keep numeric fields as JSON numbers instead of string literals.
+        if (trimmed == "{{temperature}}" || trimmed == "{{top_p}}")
+            return QJsonValue(tokens.value(trimmed.mid(2, trimmed.length() - 4)).toDouble());
+        if (trimmed == "{{max_tokens}}")
+            return QJsonValue(tokens.value("max_tokens").toInt());
+
+        QString out = raw;
+        for (auto it = tokens.constBegin(); it != tokens.constEnd(); ++it)
+            out.replace(QString("{{%1}}").arg(it.key()), it.value());
+        return out;
+    }
+
+    if (value.isArray())
+    {
+        QJsonArray replaced;
+        const QJsonArray src = value.toArray();
+        for (const QJsonValue &v : src)
+            replaced.append(substituteTemplateTokens(v, tokens));
+        return replaced;
+    }
+
+    if (value.isObject())
+    {
+        QJsonObject replaced;
+        const QJsonObject src = value.toObject();
+        for (auto it = src.constBegin(); it != src.constEnd(); ++it)
+            replaced.insert(it.key(), substituteTemplateTokens(it.value(), tokens));
+        return replaced;
+    }
+
+    return value;
+}
+
 QString ConfigDialog::defaultEndpointForProvider(const QString &provider) const
 {
     const QString p = provider.trimmed().toLower();
@@ -65,7 +107,12 @@ QString ConfigDialog::defaultEndpointForProvider(const QString &provider) const
         return "/v1beta";
     if (p == "claude")
         return "/v1/messages";
-    return "/chat/completions";
+
+    // OpenAI-compatible providers differ: some base URLs already include /v1, some do not.
+    const QString baseLower = m_baseUrlEdit ? m_baseUrlEdit->text().trimmed().toLower() : QString();
+    if (baseLower.endsWith("/v1") || baseLower.endsWith("/v1/") || baseLower.contains("/compatible-mode/v1"))
+        return "/chat/completions";
+    return "/v1/chat/completions";
 }
 
 void ConfigDialog::maybeApplyEndpointDefaultForProvider(const QString &provider)
@@ -83,8 +130,299 @@ void ConfigDialog::maybeApplyEndpointDefaultForProvider(const QString &provider)
     }
 }
 
+QString ConfigDialog::normalizeProviderForAdvancedTemplate(const QString &provider) const
+{
+    const QString p = provider.trimmed().toLower();
+    if (p == "gemini" || p == "claude")
+        return p;
+    return "openai";
+}
+
+QString ConfigDialog::buildAdvancedTemplateFromRegular(const QString &provider) const
+{
+    const QString normalizedProvider = normalizeProviderForAdvancedTemplate(provider);
+    const QString endpoint = m_endpointPathEdit ? m_endpointPathEdit->text().trimmed() : QString();
+    const QString providerDefaultEndpoint = defaultEndpointForProvider(normalizedProvider);
+
+    QString normalizedEndpoint = endpoint;
+    if (normalizedEndpoint.isEmpty())
+    {
+        normalizedEndpoint = providerDefaultEndpoint;
+    }
+    else
+    {
+        const QString ep = normalizedEndpoint.trimmed().toLower();
+        const bool staleForClaude = (normalizedProvider == "claude" &&
+                                     (ep == "/chat/completions" || ep == "/v1/chat/completions" || ep == "/v1beta"));
+        const bool staleForOpenAI = (normalizedProvider == "openai" &&
+                                     (ep == "/v1/messages" || ep == "/v1beta"));
+        const bool staleForGemini = (normalizedProvider == "gemini" &&
+                                     (ep == "/chat/completions" || ep == "/v1/chat/completions" || ep == "/v1/messages"));
+        if (staleForClaude || staleForOpenAI || staleForGemini)
+            normalizedEndpoint = providerDefaultEndpoint;
+    }
+
+    QJsonObject root;
+    root["provider"] = normalizedProvider;
+    root["api_key"] = m_apiKeyEdit ? m_apiKeyEdit->text() : QString();
+    root["base_url"] = m_baseUrlEdit ? m_baseUrlEdit->text().trimmed() : QString();
+    root["endpoint"] = normalizedEndpoint;
+    root["model"] = m_modelNameEdit ? m_modelNameEdit->text().trimmed() : QString();
+    root["prompt"] = m_promptEdit ? m_promptEdit->toPlainText() : QString();
+    root["temperature"] = 0.2;
+    root["top_p"] = 1.0;
+    root["max_tokens"] = 1024;
+
+    QJsonObject headers;
+    headers["Content-Type"] = "application/json";
+    if (normalizedProvider == "claude")
+    {
+        headers["x-api-key"] = "{{api_key}}";
+        headers["anthropic-version"] = "2023-06-01";
+    }
+    else if (normalizedProvider == "openai")
+    {
+        headers["Authorization"] = "Bearer {{api_key}}";
+    }
+    root["headers"] = headers;
+
+    QJsonObject requestBody;
+    if (normalizedProvider == "gemini")
+    {
+        QJsonArray parts;
+        QJsonObject imagePart;
+        QJsonObject inlineData;
+        inlineData["mime_type"] = "image/png";
+        inlineData["data"] = "{{base64_image}}";
+        imagePart["inline_data"] = inlineData;
+
+        QJsonObject textPart;
+        textPart["text"] = "{{prompt}}";
+
+        parts.append(imagePart);
+        parts.append(textPart);
+
+        QJsonObject content;
+        content["parts"] = parts;
+
+        QJsonArray contents;
+        contents.append(content);
+        requestBody["contents"] = contents;
+    }
+    else if (normalizedProvider == "claude")
+    {
+        QJsonArray content;
+        QJsonObject image;
+        image["type"] = "image";
+        QJsonObject source;
+        source["type"] = "base64";
+        source["media_type"] = "image/png";
+        source["data"] = "{{base64_image}}";
+        image["source"] = source;
+        content.append(image);
+
+        QJsonObject text;
+        text["type"] = "text";
+        text["text"] = "{{prompt}}";
+        content.append(text);
+
+        QJsonObject msg;
+        msg["role"] = "user";
+        msg["content"] = content;
+        QJsonArray msgs;
+        msgs.append(msg);
+        requestBody["messages"] = msgs;
+        requestBody["model"] = "{{model}}";
+        requestBody["max_tokens"] = "{{max_tokens}}";
+    }
+    else
+    {
+        QJsonObject systemMsg;
+        systemMsg["role"] = "system";
+        systemMsg["content"] = "You are a helpful assistant.";
+
+        QJsonObject imageContent;
+        imageContent["type"] = "image_url";
+        QJsonObject imageUrl;
+        imageUrl["url"] = "data:image/png;base64,{{base64_image}}";
+        imageContent["image_url"] = imageUrl;
+
+        QJsonObject textContent;
+        textContent["type"] = "text";
+        textContent["text"] = "{{prompt}}";
+
+        QJsonArray userContent;
+        userContent.append(imageContent);
+        userContent.append(textContent);
+
+        QJsonObject userMsg;
+        userMsg["role"] = "user";
+        userMsg["content"] = userContent;
+
+        QJsonArray msgs;
+        msgs.append(systemMsg);
+        msgs.append(userMsg);
+
+        requestBody["model"] = "{{model}}";
+        requestBody["messages"] = msgs;
+        requestBody["temperature"] = "{{temperature}}";
+        requestBody["top_p"] = "{{top_p}}";
+        requestBody["max_tokens"] = "{{max_tokens}}";
+    }
+    root["request_body"] = requestBody;
+
+    return QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Indented));
+}
+
+bool ConfigDialog::parseAdvancedTemplateJson(QJsonObject &outRoot, QString &outError) const
+{
+    outRoot = QJsonObject();
+    outError.clear();
+
+    if (!m_advancedApiTemplateEdit)
+    {
+        outError = "高级模板编辑器不可用。";
+        return false;
+    }
+
+    const QByteArray raw = m_advancedApiTemplateEdit->toPlainText().toUtf8();
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(raw, &err);
+    if (doc.isNull() || !doc.isObject() || err.error != QJsonParseError::NoError)
+    {
+        outError = QString("JSON 解析失败: %1 (offset=%2)").arg(err.errorString()).arg(err.offset);
+        return false;
+    }
+
+    outRoot = doc.object();
+    return true;
+}
+
+void ConfigDialog::syncAdvancedTemplateFromRegular()
+{
+    if (m_isLoadingConfig || m_isSyncingAdvanced || !m_advancedApiTemplateEdit)
+        return;
+    if (m_advancedTemplateDetached)
+        return;
+    if (m_enableAdvancedApiCheck && m_enableAdvancedApiCheck->isChecked())
+        return;
+
+    const QString provider = m_apiProviderCombo ? m_apiProviderCombo->currentData().toString() : QString("openai");
+
+    m_isSyncingAdvanced = true;
+    m_advancedApiTemplateEdit->setPlainText(buildAdvancedTemplateFromRegular(provider));
+    m_isSyncingAdvanced = false;
+}
+
+void ConfigDialog::syncRegularFieldsFromAdvancedTemplate()
+{
+    if (m_isLoadingConfig || m_isSyncingAdvanced)
+        return;
+
+    QJsonObject root;
+    QString err;
+    if (!parseAdvancedTemplateJson(root, err))
+        return;
+
+    m_isSyncingAdvanced = true;
+    if (root.contains("api_key") && m_apiKeyEdit)
+        m_apiKeyEdit->setText(root.value("api_key").toString());
+    if (root.contains("base_url") && m_baseUrlEdit)
+        m_baseUrlEdit->setText(root.value("base_url").toString());
+    if (root.contains("endpoint") && m_endpointPathEdit)
+        m_endpointPathEdit->setText(root.value("endpoint").toString());
+    if (root.contains("model") && m_modelNameEdit)
+        m_modelNameEdit->setText(root.value("model").toString());
+    if (root.contains("prompt") && m_promptEdit)
+        m_promptEdit->setPlainText(root.value("prompt").toString());
+
+    if (root.contains("provider") && m_apiProviderCombo)
+    {
+        const QString provider = normalizeProviderForAdvancedTemplate(root.value("provider").toString());
+        if (!provider.isEmpty())
+            m_lastRegularProvider = provider;
+    }
+    m_isSyncingAdvanced = false;
+}
+
+void ConfigDialog::ensureAdvancedProviderOption(bool enabled)
+{
+    Q_UNUSED(enabled);
+    if (!m_apiProviderCombo)
+        return;
+
+    const int advancedIndex = m_apiProviderCombo->findData("advanced");
+    if (advancedIndex >= 0)
+        m_apiProviderCombo->removeItem(advancedIndex);
+}
+
+void ConfigDialog::updateAdvancedApiUiState()
+{
+    const bool advancedOn = m_enableAdvancedApiCheck && m_enableAdvancedApiCheck->isChecked();
+
+    ensureAdvancedProviderOption(advancedOn);
+
+    if (m_advancedApiTemplateEdit)
+        m_advancedApiTemplateEdit->setReadOnly(!advancedOn);
+
+    if (m_apiKeyEdit)
+        m_apiKeyEdit->setEnabled(!advancedOn);
+    if (m_apiProviderCombo)
+        m_apiProviderCombo->setEnabled(!advancedOn);
+    if (m_baseUrlEdit)
+        m_baseUrlEdit->setEnabled(!advancedOn);
+    if (m_endpointPathEdit)
+        m_endpointPathEdit->setEnabled(!advancedOn);
+    if (m_modelNameEdit)
+        m_modelNameEdit->setEnabled(!advancedOn);
+    if (m_promptEdit)
+        m_promptEdit->setEnabled(!advancedOn);
+    if (m_testConnectionBtn)
+        m_testConnectionBtn->setEnabled(!advancedOn);
+
+    updateAdvancedTemplateStatusLabel();
+}
+
+void ConfigDialog::updateAdvancedTemplateStatusLabel()
+{
+    if (!m_advancedTemplateStatusLabel)
+        return;
+
+    if (m_advancedTemplateDetached)
+    {
+        m_advancedTemplateStatusLabel->setText("已独立");
+        m_advancedTemplateStatusLabel->setStyleSheet("color: #f1c40f;");
+    }
+    else
+    {
+        m_advancedTemplateStatusLabel->setText("跟随常规");
+        m_advancedTemplateStatusLabel->setStyleSheet("color: #7fd38a;");
+    }
+}
+
+void ConfigDialog::resetAdvancedApiToDefault()
+{
+    if (!m_enableAdvancedApiCheck || !m_advancedApiTemplateEdit)
+        return;
+
+    m_isSyncingAdvanced = true;
+    m_enableAdvancedApiCheck->setChecked(false);
+    m_advancedTemplateDetached = false;
+    const QString provider = m_apiProviderCombo ? m_apiProviderCombo->currentData().toString() : QString("openai");
+    m_advancedApiTemplateEdit->setPlainText(buildAdvancedTemplateFromRegular(provider));
+    m_isSyncingAdvanced = false;
+
+    updateAdvancedApiUiState();
+}
+
 void ConfigDialog::onTestConnection()
 {
+    if (m_enableAdvancedApiCheck && m_enableAdvancedApiCheck->isChecked())
+    {
+        onTestAdvancedApi();
+        return;
+    }
+
     TranslationManager &tm = TranslationManager::instance();
 
     if (!m_testNam)
@@ -231,6 +569,167 @@ void ConfigDialog::onTestConnection()
             QMessageBox::warning(this, tm.tr("test_title"), tm.tr("test_failed").arg(status).arg(err).arg(bodyPreview));
         }
 
+        reply->deleteLater(); });
+}
+
+void ConfigDialog::onTestAdvancedApi()
+{
+    if (!m_testNam)
+        m_testNam = new QNetworkAccessManager(this);
+
+    if (m_testReply)
+    {
+        m_testReply->abort();
+        m_testReply->deleteLater();
+        m_testReply = nullptr;
+    }
+
+    if (m_advancedApiResultEdit)
+        m_advancedApiResultEdit->clear();
+
+    QJsonObject root;
+    QString parseErr;
+    if (!parseAdvancedTemplateJson(root, parseErr))
+    {
+        if (m_advancedApiResultEdit)
+            m_advancedApiResultEdit->setPlainText(parseErr);
+        return;
+    }
+
+    const QString baseUrl = root.value("base_url").toString().trimmed();
+    const QString endpoint = root.value("endpoint").toString().trimmed();
+    const QString apiKey = root.value("api_key").toString();
+    const QString model = root.value("model").toString().trimmed();
+    const QString prompt = root.value("prompt").toString("ping");
+    const bool useProxy = root.contains("use_proxy") ? root.value("use_proxy").toBool(false)
+                                                     : (m_useProxyCheck ? m_useProxyCheck->isChecked() : false);
+    const QString proxyUrl = root.contains("proxy") ? root.value("proxy").toString().trimmed()
+                                                    : (m_proxyUrlEdit ? m_proxyUrlEdit->text().trimmed() : QString());
+
+    const QUrl testUrl = joinBaseAndEndpointUi(baseUrl, endpoint);
+    if (baseUrl.isEmpty() || !testUrl.isValid() || testUrl.scheme().isEmpty() || testUrl.host().isEmpty())
+    {
+        if (m_advancedApiResultEdit)
+            m_advancedApiResultEdit->setPlainText("base_url 或 endpoint 无效。");
+        return;
+    }
+
+    QNetworkRequest req(testUrl);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    req.setRawHeader("Accept", "application/json");
+    req.setRawHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+
+    const QString provider = normalizeProviderForAdvancedTemplate(root.value("provider").toString());
+
+    if (useProxy && !proxyUrl.isEmpty())
+    {
+        QNetworkProxy proxy;
+        QString proxyErr;
+        if (!tryBuildProxyFromUrl(proxyUrl, proxy, proxyErr))
+        {
+            if (m_advancedApiResultEdit)
+                m_advancedApiResultEdit->setPlainText(QString("代理配置无效：%1").arg(proxyErr));
+            return;
+        }
+
+        QTcpSocket sock;
+        sock.connectToHost(proxy.hostName(), proxy.port());
+        if (!sock.waitForConnected(2500))
+        {
+            if (m_advancedApiResultEdit)
+                m_advancedApiResultEdit->setPlainText(QString("代理不可达：%1").arg(sock.errorString()));
+            return;
+        }
+        sock.disconnectFromHost();
+
+        m_testNam->setProxy(proxy);
+    }
+    else
+    {
+        m_testNam->setProxy(QNetworkProxy::DefaultProxy);
+    }
+
+    const QHash<QString, QString> tokens = {
+        {"api_key", apiKey},
+        {"model", model},
+        {"prompt", prompt},
+        {"temperature", QString::number(root.value("temperature").toDouble(0.2), 'g', 6)},
+        {"top_p", QString::number(root.value("top_p").toDouble(1.0), 'g', 6)},
+        {"max_tokens", QString::number(root.value("max_tokens").toInt(1024))},
+        // 16x16 PNG to satisfy providers that reject tiny images (e.g., 1x1).
+        {"base64_image", "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1+jfqAAAAQElEQVR42mNk+M+ABzDhkxy50MDAwMDA8J8BiwKQhA0MDAwMDBQYGBj+g2EwGg0j0MDAwMDAwEA0GmAwGQ0AAAW7B8Q8n6fWAAAAAElFTkSuQmCC"},
+    };
+
+    if (provider == "openai" && !apiKey.isEmpty())
+        req.setRawHeader("Authorization", QByteArray("Bearer ") + apiKey.toUtf8());
+    if (provider == "claude" && !apiKey.isEmpty())
+    {
+        req.setRawHeader("x-api-key", apiKey.toUtf8());
+        req.setRawHeader("anthropic-version", "2023-06-01");
+    }
+
+    if (root.contains("headers") && root.value("headers").isObject())
+    {
+        const QJsonObject headers = root.value("headers").toObject();
+        for (auto it = headers.constBegin(); it != headers.constEnd(); ++it)
+        {
+            QString headerValue = it.value().toString();
+            for (auto tk = tokens.constBegin(); tk != tokens.constEnd(); ++tk)
+                headerValue.replace(QString("{{%1}}").arg(tk.key()), tk.value());
+            req.setRawHeader(it.key().toUtf8(), headerValue.toUtf8());
+        }
+    }
+
+    // OpenAI-compatible endpoints usually require Bearer auth even for non-openai provider labels.
+    const QString epLower = endpoint.toLower();
+    const QString baseLower = baseUrl.toLower();
+    const bool looksOpenAICompatible = epLower.contains("chat/completions") || baseLower.contains("compatible-mode");
+    if (looksOpenAICompatible && !apiKey.isEmpty() && !req.hasRawHeader("Authorization"))
+        req.setRawHeader("Authorization", QByteArray("Bearer ") + apiKey.toUtf8());
+
+    QJsonObject body;
+    if (root.contains("request_body") && root.value("request_body").isObject())
+    {
+        body = substituteTemplateTokens(root.value("request_body"), tokens).toObject();
+    }
+    else
+    {
+        body["model"] = model;
+        body["messages"] = QJsonArray{QJsonObject{{"role", "user"}, {"content", "ping"}}};
+        body["max_tokens"] = 1;
+    }
+
+    if (m_testAdvancedApiBtn)
+        m_testAdvancedApiBtn->setEnabled(false);
+
+    m_testReply = m_testNam->post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
+
+    QTimer *timeoutTimer = new QTimer(this);
+    timeoutTimer->setSingleShot(true);
+    timeoutTimer->setInterval(8000);
+    connect(timeoutTimer, &QTimer::timeout, this, [this]()
+            {
+        if (m_testReply)
+            m_testReply->abort(); });
+    timeoutTimer->start();
+
+    connect(m_testReply, &QNetworkReply::finished, this, [this, timeoutTimer]()
+            {
+        timeoutTimer->stop();
+        timeoutTimer->deleteLater();
+
+        QPointer<QNetworkReply> reply = m_testReply;
+        m_testReply = nullptr;
+        if (m_testAdvancedApiBtn)
+            m_testAdvancedApiBtn->setEnabled(true);
+        if (!reply)
+            return;
+
+        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const QByteArray body = reply->readAll();
+        const QString output = QString("HTTP %1\n%2").arg(status).arg(QString::fromUtf8(body));
+        if (m_advancedApiResultEdit)
+            m_advancedApiResultEdit->setPlainText(output);
         reply->deleteLater(); });
 }
 

@@ -3,6 +3,7 @@
 
 #include <QDir>
 #include <QDebug>
+#include <QMessageBox>
 #include <QSignalBlocker>
 
 void ConfigDialog::loadFromConfig()
@@ -20,9 +21,33 @@ void ConfigDialog::loadFromConfig()
 
     {
         const QSignalBlocker blocker(m_apiProviderCombo);
-        int providerIndex = m_apiProviderCombo->findData(cfg.apiProvider);
+        QString loadProvider = cfg.apiProvider.trimmed().toLower();
+        if (loadProvider != "openai" && loadProvider != "gemini" && loadProvider != "claude")
+            loadProvider = "openai";
+        int providerIndex = m_apiProviderCombo->findData(loadProvider);
         if (providerIndex >= 0)
             m_apiProviderCombo->setCurrentIndex(providerIndex);
+    }
+
+    if (!cfg.apiProvider.trimmed().isEmpty())
+        m_lastRegularProvider = cfg.apiProvider.trimmed().toLower();
+
+    m_advancedTemplateDetached = cfg.advancedApiCustomized;
+
+    if (m_advancedApiTemplateEdit)
+    {
+        QString templateText;
+        if (m_advancedTemplateDetached && !cfg.advancedApiTemplate.trimmed().isEmpty())
+            templateText = cfg.advancedApiTemplate;
+        else
+            templateText = buildAdvancedTemplateFromRegular(m_apiProviderCombo ? m_apiProviderCombo->currentData().toString() : QString("openai"));
+        m_advancedApiTemplateEdit->setPlainText(templateText);
+    }
+
+    if (m_enableAdvancedApiCheck)
+    {
+        const QSignalBlocker blocker(m_enableAdvancedApiCheck);
+        m_enableAdvancedApiCheck->setChecked(cfg.useAdvancedApiMode);
     }
 
     // If the stored endpoint is exactly the provider default, remember it as auto-filled.
@@ -96,6 +121,10 @@ void ConfigDialog::loadFromConfig()
     }
 
     m_isLoadingConfig = false;
+
+    syncAdvancedTemplateFromRegular();
+
+    updateAdvancedApiUiState();
 }
 
 void ConfigDialog::save()
@@ -122,6 +151,22 @@ void ConfigDialog::save()
     cfg.proxyUrl = m_proxyUrlEdit->text();
     cfg.useProxy = m_useProxyCheck->isChecked();
     cfg.storagePath = storageSetting;
+    cfg.useAdvancedApiMode = m_enableAdvancedApiCheck && m_enableAdvancedApiCheck->isChecked();
+    if (m_advancedApiTemplateEdit)
+        cfg.advancedApiTemplate = m_advancedApiTemplateEdit->toPlainText();
+
+    if (cfg.useAdvancedApiMode)
+    {
+        QJsonObject parsedRoot;
+        QString parseErr;
+        if (!parseAdvancedTemplateJson(parsedRoot, parseErr))
+        {
+            QMessageBox::warning(this, "高级 API", QString("高级模板 JSON 无效，无法保存。\n%1").arg(parseErr));
+            return;
+        }
+    }
+
+    cfg.advancedApiCustomized = m_advancedTemplateDetached;
     cfg.apiProvider = m_apiProviderCombo->currentData().toString();
     cfg.showPreviewCard = m_showPreviewCheck->isChecked();
     cfg.showResultWindow = m_showResultCheck->isChecked();

@@ -356,14 +356,16 @@ void App::restorePreview(const QString &entryId)
 
 void App::onRetranslateRequested(const QString &base64Image)
 {
-    if (base64Image.isEmpty()) {
+    if (base64Image.isEmpty())
+    {
         qWarning() << "[App] onRetranslateRequested: empty base64 image";
         return;
     }
 
     AppConfig cfg = m_configManager.getConfig();
 
-    if (cfg.apiKey.isEmpty()) {
+    if (!cfg.useAdvancedApiMode && cfg.apiKey.isEmpty())
+    {
         qWarning() << "[App] onRetranslateRequested: no API key configured";
         return;
     }
@@ -384,17 +386,21 @@ void App::onRetranslateRequested(const QString &base64Image)
     m_historyManager.saveEntry(entry);
 
     // Show result window
-    if (cfg.showResultWindow) {
+    if (cfg.showResultWindow)
+    {
         showResult(entryId);
     }
 
     // Convert QString apiProvider to enum
-    ApiProvider provider = ApiProvider::OpenAI;  // default
+    ApiProvider provider = ApiProvider::OpenAI; // default
     QString providerStr = cfg.apiProvider.trimmed().toLower();
-    if (providerStr == "gemini") provider = ApiProvider::Gemini;
-    else if (providerStr == "claude") provider = ApiProvider::Claude;
+    if (providerStr == "gemini")
+        provider = ApiProvider::Gemini;
+    else if (providerStr == "claude")
+        provider = ApiProvider::Claude;
 
-    m_apiClient->configure(cfg.apiKey, cfg.baseUrl, cfg.modelName, provider, cfg.useProxy, cfg.proxyUrl, cfg.endpointPath);
+    m_apiClient->configure(cfg.apiKey, cfg.baseUrl, cfg.modelName, provider, cfg.useProxy,
+                           cfg.proxyUrl, cfg.endpointPath, cfg.useAdvancedApiMode, cfg.advancedApiTemplate);
 
     // Store entryId in heap to pass as context
     QByteArray *contextData = new QByteArray(entryId.toUtf8());
@@ -402,7 +408,7 @@ void App::onRetranslateRequested(const QString &base64Image)
     // Convert base64 string back to QByteArray for API call
     QByteArray base64Bytes = base64Image.toLatin1();
 
-    m_apiClient->processImage(base64Bytes, cfg.promptText, (void*)contextData);
+    m_apiClient->processImage(base64Bytes, cfg.promptText, (void *)contextData);
 
     qDebug() << "[App] Retranslation request sent for entry:" << entryId;
 }

@@ -6,6 +6,8 @@
 #include <QNetworkReply>
 #include <QString>
 #include <QByteArray>
+#include <QHash>
+#include <QJsonValue>
 #include <QSet>
 
 enum class ApiProvider
@@ -24,7 +26,8 @@ public:
 
     // Setup connection details
     void configure(const QString &apiKey, const QString &baseUrl, const QString &modelName,
-                   ApiProvider provider, bool useProxy, const QString &proxyUrl = QString(), const QString &endpointPath = QString());
+                   ApiProvider provider, bool useProxy, const QString &proxyUrl = QString(), const QString &endpointPath = QString(),
+                   bool useAdvancedApi = false, const QString &advancedApiTemplate = QString());
 
     // Main action
     void processImage(const QByteArray &base64Image, const QString &promptText, void *context = nullptr);
@@ -45,6 +48,8 @@ private:
     ApiProvider m_provider = ApiProvider::OpenAI;
     bool m_useProxy = false;
     QString m_proxyUrl;
+    bool m_useAdvancedApi = false;
+    QString m_advancedApiTemplate;
 
     // Retry logic tracking (to prevent infinite loops)
     // We store the context in a set to track if a specific request has already retried
@@ -63,6 +68,11 @@ private:
     // Provider-specific endpoint and header helpers
     QString getEndpoint() const;
     void setProviderHeaders(QNetworkRequest &request) const;
+    bool buildAdvancedRequest(const QByteArray &base64Image, const QString &promptText,
+                              QNetworkRequest &request, QByteArray &payload,
+                              QString &outError) const;
+    QJsonValue applyTemplateTokens(const QJsonValue &value, const QHash<QString, QString> &tokens) const;
+    QString extractGenericText(const QJsonObject &root) const;
 };
 
 #endif // APICLIENT_H

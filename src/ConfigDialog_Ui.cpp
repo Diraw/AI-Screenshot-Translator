@@ -74,13 +74,45 @@ void ConfigDialog::setupDialogUi()
     setupProfileSection(mainLayout);
     setupTabs(mainLayout);
 
-    connect(m_tabWidget, &QTabWidget::currentChanged, [this]()
-            {
-        layout()->setSizeConstraint(QLayout::SetFixedSize);
-        QTimer::singleShot(100, [this]()
-                           { layout()->setSizeConstraint(QLayout::SetDefaultConstraint); }); });
-
     setupActionButtons(mainLayout);
+
+    // Vertical resize behavior: keep profile/actions fixed, only tabs area gets extra height.
+    mainLayout->setStretch(0, 0);
+    mainLayout->setStretch(1, 1);
+    mainLayout->setStretch(2, 0);
+
+    // Keep dialog baseline size aligned with the General tab; other tabs should adapt via scroll areas.
+    QTimer::singleShot(0, this, [this]()
+                       {
+        if (!m_tabWidget || !m_generalTab)
+            return;
+
+        const bool hasSavedGeometry = m_configManager && !m_configManager->getConfig().configWindowGeometry.isEmpty();
+
+        if (!hasSavedGeometry)
+        {
+            const int previousIndex = m_tabWidget->currentIndex();
+            const int generalIndex = m_tabWidget->indexOf(m_generalTab);
+            if (generalIndex >= 0)
+                m_tabWidget->setCurrentIndex(generalIndex);
+
+            adjustSize();
+            const QSize baselineSize = size();
+
+            if (previousIndex >= 0)
+                m_tabWidget->setCurrentIndex(previousIndex);
+
+            resize(baselineSize);
+            // Keep width baseline, but do not lock window minimum height.
+            setMinimumWidth(baselineSize.width());
+        }
+
+        // Release prompt fixed-height seed so it can expand when the window grows.
+        if (m_promptEdit)
+        {
+            m_promptEdit->setMinimumHeight(30);
+            m_promptEdit->setMaximumHeight(QWIDGETSIZE_MAX);
+        } });
 }
 
 void ConfigDialog::setupTabs(QVBoxLayout *mainLayout)
@@ -92,4 +124,5 @@ void ConfigDialog::setupTabs(QVBoxLayout *mainLayout)
     setupTranslationTab();
     setupArchiveTab();
     setupOtherTab();
+    setupAdvancedApiTab();
 }
