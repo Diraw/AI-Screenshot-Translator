@@ -1,3 +1,5 @@
+<p align="right"><b>🇨🇳 中文</b> | <a href="README_EN.md">🇬🇧 English</a></p>
+
 # AI 截图翻译工具 (AI Screenshot Translator)
 
 [![Qt6](https://img.shields.io/badge/Qt-6.x-41CD52)](https://www.qt.io/) [![WebView2](https://img.shields.io/badge/WebView2-Microsoft-0078D4?logo=microsoftedge&logoColor=white)](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) <img alt="GitHub release (latest by date)" src="https://img.shields.io/github/v/release/Diraw/AI-Screenshot-Translator"> <img alt="GitHub issues" src="https://img.shields.io/github/issues/Diraw/AI-Screenshot-Translator?color=green"> [![Downloads](https://img.shields.io/github/downloads/Diraw/AI-Screenshot-Translator/total?color=yellow)](https://github.com/Diraw/AI-Screenshot-Translator/releases/)
