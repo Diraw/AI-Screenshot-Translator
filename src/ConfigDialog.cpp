@@ -52,6 +52,195 @@ static bool tryBuildProxyFromUrl(const QString &proxyUrl, QNetworkProxy &outProx
     return true;
 }
 
+// 生成详细的网络错误诊断信息
+static QString buildDetailedNetworkError(QNetworkReply::NetworkError error, const QString &errorString, int httpStatus, const QUrl &url)
+{
+    QString diagnosis;
+    
+    switch (error)
+    {
+    case QNetworkReply::ConnectionRefusedError:
+        diagnosis = QStringLiteral("❌ 连接被拒绝\n\n"
+            "可能原因：\n"
+            "• 服务器未启动或未监听该端口\n"
+            "• 防火墙阻止了连接\n"
+            "• IP 地址或端口号错误\n\n"
+            "建议检查：服务器是否运行，地址和端口是否正确");
+        break;
+        
+    case QNetworkReply::RemoteHostClosedError:
+        diagnosis = QStringLiteral("❌ 服务器主动断开连接\n\n"
+            "可能原因：\n"
+            "• 服务器拒绝了请求（可能是 TLS/SSL 版本不兼容）\n"
+            "• 请求被防火墙或安全软件拦截\n"
+            "• 代理服务器配置错误\n\n"
+            "建议检查：如果使用代理，请检查代理设置；尝试关闭防火墙测试");
+        break;
+        
+    case QNetworkReply::HostNotFoundError:
+        diagnosis = QStringLiteral("❌ 无法解析服务器地址\n\n"
+            "可能原因：\n"
+            "• DNS 解析失败\n"
+            "• 域名拼写错误\n"
+            "• 网络连接断开\n\n"
+            "建议检查：\n"
+            "• 检查域名拼写是否正确\n"
+            "• 尝试在浏览器中访问该地址\n"
+            "• 检查网络连接");
+        break;
+        
+    case QNetworkReply::TimeoutError:
+        diagnosis = QStringLiteral("❌ 连接超时（超过 8 秒）\n\n"
+            "可能原因：\n"
+            "• 网络延迟过高\n"
+            "• 服务器响应缓慢\n"
+            "• 防火墙或代理导致连接阻塞\n\n"
+            "建议检查：\n"
+            "• 网络连接是否正常\n"
+            "• 如果使用代理，检查代理是否可用\n"
+            "• 尝试在浏览器中访问该地址确认响应速度");
+        break;
+        
+    case QNetworkReply::OperationCanceledError:
+        if (httpStatus == 0)
+        {
+            diagnosis = QStringLiteral("❌ 请求被中断（HTTP 0）\n\n"
+                "可能原因：\n"
+                "• 请求超时（超过 8 秒无响应）\n"
+                "• 网络连接中断\n"
+                "• 请求被防火墙/杀毒软件拦截\n"
+                "• 服务器无响应\n\n"
+                "建议检查：\n"
+                "• 检查网络连接\n"
+                "• 如果使用代理，确认代理可用\n"
+                "• 暂时关闭防火墙/杀毒软件测试\n"
+                "• 在浏览器中访问相同地址测试");
+        }
+        else
+        {
+            diagnosis = QStringLiteral("❌ 请求被取消");
+        }
+        break;
+        
+    case QNetworkReply::SslHandshakeFailedError:
+        diagnosis = QStringLiteral("❌ SSL/TLS 握手失败\n\n"
+            "可能原因：\n"
+            "• 服务器证书过期或不受信任\n"
+            "• 系统时间不正确导致证书验证失败\n"
+            "• TLS 版本不兼容\n\n"
+            "建议检查：\n"
+            "• 检查系统时间是否正确\n"
+            "• 尝试在浏览器中访问，查看证书警告\n"
+            "• 如果是自签名证书，需要添加到信任列表");
+        break;
+        
+    case QNetworkReply::TemporaryNetworkFailureError:
+    case QNetworkReply::NetworkSessionFailedError:
+        diagnosis = QStringLiteral("❌ 网络会话失败\n\n"
+            "可能原因：\n"
+            "• 网络连接已断开\n"
+            "• WiFi 连接不稳定\n\n"
+            "建议检查：网络连接状态");
+        break;
+        
+    case QNetworkReply::ProxyConnectionRefusedError:
+        diagnosis = QStringLiteral("❌ 代理服务器拒绝连接\n\n"
+            "可能原因：\n"
+            "• 代理服务器未运行\n"
+            "• 代理地址或端口错误\n\n"
+            "建议检查：代理设置是否正确");
+        break;
+        
+    case QNetworkReply::ProxyNotFoundError:
+        diagnosis = QStringLiteral("❌ 无法连接到代理服务器\n\n"
+            "可能原因：\n"
+            "• 代理服务器地址错误\n"
+            "• 代理服务器不可达\n\n"
+            "建议检查：代理地址和端口配置");
+        break;
+        
+    case QNetworkReply::ProxyTimeoutError:
+        diagnosis = QStringLiteral("❌ 代理连接超时\n\n"
+            "可能原因：\n"
+            "• 代理服务器响应缓慢\n"
+            "• 代理服务器不可达\n\n"
+            "建议检查：\n"
+            "• 确认代理服务器可用\n"
+            "• 尝试不使用代理直接连接");
+        break;
+        
+    case QNetworkReply::ProxyAuthenticationRequiredError:
+        diagnosis = QStringLiteral("❌ 代理需要身份验证\n\n"
+            "建议检查：代理用户名和密码是否正确");
+        break;
+        
+    case QNetworkReply::ContentAccessDenied:
+    case QNetworkReply::AuthenticationRequiredError:
+        diagnosis = QStringLiteral("❌ 访问被拒绝（HTTP 401/403）\n\n"
+            "可能原因：API Key 无效或过期\n\n"
+            "建议检查：API Key 是否正确");
+        break;
+        
+    case QNetworkReply::ContentNotFoundError:
+        diagnosis = QStringLiteral("❌ 接口路径不存在（HTTP 404）\n\n"
+            "建议检查：端点路径（Endpoint）是否正确");
+        break;
+        
+    case QNetworkReply::ProtocolInvalidOperationError:
+        diagnosis = QStringLiteral("❌ 请求方法不允许（HTTP 405）\n\n"
+            "可能原因：API 不支持该请求方法\n\n"
+            "建议检查：API 格式设置是否正确（OpenAI/Ollama）");
+        break;
+        
+    case QNetworkReply::ContentReSendError:
+        diagnosis = QStringLiteral("❌ 重定向错误\n\n"
+            "可能原因：服务器返回了重定向，但被拦截\n\n"
+            "建议检查：使用浏览器访问看是否自动跳转");
+        break;
+        
+    case QNetworkReply::ServiceUnavailableError:
+    case QNetworkReply::InternalServerError:
+        diagnosis = QStringLiteral("❌ 服务器内部错误（HTTP 5xx）\n\n"
+            "可能原因：服务器暂时不可用\n\n"
+            "建议：稍后再试");
+        break;
+        
+    case QNetworkReply::UnknownNetworkError:
+        if (httpStatus == 0)
+        {
+            diagnosis = QStringLiteral("❌ 网络错误（HTTP 0）\n\n"
+                "可能原因：\n"
+                "• 请求超时（超过 8 秒）\n"
+                "• 网络连接中断\n"
+                "• 请求被防火墙/杀毒软件拦截\n"
+                "• 服务器无响应\n\n"
+                "建议检查：\n"
+                "1. 检查 Base URL 格式是否正确（需包含 https://）\n"
+                "2. 在浏览器中访问相同地址测试\n"
+                "3. 检查网络连接和代理设置\n"
+                "4. 暂时关闭防火墙/杀毒软件测试");
+        }
+        else
+        {
+            diagnosis = QStringLiteral("❌ 未知网络错误");
+        }
+        break;
+        
+    default:
+        diagnosis = QStringLiteral("网络错误 (%1)").arg(error);
+        break;
+    }
+    
+    QString result = QStringLiteral("测试失败（HTTP %1）\n\n").arg(httpStatus);
+    result += diagnosis;
+    result += QStringLiteral("\n\n技术信息：\n• 错误类型: %1\n• 原始错误: %2\n• 请求地址: %3")
+        .arg(error)
+        .arg(errorString)
+        .arg(url.toString());
+    
+    return result;
+}
+
 static QUrl joinBaseAndEndpointUi(const QString &baseUrl, const QString &endpoint)
 {
     QUrl base = QUrl::fromUserInput(baseUrl.trimmed());
@@ -236,6 +425,8 @@ QString ConfigDialog::defaultEndpointForProvider(const QString &provider) const
         return "/v1beta";
     if (p == "claude")
         return "/v1/messages";
+    if (p == "aihubmix")
+        return "/v1/chat/completions"; // AIHubMix uses OpenAI-compatible endpoint for all models
 
     // OpenAI-compatible providers differ: some base URLs already include /v1, some do not.
     const QString baseLower = m_baseUrlEdit ? m_baseUrlEdit->text().trimmed().toLower() : QString();
@@ -698,9 +889,9 @@ void ConfigDialog::onTestConnection()
         }
         else
         {
-            const QString err = activeReply->errorString();
-            const QString bodyPreview = QString::fromUtf8(body.left(800));
-            QMessageBox::warning(this, tm.tr("test_title"), tm.tr("test_failed").arg(status).arg(err).arg(bodyPreview));
+            const QNetworkReply::NetworkError netErr = activeReply->error();
+            const QString detailedError = buildDetailedNetworkError(netErr, activeReply->errorString(), status, activeReply->url());
+            QMessageBox::warning(this, tm.tr("test_title"), detailedError);
         }
 
         activeReply->deleteLater(); });
@@ -756,9 +947,9 @@ void ConfigDialog::onTestConnection()
         }
         else
         {
-            const QString err = activeReply->errorString();
-            const QString bodyPreview = QString::fromUtf8(body.left(800));
-            QMessageBox::warning(this, tm.tr("test_title"), tm.tr("test_failed").arg(status).arg(err).arg(bodyPreview));
+            const QNetworkReply::NetworkError netErr = activeReply->error();
+            const QString detailedError = buildDetailedNetworkError(netErr, activeReply->errorString(), status, activeReply->url());
+            QMessageBox::warning(this, tm.tr("test_title"), detailedError);
         }
 
         activeReply->deleteLater(); });
@@ -934,15 +1125,17 @@ void ConfigDialog::onTestAdvancedApi()
 
         const int status = activeReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         const QByteArray body = activeReply->readAll();
-        QString output = QString("HTTP %1").arg(status);
+        QString output;
         if (status == 0 || activeReply->error() != QNetworkReply::NoError)
         {
-            output += QString("\nNetwork Error (%1): %2")
-                          .arg(static_cast<int>(activeReply->error()))
-                          .arg(activeReply->errorString());
+            output = buildDetailedNetworkError(activeReply->error(), activeReply->errorString(), status, activeReply->url());
+        }
+        else
+        {
+            output = QString("HTTP %1").arg(status);
         }
         if (!body.isEmpty())
-            output += QString("\n%1").arg(QString::fromUtf8(body));
+            output += QString("\n\n响应内容：\n%1").arg(QString::fromUtf8(body));
         if (m_advancedApiResultEdit)
             m_advancedApiResultEdit->setPlainText(output);
 
