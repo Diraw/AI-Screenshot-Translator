@@ -109,6 +109,8 @@ void HistoryManager::saveEntry(const TranslationEntry &entry)
     TranslationEntry cachedEntry = entry;
     cachedEntry.translatedMarkdown = HistoryManager::normalizeMarkdown(entry.translatedMarkdown);
     cachedEntry.localImagePath = fullImgPath;
+    // Keep cache lightweight: image bytes are loaded on-demand via getEntryById().
+    cachedEntry.originalBase64.clear();
     m_markdownCache[entry.id] = cachedEntry.translatedMarkdown;
     m_entryCache[entry.id] = cachedEntry;
 }
@@ -153,23 +155,13 @@ QList<TranslationEntry> HistoryManager::loadEntries()
             continue;
         }
 
-        QImage img(imagePath);
-        if (img.isNull())
-        {
-            staleIds << entry.id;
-            continue;
-        }
-
         entry.prompt = query.value(3).toString();
         entry.translatedMarkdown = HistoryManager::normalizeMarkdown(query.value(4).toString());
         entry.tags = parseTagsJson(query.value(5).toString());
         entry.localImagePath = imagePath;
 
-        QByteArray ba;
-        QBuffer buffer(&ba);
-        buffer.open(QIODevice::WriteOnly);
-        img.save(&buffer, "PNG");
-        entry.originalBase64 = ba.toBase64();
+        // Do not decode image bytes while loading the archive list.
+        entry.originalBase64.clear();
 
         m_markdownCache[entry.id] = entry.translatedMarkdown;
         m_entryCache[entry.id] = entry;
@@ -261,35 +253,52 @@ bool HistoryManager::deleteEntries(const QStringList &ids)
 
 TranslationEntry HistoryManager::getEntryById(const QString &id)
 {
+    TranslationEntry entry;
     if (m_entryCache.contains(id))
-        return m_entryCache.value(id);
+    {
+        entry = m_entryCache.value(id);
+    }
+
     if (!ensureDatabaseReady())
         return TranslationEntry();
 
-    QSqlQuery query(m_db);
-    query.prepare("SELECT id, timestamp, image_file, prompt, markdown, tags_json FROM entries WHERE id = ?");
-    query.addBindValue(id);
-    if (!query.exec() || !query.next())
+    if (entry.id.isEmpty())
+    {
+        QSqlQuery query(m_db);
+        query.prepare("SELECT id, timestamp, image_file, prompt, markdown, tags_json FROM entries WHERE id = ?");
+        query.addBindValue(id);
+        if (!query.exec() || !query.next())
+            return TranslationEntry();
+
+        entry.id = query.value(0).toString();
+        entry.timestamp = QDateTime::fromString(query.value(1).toString(), Qt::ISODate);
+        if (!entry.timestamp.isValid())
+            entry.timestamp = QDateTime::currentDateTime();
+
+        QString imagePath = query.value(2).toString();
+        if (!QDir::isAbsolutePath(imagePath))
+            imagePath = QDir(m_basePath).filePath(imagePath);
+        if (!QFile::exists(imagePath))
+            return TranslationEntry();
+
+        entry.prompt = query.value(3).toString();
+        entry.translatedMarkdown = HistoryManager::normalizeMarkdown(query.value(4).toString());
+        entry.tags = parseTagsJson(query.value(5).toString());
+        entry.localImagePath = imagePath;
+
+        // Cache metadata only; image bytes remain on-demand.
+        TranslationEntry metadataOnly = entry;
+        metadataOnly.originalBase64.clear();
+        m_markdownCache[entry.id] = metadataOnly.translatedMarkdown;
+        m_entryCache[entry.id] = metadataOnly;
+    }
+
+    if (entry.localImagePath.isEmpty())
+        return TranslationEntry();
+    if (!QFile::exists(entry.localImagePath))
         return TranslationEntry();
 
-    TranslationEntry entry;
-    entry.id = query.value(0).toString();
-    entry.timestamp = QDateTime::fromString(query.value(1).toString(), Qt::ISODate);
-    if (!entry.timestamp.isValid())
-        entry.timestamp = QDateTime::currentDateTime();
-
-    QString imagePath = query.value(2).toString();
-    if (!QDir::isAbsolutePath(imagePath))
-        imagePath = QDir(m_basePath).filePath(imagePath);
-    if (!QFile::exists(imagePath))
-        return TranslationEntry();
-
-    entry.prompt = query.value(3).toString();
-    entry.translatedMarkdown = HistoryManager::normalizeMarkdown(query.value(4).toString());
-    entry.tags = parseTagsJson(query.value(5).toString());
-    entry.localImagePath = imagePath;
-
-    QImage img(imagePath);
+    QImage img(entry.localImagePath);
     if (img.isNull())
         return TranslationEntry();
     QByteArray ba;
@@ -298,8 +307,6 @@ TranslationEntry HistoryManager::getEntryById(const QString &id)
     img.save(&buffer, "PNG");
     entry.originalBase64 = ba.toBase64();
 
-    m_markdownCache[entry.id] = entry.translatedMarkdown;
-    m_entryCache[entry.id] = entry;
     return entry;
 }
 

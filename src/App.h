@@ -7,6 +7,7 @@
 #include <QList>
 #include <QPointer>
 #include <QTimer>
+#include <QPixmap>
 
 extern bool g_enableLogging;
 
@@ -75,6 +76,8 @@ private:
     QList<QPointer<QWidget>> m_activeWindows;
     QMap<QString, QPointer<PreviewCard>> m_previewCards; // ID -> Card (Restored for history)
     QMap<QString, QRect> m_previewGeometries;            // ID -> Last known geometry
+    QMap<QString, QPixmap> m_previewImageCache;          // ID -> Recently decoded preview image
+    QMap<QString, QPointer<QTimer>> m_previewReleaseTimers; // ID -> Delayed release timers
     QPointer<PreviewCard> m_activePreviewCard;           // The main/initial screenshot card
     QRect m_lastPreviewGeometry;                         // Persistence for screenshot card
 
@@ -87,6 +90,8 @@ private:
     QString syncLaunchAtStartup(bool enabled);
     void showResult(const QString &entryId);
     QString updateConfig(const AppConfig &cfg);
+    void schedulePreviewImageRelease(const QString &entryId);
+    void cancelPreviewImageRelease(const QString &entryId);
     // New hotkey configuration
 
     // Dynamic State

@@ -208,6 +208,48 @@ void App::onResultWindowScreenshotRequested(const QString &entryId, const QStrin
     restorePreview(entryId);
 }
 
+void App::cancelPreviewImageRelease(const QString &entryId)
+{
+    auto timer = m_previewReleaseTimers.value(entryId);
+    if (timer)
+    {
+        timer->stop();
+        timer->deleteLater();
+    }
+    m_previewReleaseTimers.remove(entryId);
+}
+
+void App::schedulePreviewImageRelease(const QString &entryId)
+{
+    if (entryId.isEmpty())
+        return;
+
+    cancelPreviewImageRelease(entryId);
+
+    QTimer *timer = new QTimer(this);
+    timer->setSingleShot(true);
+    connect(timer, &QTimer::timeout, this, [this, entryId, timer]()
+            {
+                m_previewReleaseTimers.remove(entryId);
+                timer->deleteLater();
+
+                // If the preview is visible again, keep cache alive.
+                if (m_previewCards.contains(entryId) && m_previewCards[entryId])
+                    return;
+
+                m_previewImageCache.remove(entryId);
+#ifdef _WIN32
+                {
+                    QString msg = QString("[APP] preview cache released entryId=%1").arg(entryId);
+                    QByteArray line = msg.toUtf8();
+                    WinKeyForwarder::trace(line.constData());
+                }
+#endif
+            });
+    m_previewReleaseTimers[entryId] = timer;
+    timer->start(5000);
+}
+
 void App::restorePreview(const QString &entryId)
 {
 #ifdef _WIN32
@@ -233,56 +275,62 @@ void App::restorePreview(const QString &entryId)
         WinKeyForwarder::trace("[APP] restorePreview toggle: closing existing PreviewCard");
 #endif
         m_previewCards[entryId]->close();
+        schedulePreviewImageRelease(entryId);
         // QPointer will null it out automatically because WA_DeleteOnClose is set
         return;
     }
 
-    TranslationEntry entry = m_historyManager.getEntryById(entryId);
-    if (entry.id.isEmpty())
-    {
-#ifdef _WIN32
-        WinKeyForwarder::trace("[APP] restorePreview abort: entry not found in history");
-#endif
-        return;
-    }
-
-#ifdef _WIN32
-    {
-        QString msg = QString("[APP] entry found: b64=%1").arg(entry.originalBase64.size());
-        QByteArray line = msg.toUtf8();
-        WinKeyForwarder::trace(line.constData());
-    }
-#endif
+    cancelPreviewImageRelease(entryId);
 
     AppConfig cfg = m_configManager.getConfig();
+    QPixmap pixmap = m_previewImageCache.value(entryId);
 
-    QPixmap pixmap;
-    if (!entry.originalBase64.isEmpty())
+    if (pixmap.isNull())
     {
-        QByteArray bytes = QByteArray::fromBase64(entry.originalBase64.toLatin1());
+        TranslationEntry entry = m_historyManager.getEntryById(entryId);
+        if (entry.id.isEmpty())
+        {
+#ifdef _WIN32
+            WinKeyForwarder::trace("[APP] restorePreview abort: entry not found in history");
+#endif
+            return;
+        }
+
 #ifdef _WIN32
         {
-            QString msg = QString("[APP] decoded bytes=%1").arg(bytes.size());
+            QString msg = QString("[APP] entry found: b64=%1").arg(entry.originalBase64.size());
             QByteArray line = msg.toUtf8();
             WinKeyForwarder::trace(line.constData());
         }
 #endif
-        pixmap.loadFromData(bytes);
-    }
 
-    if (entry.originalBase64.isEmpty())
-    {
+        if (!entry.originalBase64.isEmpty())
+        {
+            QByteArray bytes = QByteArray::fromBase64(entry.originalBase64.toLatin1());
 #ifdef _WIN32
-        WinKeyForwarder::trace("[APP] restorePreview abort: entry.originalBase64 empty");
+            {
+                QString msg = QString("[APP] decoded bytes=%1").arg(bytes.size());
+                QByteArray line = msg.toUtf8();
+                WinKeyForwarder::trace(line.constData());
+            }
 #endif
-    }
+            pixmap.loadFromData(bytes);
+        }
 
-    if (pixmap.isNull())
-    {
+        if (entry.originalBase64.isEmpty())
+        {
 #ifdef _WIN32
-        WinKeyForwarder::trace("[APP] restorePreview abort: pixmap.isNull (decode failed)");
+            WinKeyForwarder::trace("[APP] restorePreview abort: entry.originalBase64 empty");
 #endif
-        return;
+        }
+
+        if (pixmap.isNull())
+        {
+#ifdef _WIN32
+            WinKeyForwarder::trace("[APP] restorePreview abort: pixmap.isNull (decode failed)");
+#endif
+            return;
+        }
     }
 
 #ifdef _WIN32
@@ -336,6 +384,9 @@ void App::restorePreview(const QString &entryId)
         }
     }
 
+    // Keep one decoded image in-memory per preview entry; released 5s after close.
+    m_previewImageCache[entryId] = pixmap;
+
     PreviewCard *card = new PreviewCard(pixmap);
     card->setZoomSensitivity(cfg.zoomSensitivity);
     card->setBorderColor(cfg.cardBorderColor);
@@ -359,6 +410,7 @@ void App::restorePreview(const QString &entryId)
     connect(card, &PreviewCard::closed, [this, card, entryId]()
             {
                 m_activeWindows.removeAll(card);
+                schedulePreviewImageRelease(entryId);
                 // m_previewCards[entryId] will become null due to QPointer
             });
 }
