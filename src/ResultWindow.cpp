@@ -9,6 +9,9 @@
 #include "ColorUtils.h"
 
 #include <QVBoxLayout>
+
+// From main.cpp - global debug mode flag
+extern bool g_enableLogging;
 #include <QHBoxLayout>
 #include <QFile>
 #include <QCoreApplication>
@@ -57,12 +60,15 @@ ResultWindow::ResultWindow(QWidget *parent) : QWidget(parent)
   m_webContainer = new QWidget(this);
   m_webView = std::make_unique<EmbedWebView>(m_webContainer);
 
-  // DevTools shortcut for WebView debugging
-  QShortcut *devToolsShortcut = new QShortcut(QKeySequence(Qt::Key_F12), this);
-  devToolsShortcut->setContext(Qt::ApplicationShortcut);
-  connect(devToolsShortcut, &QShortcut::activated, this, [this]()
-          {
-        if (m_webView) m_webView->openDevTools(); });
+  // DevTools shortcut for WebView debugging - only in debug mode
+  if (g_enableLogging)
+  {
+    QShortcut *devToolsShortcut = new QShortcut(QKeySequence(Qt::Key_F12), this);
+    devToolsShortcut->setContext(Qt::ApplicationShortcut);
+    connect(devToolsShortcut, &QShortcut::activated, this, [this]()
+            {
+          if (m_webView) m_webView->openDevTools(); });
+  }
 
   m_toolBar = new QWidget(this);
   m_toolBar->setObjectName("resultToolBar");

@@ -10,6 +10,9 @@
 #include <QTimer>
 #include <QWidget>
 
+// From main.cpp - global debug mode flag
+extern bool g_enableLogging;
+
 EmbedWebView::EmbedWebView(QWidget *parent) : QObject(parent)
 {
     try
@@ -148,46 +151,93 @@ void EmbedWebView::checkReady()
                 &lostToken);
         }
 
-        // Ensure DevTools are enabled and capture F12/Ctrl+Shift+I even when focus is inside WebView
-        if (m_impl->m_webview)
+        // Only enable DevTools and WebView shortcuts in debug mode
+        if (g_enableLogging)
         {
-            ICoreWebView2Settings *settings = nullptr;
-            if (SUCCEEDED(m_impl->m_webview->get_Settings(&settings)) && settings)
+            // Ensure DevTools are enabled and capture F12/Ctrl+Shift+I even when focus is inside WebView
+            if (m_impl->m_webview)
             {
-                settings->put_AreDevToolsEnabled(TRUE);
-                settings->Release();
+                ICoreWebView2Settings *settings = nullptr;
+                if (SUCCEEDED(m_impl->m_webview->get_Settings(&settings)) && settings)
+                {
+                    settings->put_AreDevToolsEnabled(TRUE);
+                    settings->Release();
+                }
+            }
+            if (m_impl->m_controller)
+            {
+                EventRegistrationToken token{};
+                m_impl->m_controller->add_AcceleratorKeyPressed(
+                    Callback<ICoreWebView2AcceleratorKeyPressedEventHandler>(
+                        [this](ICoreWebView2Controller *, ICoreWebView2AcceleratorKeyPressedEventArgs *args) -> HRESULT
+                        {
+                            COREWEBVIEW2_KEY_EVENT_KIND kind;
+                            if (FAILED(args->get_KeyEventKind(&kind)))
+                                return S_OK;
+                            if (kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN &&
+                                kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN)
+                            {
+                                return S_OK;
+                            }
+                            UINT key = 0;
+                            if (FAILED(args->get_VirtualKey(&key)))
+                                return S_OK;
+                            bool isCtrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+                            bool isShift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+                            if (key == VK_F12 || (isCtrl && isShift && key == 'I'))
+                            {
+                                qDebug() << "[DevTools] AcceleratorKeyPressed -> open";
+                                openDevTools();
+                                args->put_Handled(TRUE);
+                            }
+                            return S_OK;
+                        })
+                        .Get(),
+                    &token);
             }
         }
-        if (m_impl->m_controller)
+        else
         {
-            EventRegistrationToken token{};
-            m_impl->m_controller->add_AcceleratorKeyPressed(
-                Callback<ICoreWebView2AcceleratorKeyPressedEventHandler>(
-                    [this](ICoreWebView2Controller *, ICoreWebView2AcceleratorKeyPressedEventArgs *args) -> HRESULT
-                    {
-                        COREWEBVIEW2_KEY_EVENT_KIND kind;
-                        if (FAILED(args->get_KeyEventKind(&kind)))
-                            return S_OK;
-                        if (kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN &&
-                            kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN)
+            // Disable DevTools in non-debug mode
+            if (m_impl->m_webview)
+            {
+                ICoreWebView2Settings *settings = nullptr;
+                if (SUCCEEDED(m_impl->m_webview->get_Settings(&settings)) && settings)
+                {
+                    settings->put_AreDevToolsEnabled(FALSE);
+                    settings->Release();
+                }
+            }
+            // Block browser shortcuts (Ctrl+R, etc.) in non-debug mode
+            if (m_impl->m_controller)
+            {
+                EventRegistrationToken token{};
+                m_impl->m_controller->add_AcceleratorKeyPressed(
+                    Callback<ICoreWebView2AcceleratorKeyPressedEventHandler>(
+                        [this](ICoreWebView2Controller *, ICoreWebView2AcceleratorKeyPressedEventArgs *args) -> HRESULT
                         {
+                            COREWEBVIEW2_KEY_EVENT_KIND kind;
+                            if (FAILED(args->get_KeyEventKind(&kind)))
+                                return S_OK;
+                            if (kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN &&
+                                kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN)
+                            {
+                                return S_OK;
+                            }
+                            UINT key = 0;
+                            if (FAILED(args->get_VirtualKey(&key)))
+                                return S_OK;
+                            bool isCtrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+                            // Block Ctrl+R (refresh) and other browser shortcuts in non-debug mode
+                            if (isCtrl && (key == 'R' || key == 'P' || key == 'S' || key == VK_F5))
+                            {
+                                args->put_Handled(TRUE);
+                            }
                             return S_OK;
-                        }
-                        UINT key = 0;
-                        if (FAILED(args->get_VirtualKey(&key)))
-                            return S_OK;
-                        bool isCtrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
-                        bool isShift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-                        if (key == VK_F12 || (isCtrl && isShift && key == 'I'))
-                        {
-                            qDebug() << "[DevTools] AcceleratorKeyPressed -> open";
-                            openDevTools();
-                            args->put_Handled(TRUE);
-                        }
-                        return S_OK;
-                    })
-                    .Get(),
-                &token);
+                        })
+                        .Get(),
+                    &token);
+            }
         }
 #endif
 

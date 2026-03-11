@@ -9,6 +9,9 @@
 #include <QUuid>
 
 #include <QIcon>
+
+// From main.cpp - global debug mode flag
+extern bool g_enableLogging;
 #include <QMenu>
 #include <QAction>
 #include <QKeyEvent>
@@ -84,12 +87,15 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent)
     m_webView = std::make_unique<EmbedWebView>(m_webContainer);
     qApp->installEventFilter(this);
 
-    // DevTools shortcut for debugging WebView content
-    QShortcut *devToolsShortcut = new QShortcut(QKeySequence(Qt::Key_F12), this);
-    devToolsShortcut->setContext(Qt::ApplicationShortcut);
-    connect(devToolsShortcut, &QShortcut::activated, this, [this]()
-            {
-        if (m_webView) m_webView->openDevTools(); });
+    // DevTools shortcut for debugging WebView content - only in debug mode
+    if (g_enableLogging)
+    {
+        QShortcut *devToolsShortcut = new QShortcut(QKeySequence(Qt::Key_F12), this);
+        devToolsShortcut->setContext(Qt::ApplicationShortcut);
+        connect(devToolsShortcut, &QShortcut::activated, this, [this]()
+                {
+            if (m_webView) m_webView->openDevTools(); });
+    }
 
     // Local shortcuts for archive window UX
     // - Ctrl+S toggles batch selection mode (keep 's' for screenshot card)
