@@ -24,6 +24,8 @@
     "selection_toggle_hotkey": "ctrl+s",
     "archive_use_pagination": true,
     "archive_page_size": 50,
+    "show_advanced_debug_in_result": true,
+    "show_advanced_debug_in_archive": false,
 
     "bold_hotkey": "ctrl+b",
     "underline_hotkey": "ctrl+u",

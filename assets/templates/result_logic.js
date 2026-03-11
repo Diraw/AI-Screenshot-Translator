@@ -4,6 +4,7 @@ if (typeof marked !== 'undefined') {
 var INIT_DATA = {}; var CUR_MD = '';
 try { INIT_DATA = JSON.parse(document.getElementById('init-data').textContent || '{}'); CUR_MD = INIT_DATA.raw_md || ''; } catch(e) {}
 const DARK_MODE = !!INIT_DATA.is_dark;
+var SHOW_ADV_DEBUG = (INIT_DATA.show_adv_debug !== false);
 document.documentElement.classList.toggle('dark-mode', DARK_MODE);
 document.body.classList.toggle('dark-mode', DARK_MODE);
 try {
@@ -112,9 +113,17 @@ function splitDebugFromMarkdown(md) {
   return { md: src.slice(m[0].length), debug: (m[1] || '').trim() };
 }
 
+function applyDebugBarVisibility() {
+  var bar = document.getElementById('debug_bar');
+  if (!bar) return;
+  bar.style.display = SHOW_ADV_DEBUG ? '' : 'none';
+}
+
 function setDebugInfo(text) {
   var el = document.getElementById('debug_lines');
   if (!el) return;
+  applyDebugBarVisibility();
+  if (!SHOW_ADV_DEBUG) return;
   var v = (text || '').trim();
   if (!v) { el.textContent = 'debug: -'; return; }
   var lines = v.split(/\r?\n/).filter(function(line){ return line.trim().length > 0; });
@@ -208,6 +217,11 @@ function render(md, opts) {
     }
   }
 }
+window.__setAdvancedDebugVisible = function(show) {
+  SHOW_ADV_DEBUG = !!show;
+  applyDebugBarVisibility();
+  render(CUR_MD, { keepDebug: true });
+};
 window.updateContentFromNative = function(payload) {
   var next = payload;
   if (payload && typeof payload === 'object' && !Array.isArray(payload)) {

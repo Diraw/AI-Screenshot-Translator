@@ -54,6 +54,16 @@ void ConfigDialog::loadFromConfig()
         const QSignalBlocker blocker(m_enableAdvancedApiCheck);
         m_enableAdvancedApiCheck->setChecked(cfg.useAdvancedApiMode);
     }
+    if (m_showAdvancedDebugInResultCheck)
+    {
+        const QSignalBlocker blocker(m_showAdvancedDebugInResultCheck);
+        m_showAdvancedDebugInResultCheck->setChecked(cfg.showAdvancedDebugInResultWindow);
+    }
+    if (m_showAdvancedDebugInArchiveCheck)
+    {
+        const QSignalBlocker blocker(m_showAdvancedDebugInArchiveCheck);
+        m_showAdvancedDebugInArchiveCheck->setChecked(cfg.showAdvancedDebugInArchiveWindow);
+    }
 
     // If the stored endpoint is exactly the provider default, remember it as auto-filled.
     if (m_endpointPathEdit)
@@ -170,6 +180,10 @@ void ConfigDialog::save()
     cfg.useAdvancedApiMode = m_enableAdvancedApiCheck && m_enableAdvancedApiCheck->isChecked();
     if (m_advancedApiTemplateEdit)
         cfg.advancedApiTemplate = m_advancedApiTemplateEdit->toPlainText();
+    cfg.showAdvancedDebugInResultWindow =
+        m_showAdvancedDebugInResultCheck ? m_showAdvancedDebugInResultCheck->isChecked() : true;
+    cfg.showAdvancedDebugInArchiveWindow =
+        m_showAdvancedDebugInArchiveCheck ? m_showAdvancedDebugInArchiveCheck->isChecked() : false;
 
     if (cfg.useAdvancedApiMode)
     {

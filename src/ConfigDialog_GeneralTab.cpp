@@ -179,13 +179,24 @@ void ConfigDialog::setupAdvancedApiTab()
     rootLayout->addWidget(m_advancedApiTemplateEdit, 1);
 
     auto *testRow = new QHBoxLayout();
+    TranslationManager &tm = TranslationManager::instance();
     m_testAdvancedApiBtn = new QPushButton("测试 JSON 与 API 连通性", this);
-    m_pickAdvancedJsonFieldsBtn = new QPushButton(TranslationManager::instance().tr("btn_select_json_fields"), this);
+    m_pickAdvancedJsonFieldsBtn = new QPushButton(tm.tr("btn_select_json_fields"), this);
+    m_showAdvancedDebugInResultCheck = new QCheckBox(tm.tr("chk_adv_debug_result_short"), this);
+    m_showAdvancedDebugInArchiveCheck = new QCheckBox(tm.tr("chk_adv_debug_archive_short"), this);
     m_pickAdvancedJsonFieldsBtn->setEnabled(false);
     testRow->addWidget(m_testAdvancedApiBtn, 0);
     testRow->addWidget(m_pickAdvancedJsonFieldsBtn, 0);
     testRow->addStretch(1);
     rootLayout->addLayout(testRow);
+
+    auto *debugRow = new QHBoxLayout();
+    m_advancedDebugDisplayLabel = new QLabel(tm.tr("lbl_adv_debug_display"), this);
+    debugRow->addWidget(m_advancedDebugDisplayLabel, 0);
+    debugRow->addWidget(m_showAdvancedDebugInResultCheck, 0);
+    debugRow->addWidget(m_showAdvancedDebugInArchiveCheck, 0);
+    debugRow->addStretch(1);
+    rootLayout->addLayout(debugRow);
 
     m_advancedApiResultEdit = new QPlainTextEdit(this);
     m_advancedApiResultEdit->setReadOnly(true);

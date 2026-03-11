@@ -58,6 +58,11 @@ void ResultWindow::setConfig(const AppConfig &config)
                                "document.documentElement.style.setProperty('--mark-bg-dark', '%2');}catch(e){}})();")
                                .arg(mark, markDark);
         m_webView->eval(js.toStdString());
+
+        const QString debugJs = QString(
+                                    "(()=>{try{if(window.__setAdvancedDebugVisible){window.__setAdvancedDebugVisible(%1);}}catch(e){}})();")
+                                    .arg(m_config.showAdvancedDebugInResultWindow ? "true" : "false");
+        m_webView->eval(debugJs.toStdString());
     }
 
     // Apply default lock state from config (used when creating new result windows).

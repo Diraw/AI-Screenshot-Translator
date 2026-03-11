@@ -196,6 +196,9 @@ private:
     QPlainTextEdit *m_advancedApiTemplateEdit = nullptr;
     QPushButton *m_testAdvancedApiBtn = nullptr;
     QPushButton *m_pickAdvancedJsonFieldsBtn = nullptr;
+    QLabel *m_advancedDebugDisplayLabel = nullptr;
+    QCheckBox *m_showAdvancedDebugInResultCheck = nullptr;
+    QCheckBox *m_showAdvancedDebugInArchiveCheck = nullptr;
     QPlainTextEdit *m_advancedApiResultEdit = nullptr;
     QJsonDocument m_lastAdvancedApiTestJson;
     bool m_hasLastAdvancedApiTestJson = false;

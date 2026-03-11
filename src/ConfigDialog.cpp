@@ -704,6 +704,12 @@ void ConfigDialog::updateAdvancedApiUiState()
         m_testConnectionBtn->setEnabled(!advancedOn);
     if (m_pickAdvancedJsonFieldsBtn)
         m_pickAdvancedJsonFieldsBtn->setEnabled(advancedOn && m_hasLastAdvancedApiTestJson);
+    if (m_advancedDebugDisplayLabel)
+        m_advancedDebugDisplayLabel->setEnabled(advancedOn);
+    if (m_showAdvancedDebugInResultCheck)
+        m_showAdvancedDebugInResultCheck->setEnabled(advancedOn);
+    if (m_showAdvancedDebugInArchiveCheck)
+        m_showAdvancedDebugInArchiveCheck->setEnabled(advancedOn);
 
     updateAdvancedTemplateStatusLabel();
 }

@@ -131,6 +131,24 @@ function protectMathJs(text) {
    return {text: protectedText, blocks: blocks};
 }
 
+function stripArchiveDebugPrefix(md) {
+    var src = (typeof md === 'string') ? md : '';
+    if (typeof SHOW_ADV_DEBUG_ARCHIVE !== 'undefined' && SHOW_ADV_DEBUG_ARCHIVE) return src;
+
+    // Current format:
+    // ```text
+    // [Advanced API Debug]
+    // ...
+    // ```
+    src = src.replace(/^[\uFEFF\s]*```(?:text)?\r?\n\[Advanced API Debug\]\r?\n[\s\S]*?\r?\n```\s*\r?\n*/i, '');
+
+    // Legacy plain format:
+    // [Advanced API Debug]
+    // key = value
+    src = src.replace(/^[\uFEFF\s]*\[Advanced API Debug\]\r?\n(?:[A-Za-z0-9_.$\[\]-]+\s*=.*\r?\n)+\r?\n*/i, '');
+    return src;
+}
+
 function extractMarkdown(rawEl) {
     if (!rawEl) return '';
     var html = rawEl.innerHTML || '';
@@ -156,6 +174,7 @@ function renderContent(id, markdownOverride) {
     var raw = document.getElementById('raw_' + id);
     var rendered = document.getElementById('rendered_' + id);
     var markdown = (typeof markdownOverride === 'string') ? markdownOverride : (raw ? raw.textContent : '');
+    markdown = stripArchiveDebugPrefix(markdown);
     
     // Step 1: Extract LaTeX from backticks (e.g., `$formula$` -> $formula$)
     // Only unwrap if the backticked content is a valid LaTeX expression (properly paired delimiters)
@@ -402,10 +421,10 @@ if (!window.__INIT_ONCE__) {
 function updateEntryInDom(id, newMarkdown) {
    var raw = document.getElementById('raw_' + id);
    if (raw) {
-       raw.innerText = newMarkdown;
+       raw.innerText = stripArchiveDebugPrefix(newMarkdown);
        var entry = raw.closest('.entry');
        if (entry && !entry.classList.contains('mode-edit')) {
-           renderContent(id, newMarkdown);
+           renderContent(id, stripArchiveDebugPrefix(newMarkdown));
        }
    }
 }
@@ -465,7 +484,7 @@ function addEntryToDom(id, time, markdown, mathBlocks, originalRaw, isSelectionM
   
   var rawContainer = document.getElementById('raw_' + id);
   if (rawContainer) {
-      rawContainer.textContent = originalRaw; 
+      rawContainer.textContent = stripArchiveDebugPrefix(originalRaw);
       renderContent(id);
   }
 }

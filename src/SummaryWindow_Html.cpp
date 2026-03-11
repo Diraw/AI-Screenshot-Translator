@@ -163,6 +163,7 @@ void SummaryWindow::initHtml()
         QString js;
         js += "(()=>{";
         js += QString("try{applyDarkMode(%1);}catch(e){};").arg(isDark ? "true" : "false");
+        js += QString("try{SHOW_ADV_DEBUG_ARCHIVE=%1;}catch(e){};").arg(m_config.showAdvancedDebugInArchiveWindow ? "true" : "false");
         js += QString("try{SELECTION_MODE=%1;}catch(e){};").arg(m_selectionMode ? "true" : "false");
         js += "try{document.querySelectorAll('.entry').forEach(function(n){n.remove();});}catch(e){};";
         for (const auto &entry : filteredEntries)
@@ -359,6 +360,7 @@ document.addEventListener('mousedown', function() {
     html += QString("var KEY_UNDERLINE = '%1';\n").arg(m_underlineKey);
     html += QString("var KEY_HIGHLIGHT = '%1';\n").arg(m_highlightKey);
     html += QString("var RESTORE_SCROLL = %1;\n").arg(m_lastScrollY);
+    html += QString("var SHOW_ADV_DEBUG_ARCHIVE = %1;\n").arg(m_config.showAdvancedDebugInArchiveWindow ? "true" : "false");
 
     QString summaryLogic = loadAsset("templates/summary_logic.js");
     if (summaryLogic.isEmpty())

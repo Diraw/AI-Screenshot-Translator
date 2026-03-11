@@ -553,6 +553,8 @@ void ConfigManager::parseJson(const QJsonObject &root)
         m_config.selectionToggleHotkey = app["selection_toggle_hotkey"].toString("ctrl+s");
         m_config.archiveUsePagination = app["archive_use_pagination"].toBool(true);
         m_config.archivePageSize = qMax(1, app["archive_page_size"].toInt(50));
+        m_config.showAdvancedDebugInResultWindow = app["show_advanced_debug_in_result"].toBool(true);
+        m_config.showAdvancedDebugInArchiveWindow = app["show_advanced_debug_in_archive"].toBool(false);
 
         m_config.boldHotkey = app["bold_hotkey"].toString("ctrl+b");
         m_config.underlineHotkey = app["underline_hotkey"].toString("ctrl+u");
@@ -639,6 +641,8 @@ QJsonObject ConfigManager::toJson() const
     app["selection_toggle_hotkey"] = m_config.selectionToggleHotkey;
     app["archive_use_pagination"] = m_config.archiveUsePagination;
     app["archive_page_size"] = m_config.archivePageSize;
+    app["show_advanced_debug_in_result"] = m_config.showAdvancedDebugInResultWindow;
+    app["show_advanced_debug_in_archive"] = m_config.showAdvancedDebugInArchiveWindow;
 
     app["bold_hotkey"] = m_config.boldHotkey;
     app["underline_hotkey"] = m_config.underlineHotkey;

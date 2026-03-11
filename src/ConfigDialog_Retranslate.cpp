@@ -168,6 +168,12 @@ void ConfigDialog::retranslateUi()
         m_testAdvancedApiBtn->setText(QStringLiteral("测试 JSON 与 API 连通性"));
     if (m_pickAdvancedJsonFieldsBtn)
         m_pickAdvancedJsonFieldsBtn->setText(tm.tr("btn_select_json_fields"));
+    if (m_advancedDebugDisplayLabel)
+        m_advancedDebugDisplayLabel->setText(tm.tr("lbl_adv_debug_display"));
+    if (m_showAdvancedDebugInResultCheck)
+        m_showAdvancedDebugInResultCheck->setText(tm.tr("chk_adv_debug_result_short"));
+    if (m_showAdvancedDebugInArchiveCheck)
+        m_showAdvancedDebugInArchiveCheck->setText(tm.tr("chk_adv_debug_archive_short"));
     updateAdvancedTemplateStatusLabel();
 
     QGroupBox *grpShortcuts = m_otherTab->findChild<QGroupBox *>("grpShortcuts");

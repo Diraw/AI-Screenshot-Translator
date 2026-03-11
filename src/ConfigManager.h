@@ -42,6 +42,8 @@ struct AppConfig
     QString selectionToggleHotkey = "ctrl+s";
     bool archiveUsePagination = true;
     int archivePageSize = 50;
+    bool showAdvancedDebugInResultWindow = true;
+    bool showAdvancedDebugInArchiveWindow = false;
 
     // Formatting Shortcuts
     QString boldHotkey = "ctrl+b";
