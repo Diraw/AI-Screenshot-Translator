@@ -70,6 +70,17 @@ void ConfigDialog::loadFromConfig()
     m_viewToggleHotkeyEdit->setText(cfg.viewToggleHotkey);
     m_screenshotToggleHotkeyEdit->setText(cfg.screenshotToggleHotkey);
     m_selectionToggleHotkeyEdit->setText(cfg.selectionToggleHotkey);
+    if (m_archiveLoadModeCombo)
+    {
+        const int modeIndex = m_archiveLoadModeCombo->findData(cfg.archiveUsePagination);
+        if (modeIndex >= 0)
+            m_archiveLoadModeCombo->setCurrentIndex(modeIndex);
+    }
+    if (m_archivePageSizeSpin)
+    {
+        m_archivePageSizeSpin->setValue(cfg.archivePageSize > 0 ? cfg.archivePageSize : 50);
+        m_archivePageSizeSpin->setEnabled(cfg.archiveUsePagination);
+    }
     m_boldHotkeyEdit->setText(cfg.boldHotkey);
     m_underlineHotkeyEdit->setText(cfg.underlineHotkey);
     m_highlightHotkeyEdit->setText(cfg.highlightHotkey);
@@ -206,6 +217,8 @@ void ConfigDialog::save()
     cfg.viewToggleHotkey = m_viewToggleHotkeyEdit->text();
     cfg.screenshotToggleHotkey = m_screenshotToggleHotkeyEdit->text();
     cfg.selectionToggleHotkey = m_selectionToggleHotkeyEdit->text().trimmed();
+    cfg.archiveUsePagination = m_archiveLoadModeCombo && m_archiveLoadModeCombo->currentData().toBool();
+    cfg.archivePageSize = m_archivePageSizeSpin ? m_archivePageSizeSpin->value() : 50;
     cfg.boldHotkey = m_boldHotkeyEdit->text();
     cfg.underlineHotkey = m_underlineHotkeyEdit->text().trimmed();
     cfg.highlightHotkey = m_highlightHotkeyEdit->text().trimmed();

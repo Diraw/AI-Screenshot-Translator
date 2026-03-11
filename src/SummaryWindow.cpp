@@ -56,6 +56,12 @@ void SummaryWindow::setConfig(const AppConfig &config)
     if (m_selectionToggleShortcut)
         m_selectionToggleShortcut->setKey(QKeySequence(m_selectionToggleKey));
 
+    m_archiveUsePagination = m_config.archiveUsePagination;
+    m_archivePageSize = qMax(1, m_config.archivePageSize);
+    if (!m_archiveUsePagination)
+        m_currentPage = 1;
+    updatePaginationUi();
+
     if (m_webView)
     {
         const QString mark = ColorUtils::normalizeCssColor(m_config.highlightMarkColor, "#ffeb3b");
@@ -66,6 +72,9 @@ void SummaryWindow::setConfig(const AppConfig &config)
                                .arg(mark, markDark);
         m_webView->eval(js.toStdString());
     }
+
+    if (m_htmlLoaded)
+        refreshHtml(false);
 }
 
 SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent)

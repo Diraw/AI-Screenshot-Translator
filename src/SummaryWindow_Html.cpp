@@ -3,6 +3,7 @@
 #include "ColorUtils.h"
 #include "EmbedWebView.h"
 #include "ThemeUtils.h"
+#include "TranslationManager.h"
 
 #include <QCoreApplication>
 #include <QFile>
@@ -14,6 +15,7 @@
 #include <QRegularExpressionMatch>
 #include <QRegularExpressionMatchIterator>
 #include <QStringList>
+#include <QtGlobal>
 
 static QString makeHtmlSafeJson(const QJsonDocument &doc)
 {
@@ -37,10 +39,57 @@ static QJsonObject makeEntryPayload(const TranslationEntry &entry)
     return payload;
 }
 
-void SummaryWindow::refreshHtml()
+void SummaryWindow::refreshHtml(bool preserveScroll)
 {
-    captureScrollPosition();
+    if (preserveScroll)
+        captureScrollPosition();
+    else
+        m_lastScrollY = 0.0;
+
     initHtml();
+}
+
+QList<TranslationEntry> SummaryWindow::applyPagination(const QList<TranslationEntry> &entries)
+{
+    m_filteredEntryCount = entries.size();
+    if (!m_archiveUsePagination)
+    {
+        m_currentPage = 1;
+        m_totalPages = 1;
+        updatePaginationUi();
+        return entries;
+    }
+
+    const int pageSize = qMax(1, m_archivePageSize);
+    m_totalPages = qMax(1, (m_filteredEntryCount + pageSize - 1) / pageSize);
+    m_currentPage = qBound(1, m_currentPage, m_totalPages);
+
+    const int start = (m_currentPage - 1) * pageSize;
+    updatePaginationUi();
+    return entries.mid(start, pageSize);
+}
+
+void SummaryWindow::updatePaginationUi()
+{
+    if (!m_paginationGroup)
+        return;
+
+    m_paginationGroup->setVisible(m_archiveUsePagination);
+    if (!m_archiveUsePagination)
+        return;
+
+    if (m_prevPageBtn)
+        m_prevPageBtn->setEnabled(m_currentPage > 1);
+    if (m_nextPageBtn)
+        m_nextPageBtn->setEnabled(m_currentPage < m_totalPages);
+    if (m_pageInfoLabel)
+    {
+        const QString pageText = TranslationManager::instance().tr("archive_page_indicator")
+                                     .arg(m_currentPage)
+                                     .arg(m_totalPages)
+                                     .arg(m_filteredEntryCount);
+        m_pageInfoLabel->setText(pageText);
+    }
 }
 
 QString SummaryWindow::getAddEntryJs(const TranslationEntry &entry)
@@ -65,7 +114,7 @@ void SummaryWindow::initHtml()
     // in EmbedWebView to prevent reload-induced focus issues). Instead, update entries via JS.
     if (m_htmlLoaded)
     {
-        QList<TranslationEntry> filteredEntries = getFilteredEntries();
+        QList<TranslationEntry> filteredEntries = applyPagination(getFilteredEntries());
 
         QString js;
         js += "(()=>{";
@@ -277,7 +326,7 @@ document.addEventListener('mousedown', function() {
 
     html += "</head><body class=\"__BODY_CLASS__\">";
     html = html.replace("__BODY_CLASS__", isDark ? "dark-mode" : "");
-    QList<TranslationEntry> filteredEntries = getFilteredEntries();
+    QList<TranslationEntry> filteredEntries = applyPagination(getFilteredEntries());
     QJsonArray initialEntries;
     for (const auto &entry : filteredEntries)
     {

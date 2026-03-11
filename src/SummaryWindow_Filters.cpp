@@ -152,6 +152,54 @@ void SummaryWindow::setupFilterUI()
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     m_filterToolbar->addWidget(spacer);
 
+    // Middle-right group: pagination controls
+    m_paginationGroup = new QWidget(this);
+    m_paginationGroup->setObjectName("archivePaginationGroup");
+    m_paginationGroup->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+    QHBoxLayout *paginationLayout = new QHBoxLayout(m_paginationGroup);
+    paginationLayout->setContentsMargins(3, 0, 3, 0);
+    paginationLayout->setSpacing(2);
+    paginationLayout->setAlignment(Qt::AlignVCenter);
+
+    m_prevPageBtn = new QPushButton(TranslationManager::instance().tr("btn_page_prev"), this);
+    m_prevPageBtn->setObjectName("prevPageBtn");
+    m_prevPageBtn->setProperty("variant", "ghost");
+    m_prevPageBtn->setMinimumHeight(controlHeight);
+    m_prevPageBtn->setMinimumWidth(58);
+    paginationLayout->addWidget(m_prevPageBtn);
+
+    m_pageInfoLabel = new QLabel(this);
+    m_pageInfoLabel->setObjectName("pageInfoLabel");
+    m_pageInfoLabel->setProperty("role", "caption");
+    m_pageInfoLabel->setMinimumHeight(controlHeight);
+    m_pageInfoLabel->setAlignment(Qt::AlignCenter);
+    m_pageInfoLabel->setMinimumWidth(140);
+    paginationLayout->addWidget(m_pageInfoLabel);
+
+    m_nextPageBtn = new QPushButton(TranslationManager::instance().tr("btn_page_next"), this);
+    m_nextPageBtn->setObjectName("nextPageBtn");
+    m_nextPageBtn->setProperty("variant", "ghost");
+    m_nextPageBtn->setMinimumHeight(controlHeight);
+    m_nextPageBtn->setMinimumWidth(58);
+    paginationLayout->addWidget(m_nextPageBtn);
+
+    connect(m_prevPageBtn, &QPushButton::clicked, this, [this]()
+            {
+                if (!m_archiveUsePagination || m_currentPage <= 1)
+                    return;
+                --m_currentPage;
+                refreshHtml(false);
+            });
+    connect(m_nextPageBtn, &QPushButton::clicked, this, [this]()
+            {
+                if (!m_archiveUsePagination || m_currentPage >= m_totalPages)
+                    return;
+                ++m_currentPage;
+                refreshHtml(false);
+            });
+
+    m_filterToolbar->addWidget(m_paginationGroup);
+
     // Right group: batch actions
     m_actionsGroup = new QWidget(this);
     m_actionsGroup->setObjectName("archiveActionsGroup");
@@ -262,6 +310,8 @@ void SummaryWindow::setupFilterUI()
         if (m_tagFilterBtn) m_tagFilterBtn->setText(TranslationManager::instance().tr("filter_all_tags"));
         if (m_searchEdit) m_searchEdit->clear();
         applyFilters(); });
+
+    updatePaginationUi();
 }
 
 void SummaryWindow::setHistoryManager(HistoryManager *historyManager)
@@ -291,8 +341,8 @@ void SummaryWindow::loadAvailableTags()
 
 void SummaryWindow::applyFilters()
 {
-    captureScrollPosition();
-    refreshHtml();
+    m_currentPage = 1;
+    refreshHtml(false);
 }
 
 QList<TranslationEntry> SummaryWindow::getFilteredEntries() const
@@ -495,7 +545,12 @@ void SummaryWindow::updateLanguage()
         m_batchAddTagBtn->setText(TranslationManager::instance().tr("btn_batch_add_tag"));
     if (m_batchRemoveTagBtn)
         m_batchRemoveTagBtn->setText(TranslationManager::instance().tr("btn_batch_remove_tag"));
-    
+    if (m_prevPageBtn)
+        m_prevPageBtn->setText(TranslationManager::instance().tr("btn_page_prev"));
+    if (m_nextPageBtn)
+        m_nextPageBtn->setText(TranslationManager::instance().tr("btn_page_next"));
+    updatePaginationUi();
+
     // Update search placeholder
     if (m_searchEdit)
         m_searchEdit->setPlaceholderText(TranslationManager::instance().tr("filter_search_placeholder"));

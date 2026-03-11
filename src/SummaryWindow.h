@@ -75,24 +75,35 @@ private:
     // Filter UI
     QToolBar *m_filterToolbar = nullptr;
     QWidget *m_filtersGroup = nullptr;
+    QWidget *m_paginationGroup = nullptr;
     QWidget *m_actionsGroup = nullptr;
     QDateEdit *m_fromDateEdit = nullptr;
     QDateEdit *m_toDateEdit = nullptr;
     QPushButton *m_tagFilterBtn = nullptr;
     QPushButton *m_clearFilterBtn = nullptr;
+    QPushButton *m_prevPageBtn = nullptr;
+    QPushButton *m_nextPageBtn = nullptr;
     QLineEdit *m_searchEdit = nullptr; // Search by translation content
     QLabel *m_fromLabel = nullptr;
     QLabel *m_toLabel = nullptr;
     QLabel *m_searchLabel = nullptr;
+    QLabel *m_pageInfoLabel = nullptr;
     QStringList m_selectedTags;
     HistoryManager *m_historyManager = nullptr;
+    bool m_archiveUsePagination = false;
+    int m_archivePageSize = 50;
+    int m_currentPage = 1;
+    int m_totalPages = 1;
+    int m_filteredEntryCount = 0;
 
     void setupFilterUI();
     void applyFilters();
     QList<TranslationEntry> getFilteredEntries() const;
+    QList<TranslationEntry> applyPagination(const QList<TranslationEntry> &entries);
     void loadAvailableTags();
+    void updatePaginationUi();
 
-    void refreshHtml();
+    void refreshHtml(bool preserveScroll = true);
 
     QString m_editKey = "e";
     QString m_viewKey = "r";

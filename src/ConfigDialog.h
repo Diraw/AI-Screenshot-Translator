@@ -136,6 +136,8 @@ private:
     QLineEdit *m_viewToggleHotkeyEdit;
     QLineEdit *m_screenshotToggleHotkeyEdit;
     QLineEdit *m_selectionToggleHotkeyEdit;
+    QComboBox *m_archiveLoadModeCombo = nullptr;
+    QSpinBox *m_archivePageSizeSpin = nullptr;
 
     QLineEdit *m_boldHotkeyEdit;
     QLineEdit *m_underlineHotkeyEdit;

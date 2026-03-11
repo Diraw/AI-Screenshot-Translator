@@ -22,6 +22,8 @@
     "view_toggle_hotkey": "r",
     "screenshot_toggle_hotkey": "s",
     "selection_toggle_hotkey": "ctrl+s",
+    "archive_use_pagination": true,
+    "archive_page_size": 50,
 
     "bold_hotkey": "ctrl+b",
     "underline_hotkey": "ctrl+u",

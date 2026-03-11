@@ -18,13 +18,31 @@ void ConfigDialog::setupArchiveTab()
     auto *viewLayout = new QFormLayout(grpView);
 
     m_viewToggleHotkeyEdit = new QLineEdit(this);
-    viewLayout->addRow("Summary View Toggle:", m_viewToggleHotkeyEdit);
+    viewLayout->addRow(tm.tr("lbl_view_hotkey"), m_viewToggleHotkeyEdit);
 
     m_screenshotToggleHotkeyEdit = new QLineEdit(this);
-    viewLayout->addRow("Summary Screenshot Toggle:", m_screenshotToggleHotkeyEdit);
+    viewLayout->addRow(tm.tr("lbl_shot_toggle_hotkey"), m_screenshotToggleHotkeyEdit);
 
     m_selectionToggleHotkeyEdit = new QLineEdit(this);
-    viewLayout->addRow(TranslationManager::instance().tr("lbl_selection_toggle_hotkey"), m_selectionToggleHotkeyEdit);
+    viewLayout->addRow(tm.tr("lbl_selection_toggle_hotkey"), m_selectionToggleHotkeyEdit);
+
+    m_archiveLoadModeCombo = new QComboBox(this);
+    m_archiveLoadModeCombo->addItem(tm.tr("opt_archive_load_all"), false);
+    m_archiveLoadModeCombo->addItem(tm.tr("opt_archive_load_paged"), true);
+    viewLayout->addRow(tm.tr("lbl_archive_load_mode"), m_archiveLoadModeCombo);
+
+    m_archivePageSizeSpin = new QSpinBox(this);
+    m_archivePageSizeSpin->setRange(1, 1000);
+    m_archivePageSizeSpin->setValue(50);
+    viewLayout->addRow(tm.tr("lbl_archive_page_size"), m_archivePageSizeSpin);
+
+    connect(m_archiveLoadModeCombo, &QComboBox::currentIndexChanged, this, [this](int)
+            {
+                if (!m_archiveLoadModeCombo || !m_archivePageSizeSpin)
+                    return;
+                m_archivePageSizeSpin->setEnabled(m_archiveLoadModeCombo->currentData().toBool());
+            });
+    m_archivePageSizeSpin->setEnabled(false);
 
     archiveMainLayout->addWidget(grpView);
 
@@ -33,16 +51,16 @@ void ConfigDialog::setupArchiveTab()
     auto *editLayout = new QFormLayout(grpEdit);
 
     m_editHotkeyEdit = new QLineEdit(this);
-    editLayout->addRow("Summary Edit Toggle:", m_editHotkeyEdit);
+    editLayout->addRow(tm.tr("lbl_edit_hotkey"), m_editHotkeyEdit);
 
     m_boldHotkeyEdit = new QLineEdit(this);
-    editLayout->addRow("Bold Shortcut:", m_boldHotkeyEdit);
+    editLayout->addRow(tm.tr("lbl_bold"), m_boldHotkeyEdit);
 
     m_underlineHotkeyEdit = new QLineEdit(this);
-    editLayout->addRow("Underline Shortcut:", m_underlineHotkeyEdit);
+    editLayout->addRow(tm.tr("lbl_underline"), m_underlineHotkeyEdit);
 
     m_highlightHotkeyEdit = new QLineEdit(this);
-    editLayout->addRow("Highlight Shortcut:", m_highlightHotkeyEdit);
+    editLayout->addRow(tm.tr("lbl_highlight"), m_highlightHotkeyEdit);
 
     m_highlightMarkColorEdit = new QLineEdit(this);
     m_highlightMarkColorEdit->setPlaceholderText("#ffeb3b80 or rgba(255,235,59,0.5) or 255,235,59,0.5");
@@ -57,7 +75,7 @@ void ConfigDialog::setupArchiveTab()
     hl1->addWidget(m_highlightMarkColorPreview);
     auto *hl1w = new QWidget(this);
     hl1w->setLayout(hl1);
-    editLayout->addRow("Highlight Color:", hl1w);
+    editLayout->addRow(tm.tr("lbl_highlight_color"), hl1w);
 
     m_highlightMarkColorDarkEdit = new QLineEdit(this);
     m_highlightMarkColorDarkEdit->setPlaceholderText("#d4af3780 or rgba(212,175,55,0.5) or 212,175,55,0.5");
@@ -72,7 +90,7 @@ void ConfigDialog::setupArchiveTab()
     hl2->addWidget(m_highlightMarkColorDarkPreview);
     auto *hl2w = new QWidget(this);
     hl2w->setLayout(hl2);
-    editLayout->addRow("Highlight Color (Dark):", hl2w);
+    editLayout->addRow(tm.tr("lbl_highlight_color_dark"), hl2w);
 
     archiveMainLayout->addWidget(grpEdit);
 
@@ -98,5 +116,5 @@ void ConfigDialog::setupArchiveTab()
 
     archiveMainLayout->addStretch();
 
-    m_tabWidget->addTab(m_archiveTab, "Archive Interface");
+    m_tabWidget->addTab(m_archiveTab, tm.tr("tab_archive_interface"));
 }

@@ -14,6 +14,11 @@ void SummaryWindow::setInitialHistory(const QList<TranslationEntry> &history)
 void SummaryWindow::addEntry(const TranslationEntry &entry)
 {
     m_entries.append(entry);
+    if (m_archiveUsePagination)
+    {
+        refreshHtml(false);
+        return;
+    }
     appendEntryHtml(entry);
 }
 

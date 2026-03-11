@@ -40,6 +40,8 @@ struct AppConfig
     QString screenshotToggleHotkey = "s";
     // Batch selection mode toggle inside SummaryWindow (HTML + Qt fallback)
     QString selectionToggleHotkey = "ctrl+s";
+    bool archiveUsePagination = true;
+    int archivePageSize = 50;
 
     // Formatting Shortcuts
     QString boldHotkey = "ctrl+b";

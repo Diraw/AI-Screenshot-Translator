@@ -99,6 +99,15 @@ void ConfigDialog::retranslateUi()
             updateLabel(layout, 0, "lbl_view_hotkey");
             updateLabel(layout, 1, "lbl_shot_toggle_hotkey");
             updateLabel(layout, 2, "lbl_selection_toggle_hotkey");
+            updateLabel(layout, 3, "lbl_archive_load_mode");
+            updateLabel(layout, 4, "lbl_archive_page_size");
+            if (m_archiveLoadModeCombo)
+            {
+                if (m_archiveLoadModeCombo->count() > 0)
+                    m_archiveLoadModeCombo->setItemText(0, tm.tr("opt_archive_load_all"));
+                if (m_archiveLoadModeCombo->count() > 1)
+                    m_archiveLoadModeCombo->setItemText(1, tm.tr("opt_archive_load_paged"));
+            }
         }
     }
 
