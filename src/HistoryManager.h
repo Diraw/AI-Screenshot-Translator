@@ -7,6 +7,7 @@
 #include <QFileSystemWatcher>
 #include <QMap>
 #include <QSqlDatabase>
+#include <QDate>
 #include "TranslationEntry.h"
 
 class HistoryManager : public QObject
@@ -26,6 +27,13 @@ public:
 
     // Load all valid entries from disk
     QList<TranslationEntry> loadEntries(); // Non-const now because it updates internal cache
+    QList<TranslationEntry> queryEntries(const QDate &fromDate,
+                                         const QDate &toDate,
+                                         const QStringList &tags,
+                                         const QString &searchText,
+                                         int limit,
+                                         int offset,
+                                         int *totalCount = nullptr);
 
     // Delete an entry from disk
     bool deleteEntry(const QString &id);
@@ -65,6 +73,8 @@ private:
     QSqlDatabase m_db;
     QMap<QString, QString> m_markdownCache;
     QMap<QString, TranslationEntry> m_entryCache;
+    QStringList m_allTagsCache;
+    bool m_tagsCacheDirty = true;
     bool m_ignoreNextChange = false;
 
     QString getImagesPath() const;

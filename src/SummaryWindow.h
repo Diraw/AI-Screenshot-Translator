@@ -17,6 +17,7 @@
 
 class EmbedWebView;
 class HistoryManager;
+class QTimer;
 
 class SummaryWindow : public QWidget
 {
@@ -44,6 +45,7 @@ public:
                           const QString &boldKey, const QString &underlineKey, const QString &highlightKey);
 
     void setHistoryManager(HistoryManager *historyManager);
+    void reloadFromStorage(bool preserveScroll = true);
     void updateTheme(bool isDark);
     void updateLanguage();
 
@@ -84,6 +86,7 @@ private:
     QPushButton *m_prevPageBtn = nullptr;
     QPushButton *m_nextPageBtn = nullptr;
     QLineEdit *m_searchEdit = nullptr; // Search by translation content
+    QTimer *m_searchDebounceTimer = nullptr;
     QLabel *m_fromLabel = nullptr;
     QLabel *m_toLabel = nullptr;
     QLabel *m_searchLabel = nullptr;
@@ -99,6 +102,7 @@ private:
     void setupFilterUI();
     void applyFilters();
     QList<TranslationEntry> getFilteredEntries() const;
+    QList<TranslationEntry> getEntriesForCurrentView();
     QList<TranslationEntry> applyPagination(const QList<TranslationEntry> &entries);
     void loadAvailableTags();
     void updatePaginationUi();

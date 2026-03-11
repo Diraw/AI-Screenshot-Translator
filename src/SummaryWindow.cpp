@@ -301,11 +301,7 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent)
         if (reply == QMessageBox::Yes) {
             if (m_historyManager && m_historyManager->deleteEntries(ids)) {
                 qDebug() << "Batch delete successful. Updating local list.";
-                QSet<QString> idSet = QSet<QString>(ids.begin(), ids.end());
-                for (int i = m_entries.size() - 1; i >= 0; --i) {
-                    if (idSet.contains(m_entries[i].id)) m_entries.removeAt(i);
-                }
-                applyFilters(); // Refresh UI
+                reloadFromStorage(false);
             } else {
                 qDebug() << "Batch delete failed in HistoryManager.";
             }
@@ -330,8 +326,7 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent)
             qDebug() << "Batch add tags - user selected tags:" << tags;
             if (m_historyManager->addTagsToEntries(ids, tags)) {
                 qDebug() << "Batch add tags successful. Reloading entries.";
-                m_entries = m_historyManager->loadEntries();
-                applyFilters();
+                reloadFromStorage(false);
                 loadAvailableTags();
             } else {
                 qDebug() << "Batch add tags returned false (maybe no changes needed or failed).";
@@ -359,8 +354,7 @@ SummaryWindow::SummaryWindow(QWidget *parent) : QWidget(parent)
             qDebug() << "Batch remove tags - user selected tags:" << tags;
             if (m_historyManager->removeTagsFromEntries(ids, tags)) {
                 qDebug() << "Batch remove tags successful. Reloading entries.";
-                m_entries = m_historyManager->loadEntries();
-                applyFilters();
+                reloadFromStorage(false);
                 loadAvailableTags();
             } else {
                 qDebug() << "Batch remove tags returned false (maybe no changes needed or failed).";

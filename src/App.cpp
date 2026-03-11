@@ -112,18 +112,15 @@ App::App(QObject *parent)
     // Reload summary list when history.json changes externally
     connect(&m_historyManager, &HistoryManager::historyFileChanged, this, [this]()
             {
-        QList<TranslationEntry> history = m_historyManager.loadEntries();
         if (m_summaryWindow) {
-            m_summaryWindow->setInitialHistory(history);
+            if (m_summaryWindow->isVisible())
+                m_summaryWindow->reloadFromStorage(true);
             // Reload tags list for filters/batch tag ops
             m_summaryWindow->setHistoryManager(&m_historyManager);
         } });
 
     setupTray();
     m_historyManager.setStoragePath(effectiveStoragePath);
-
-    QList<TranslationEntry> history = m_historyManager.loadEntries();
-    m_summaryWindow->setInitialHistory(history);
 
     // Initialize summary hotkeys (view/edit/screenshot/bold/underline/highlight)
     m_summaryWindow->configureHotkeys(cfg.editHotkey, cfg.viewToggleHotkey, cfg.screenshotToggleHotkey,

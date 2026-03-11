@@ -1,4 +1,4 @@
-<p align="right"><b>🇨🇳 中文</b> | <a href="README_EN.md">🇬🇧 English</a></p>
+<p align="right"><b>中文</b> | <a href="README_EN.md">English</a></p>
 
 # AI 截图翻译工具 (AI Screenshot Translator)
 

@@ -495,8 +495,9 @@ void HistoryManager::setStoragePath(const QString &path)
 {
     const QString resolvedPath = ConfigManager::resolveStoragePath(path);
     const QString previousDbPath = m_watchedDbPath;
+    const bool pathChanged = (m_basePath != resolvedPath);
 
-    if (m_basePath != resolvedPath)
+    if (pathChanged)
     {
         closeDatabase();
         m_basePath = resolvedPath;
@@ -515,10 +516,14 @@ void HistoryManager::setStoragePath(const QString &path)
     }
     m_watchedDbPath = dbPath;
 
-    m_entryCache.clear();
-    m_markdownCache.clear();
-    maybeAutoImportLegacyJson();
-    loadEntries();
+    if (pathChanged)
+    {
+        m_entryCache.clear();
+        m_markdownCache.clear();
+        m_allTagsCache.clear();
+        m_tagsCacheDirty = true;
+        maybeAutoImportLegacyJson();
+    }
 }
 
 QString HistoryManager::getStoragePath() const

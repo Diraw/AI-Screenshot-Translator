@@ -9,6 +9,7 @@
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QVariant>
+#include <algorithm>
 
 namespace
 {
@@ -64,6 +65,7 @@ bool HistoryManager::updateEntryTags(const QString &id, const QStringList &tags)
         cached.tags = tags;
         m_entryCache[id] = cached;
     }
+    m_tagsCacheDirty = true;
     return true;
 }
 
@@ -116,6 +118,7 @@ bool HistoryManager::addTagsToEntries(const QStringList &ids, const QStringList 
         update.finish();
 
         modified = true;
+        m_tagsCacheDirty = true;
         if (m_entryCache.contains(id))
         {
             TranslationEntry cached = m_entryCache.value(id);
@@ -185,6 +188,7 @@ bool HistoryManager::removeTagsFromEntries(const QStringList &ids, const QString
         update.finish();
 
         modified = true;
+        m_tagsCacheDirty = true;
         if (m_entryCache.contains(id))
         {
             TranslationEntry cached = m_entryCache.value(id);
@@ -206,6 +210,9 @@ bool HistoryManager::removeTagsFromEntries(const QStringList &ids, const QString
 
 QStringList HistoryManager::getAllTags()
 {
+    if (!m_tagsCacheDirty)
+        return m_allTagsCache;
+
     if (!ensureDatabaseReady())
         return QStringList();
 
@@ -220,5 +227,9 @@ QStringList HistoryManager::getAllTags()
             uniqueTags.insert(tag);
     }
 
-    return uniqueTags.values();
+    m_allTagsCache = uniqueTags.values();
+    std::sort(m_allTagsCache.begin(), m_allTagsCache.end(), [](const QString &a, const QString &b)
+              { return QString::localeAwareCompare(a, b) < 0; });
+    m_tagsCacheDirty = false;
+    return m_allTagsCache;
 }

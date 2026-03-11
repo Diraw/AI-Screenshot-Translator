@@ -48,8 +48,8 @@ void App::showSummary()
         }
         else
         {
-            // Update history before showing
-            m_summaryWindow->setInitialHistory(m_historyManager.loadEntries());
+            // Refresh archive from storage before showing
+            m_summaryWindow->reloadFromStorage(false);
 
             // Fix white flash: Disable updates during show/restore
             m_summaryWindow->setUpdatesEnabled(false);

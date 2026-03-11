@@ -2,6 +2,7 @@
 
 #include "ColorUtils.h"
 #include "EmbedWebView.h"
+#include "HistoryManager.h"
 #include "ThemeUtils.h"
 #include "TranslationManager.h"
 
@@ -69,6 +70,49 @@ QList<TranslationEntry> SummaryWindow::applyPagination(const QList<TranslationEn
     return entries.mid(start, pageSize);
 }
 
+QList<TranslationEntry> SummaryWindow::getEntriesForCurrentView()
+{
+    if (m_historyManager)
+    {
+        const QDate fromDate = m_fromDateEdit ? m_fromDateEdit->date() : QDate();
+        const QDate toDate = m_toDateEdit ? m_toDateEdit->date() : QDate();
+        const QString searchText = m_searchEdit ? m_searchEdit->text().trimmed() : QString();
+
+        if (!m_archiveUsePagination)
+        {
+            int totalCount = 0;
+            QList<TranslationEntry> rows =
+                m_historyManager->queryEntries(fromDate, toDate, m_selectedTags, searchText, 0, 0, &totalCount);
+            m_filteredEntryCount = totalCount;
+            m_currentPage = 1;
+            m_totalPages = 1;
+            updatePaginationUi();
+            return rows;
+        }
+
+        const int pageSize = qMax(1, m_archivePageSize);
+        m_currentPage = qMax(1, m_currentPage);
+
+        int totalCount = 0;
+        int offset = (m_currentPage - 1) * pageSize;
+        QList<TranslationEntry> rows =
+            m_historyManager->queryEntries(fromDate, toDate, m_selectedTags, searchText, pageSize, offset, &totalCount);
+
+        m_filteredEntryCount = totalCount;
+        m_totalPages = qMax(1, (m_filteredEntryCount + pageSize - 1) / pageSize);
+        if (m_currentPage > m_totalPages)
+        {
+            m_currentPage = m_totalPages;
+            offset = (m_currentPage - 1) * pageSize;
+            rows = m_historyManager->queryEntries(fromDate, toDate, m_selectedTags, searchText, pageSize, offset, nullptr);
+        }
+        updatePaginationUi();
+        return rows;
+    }
+
+    return applyPagination(getFilteredEntries());
+}
+
 void SummaryWindow::updatePaginationUi()
 {
     if (!m_paginationGroup)
@@ -114,7 +158,7 @@ void SummaryWindow::initHtml()
     // in EmbedWebView to prevent reload-induced focus issues). Instead, update entries via JS.
     if (m_htmlLoaded)
     {
-        QList<TranslationEntry> filteredEntries = applyPagination(getFilteredEntries());
+        QList<TranslationEntry> filteredEntries = getEntriesForCurrentView();
 
         QString js;
         js += "(()=>{";
@@ -326,7 +370,7 @@ document.addEventListener('mousedown', function() {
 
     html += "</head><body class=\"__BODY_CLASS__\">";
     html = html.replace("__BODY_CLASS__", isDark ? "dark-mode" : "");
-    QList<TranslationEntry> filteredEntries = applyPagination(getFilteredEntries());
+    QList<TranslationEntry> filteredEntries = getEntriesForCurrentView();
     QJsonArray initialEntries;
     for (const auto &entry : filteredEntries)
     {

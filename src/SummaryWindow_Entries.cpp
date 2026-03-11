@@ -11,6 +11,11 @@ void SummaryWindow::setInitialHistory(const QList<TranslationEntry> &history)
     refreshHtml();
 }
 
+void SummaryWindow::reloadFromStorage(bool preserveScroll)
+{
+    refreshHtml(preserveScroll);
+}
+
 void SummaryWindow::addEntry(const TranslationEntry &entry)
 {
     m_entries.append(entry);

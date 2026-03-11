@@ -18,6 +18,7 @@
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QFontMetrics>
+#include <QTimer>
 
 #include <algorithm>
 #include <functional>
@@ -297,9 +298,21 @@ void SummaryWindow::setupFilterUI()
         dialog->exec();
         dialog->deleteLater(); });
 
-    // Search text changed
+    if (!m_searchDebounceTimer)
+    {
+        m_searchDebounceTimer = new QTimer(this);
+        m_searchDebounceTimer->setSingleShot(true);
+        m_searchDebounceTimer->setInterval(180);
+        connect(m_searchDebounceTimer, &QTimer::timeout, this, [this]()
+                { applyFilters(); });
+    }
+
+    // Search text changed (debounced)
     connect(m_searchEdit, &QLineEdit::textChanged, this, [this]() {
-        applyFilters();
+        if (m_searchDebounceTimer)
+            m_searchDebounceTimer->start();
+        else
+            applyFilters();
     });
 
     connect(m_clearFilterBtn, &QPushButton::clicked, this, [this]()
@@ -309,6 +322,7 @@ void SummaryWindow::setupFilterUI()
         m_selectedTags.clear();
         if (m_tagFilterBtn) m_tagFilterBtn->setText(TranslationManager::instance().tr("filter_all_tags"));
         if (m_searchEdit) m_searchEdit->clear();
+        if (m_searchDebounceTimer) m_searchDebounceTimer->stop();
         applyFilters(); });
 
     updatePaginationUi();

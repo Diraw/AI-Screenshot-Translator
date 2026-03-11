@@ -12,7 +12,10 @@
 #include <QScopedValueRollback>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QSet>
+#include <QTime>
 #include <QVariant>
+#include <algorithm>
 
 namespace
 {
@@ -113,6 +116,7 @@ void HistoryManager::saveEntry(const TranslationEntry &entry)
     cachedEntry.originalBase64.clear();
     m_markdownCache[entry.id] = cachedEntry.translatedMarkdown;
     m_entryCache[entry.id] = cachedEntry;
+    m_tagsCacheDirty = true;
 }
 
 QList<TranslationEntry> HistoryManager::loadEntries()
@@ -131,6 +135,7 @@ QList<TranslationEntry> HistoryManager::loadEntries()
         return entries;
     }
 
+    QSet<QString> uniqueTags;
     QStringList staleIds;
     while (query.next())
     {
@@ -159,6 +164,8 @@ QList<TranslationEntry> HistoryManager::loadEntries()
         entry.translatedMarkdown = HistoryManager::normalizeMarkdown(query.value(4).toString());
         entry.tags = parseTagsJson(query.value(5).toString());
         entry.localImagePath = imagePath;
+        for (const QString &tag : entry.tags)
+            uniqueTags.insert(tag);
 
         // Do not decode image bytes while loading the archive list.
         entry.originalBase64.clear();
@@ -183,6 +190,132 @@ QList<TranslationEntry> HistoryManager::loadEntries()
         tx.exec("COMMIT");
     }
 
+    m_allTagsCache = uniqueTags.values();
+    std::sort(m_allTagsCache.begin(), m_allTagsCache.end(), [](const QString &a, const QString &b)
+              { return QString::localeAwareCompare(a, b) < 0; });
+    m_tagsCacheDirty = false;
+
+    return entries;
+}
+
+QList<TranslationEntry> HistoryManager::queryEntries(const QDate &fromDate,
+                                                     const QDate &toDate,
+                                                     const QStringList &tags,
+                                                     const QString &searchText,
+                                                     int limit,
+                                                     int offset,
+                                                     int *totalCount)
+{
+    QList<TranslationEntry> entries;
+    if (totalCount)
+        *totalCount = 0;
+    if (!ensureDatabaseReady())
+        return entries;
+
+    auto escapeLike = [](QString s)
+    {
+        s.replace("\\", "\\\\");
+        s.replace("%", "\\%");
+        s.replace("_", "\\_");
+        return s;
+    };
+
+    QStringList whereClauses;
+    QVariantList bindValues;
+
+    if (fromDate.isValid())
+    {
+        const QString fromIso = QDateTime(fromDate, QTime(0, 0, 0, 0)).toString(Qt::ISODate);
+        whereClauses << "timestamp >= ?";
+        bindValues << fromIso;
+    }
+    if (toDate.isValid())
+    {
+        const QString toIso = QDateTime(toDate, QTime(23, 59, 59, 999)).toString(Qt::ISODate);
+        whereClauses << "timestamp <= ?";
+        bindValues << toIso;
+    }
+    if (!tags.isEmpty())
+    {
+        QStringList tagPredicates;
+        for (const QString &tag : tags)
+        {
+            if (tag.trimmed().isEmpty())
+                continue;
+            tagPredicates << "tags_json LIKE ? ESCAPE '\\'";
+            bindValues << QString("%\"%1\"%").arg(escapeLike(tag));
+        }
+        if (!tagPredicates.isEmpty())
+            whereClauses << QString("(%1)").arg(tagPredicates.join(" OR "));
+    }
+    const QString normalizedSearch = searchText.trimmed().toLower();
+    if (!normalizedSearch.isEmpty())
+    {
+        whereClauses << "LOWER(markdown) LIKE ? ESCAPE '\\'";
+        bindValues << QString("%" + escapeLike(normalizedSearch) + "%");
+    }
+
+    QString whereSql;
+    if (!whereClauses.isEmpty())
+        whereSql = " WHERE " + whereClauses.join(" AND ");
+
+    if (totalCount)
+    {
+        QSqlQuery countQuery(m_db);
+        if (countQuery.prepare("SELECT COUNT(*) FROM entries" + whereSql))
+        {
+            for (const QVariant &v : bindValues)
+                countQuery.addBindValue(v);
+            if (countQuery.exec() && countQuery.next())
+                *totalCount = countQuery.value(0).toInt();
+        }
+    }
+
+    QString selectSql = "SELECT id, timestamp, image_file, prompt, markdown, tags_json FROM entries" + whereSql +
+                        " ORDER BY timestamp DESC";
+    if (limit > 0)
+        selectSql += " LIMIT ? OFFSET ?";
+
+    QSqlQuery query(m_db);
+    if (!query.prepare(selectSql))
+        return entries;
+    for (const QVariant &v : bindValues)
+        query.addBindValue(v);
+    if (limit > 0)
+    {
+        query.addBindValue(qMax(1, limit));
+        query.addBindValue(qMax(0, offset));
+    }
+    if (!query.exec())
+        return entries;
+
+    while (query.next())
+    {
+        TranslationEntry entry;
+        entry.id = query.value(0).toString();
+        entry.timestamp = QDateTime::fromString(query.value(1).toString(), Qt::ISODate);
+        if (!entry.timestamp.isValid())
+            entry.timestamp = QDateTime::currentDateTime();
+
+        QString imagePath = query.value(2).toString();
+        if (!QDir::isAbsolutePath(imagePath))
+            imagePath = QDir(m_basePath).filePath(imagePath);
+        if (!QFile::exists(imagePath))
+            continue;
+
+        entry.prompt = query.value(3).toString();
+        entry.translatedMarkdown = HistoryManager::normalizeMarkdown(query.value(4).toString());
+        entry.tags = parseTagsJson(query.value(5).toString());
+        entry.localImagePath = imagePath;
+        entry.originalBase64.clear();
+
+        m_markdownCache[entry.id] = entry.translatedMarkdown;
+        m_entryCache[entry.id] = entry;
+        entries.append(entry);
+    }
+
+    if (totalCount && *totalCount == 0 && limit <= 0)
+        *totalCount = entries.size();
     return entries;
 }
 
@@ -248,6 +381,8 @@ bool HistoryManager::deleteEntries(const QStringList &ids)
         return false;
     }
 
+    if (modified)
+        m_tagsCacheDirty = true;
     return modified;
 }
 
