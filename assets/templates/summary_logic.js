@@ -20,7 +20,8 @@ function currentEntry() {
             return e;
         }
     }
-    if (LAST_ENTRY) return LAST_ENTRY;
+    if (LAST_ENTRY && LAST_ENTRY.isConnected) return LAST_ENTRY;
+    LAST_ENTRY = null;
     return document.querySelector('.entry');
 }
 function updateStatus(mode) {
@@ -152,9 +153,16 @@ function ensureMarkedOptions() {
 }
 
 function renderContent(id, markdownOverride) {
-    ensureMarkedOptions();
     var raw = document.getElementById('raw_' + id);
     var rendered = document.getElementById('rendered_' + id);
+    if (!rendered) return;
+    renderContentForElements(raw, rendered, markdownOverride);
+}
+
+function renderContentForElements(raw, rendered, markdownOverride) {
+    if (!rendered) return;
+
+    ensureMarkedOptions();
     var markdown = (typeof markdownOverride === 'string') ? markdownOverride : (raw ? raw.textContent : '');
     
     // Step 1: Extract LaTeX from backticks (e.g., `$formula$` -> $formula$)
@@ -203,6 +211,7 @@ function renderContent(id, markdownOverride) {
     
     // Step 5: Render LaTeX with KaTeX
     requestAnimationFrame(function() {
+      if (!rendered) return;
       renderMathInElement(rendered, {
         delimiters: [
           {left: '$$', right: '$$', display: true}, 
@@ -238,6 +247,7 @@ function matchHotkey(e, hotkeyStr) {
 function toggleView(id) {
   var raw = document.getElementById('raw_' + id);
   var rendered = document.getElementById('rendered_' + id);
+  if (!raw || !rendered) return;
   if (raw.style.display === 'none') {
     raw.style.display = 'block';
     rendered.style.display = 'none';
@@ -247,6 +257,7 @@ function toggleView(id) {
     rendered.style.display = 'block';
     updateStatus('view');
   }
+  requestMeasureRenderedHeights();
 }
 
 function toggleEdit(entry) {
@@ -271,6 +282,7 @@ function toggleEdit(entry) {
        window.cmd_updateEntry(id, markdown);
 
        entry.focus();
+       requestMeasureRenderedHeights();
    } else {
        entry.classList.remove('mode-view');
        entry.classList.add('mode-edit');
@@ -279,6 +291,7 @@ function toggleEdit(entry) {
        raw.style.display = 'block';
        raw.contentEditable = 'true';
        raw.focus();
+       requestMeasureRenderedHeights();
    }
 }
 
@@ -375,7 +388,7 @@ function handleKey(e) {
                  var id = entry.getAttribute('data-id');
                  // No confirm dialog as requested
                  window.cmd_delete(id);
-                 entry.remove();
+                 removeEntryById(id);
                  entry.lastDTime = 0;
             } else {
                  entry.lastDTime = now;
@@ -400,88 +413,567 @@ if (!window.__INIT_ONCE__) {
 }
 
 function updateEntryInDom(id, newMarkdown) {
-   var raw = document.getElementById('raw_' + id);
-   if (raw) {
-       raw.innerText = newMarkdown;
-       var entry = raw.closest('.entry');
-       if (entry && !entry.classList.contains('mode-edit')) {
-           renderContent(id, newMarkdown);
-       }
-   }
+    var idx = ENTRY_INDEX[id];
+    if (typeof idx === 'undefined') return;
+
+    ENTRY_DATA[idx].originalRaw = String(newMarkdown || '');
+
+    var raw = document.getElementById('raw_' + id);
+    if (raw) {
+        raw.innerText = ENTRY_DATA[idx].originalRaw;
+        var entry = raw.closest('.entry');
+        if (entry && !entry.classList.contains('mode-edit')) {
+            renderContent(id, ENTRY_DATA[idx].originalRaw);
+            requestMeasureRenderedHeights();
+        }
+    }
 }
 
-function addEntryToDom(id, time, markdown, mathBlocks, originalRaw, isSelectionMode, tags) {
-  var div = document.createElement('div');
-  div.className = 'entry mode-view';
-  div.id = 'entry_' + id;
-  div.setAttribute('data-id', id);
-  div.tabIndex = 0;
+var VIRTUAL_OVERSCAN_ITEMS = 3;
+var VIRTUAL_ESTIMATED_HEIGHT = 260;
+var VIRTUAL_ENTRY_GAP = 12;
 
-  var checkboxDisplay = isSelectionMode ? 'block' : 'none';
+var ENTRY_DATA = [];
+var ENTRY_INDEX = Object.create(null);
+var ENTRY_HEIGHTS = Object.create(null); // id -> measured height (without margin)
+var ENTRY_OFFSETS = []; // index -> top offset
+var ENTRY_TOTAL_HEIGHT = 0;
 
-  var header = document.createElement('div');
-  header.className = 'entry-header';
+var RENDERED_ENTRY_NODES = Object.create(null); // id -> DOM node (only currently rendered range)
+var SELECTED_IDS = Object.create(null); // id -> true
 
-  var checkbox = document.createElement('input');
-  checkbox.type = 'checkbox';
-  checkbox.className = 'selection-checkbox';
-  checkbox.style.display = checkboxDisplay;
-  checkbox.setAttribute('data-id', id);
-  header.appendChild(checkbox);
+var VIRTUAL_ROOT = null;
+var VIRTUAL_TOP_SPACER = null;
+var VIRTUAL_ITEMS_HOST = null;
+var VIRTUAL_BOTTOM_SPACER = null;
+var VIRTUAL_RANGE_START = 0;
+var VIRTUAL_RANGE_END = -1;
+var VIRTUAL_SCROLL_SCHEDULED = false;
+var VIRTUAL_MEASURE_SCHEDULED = false;
+var VIRTUAL_EVENTS_BOUND = false;
+var VIRTUAL_SCROLL_IDLE_MS = 160;
+var VIRTUAL_IS_SCROLLING = false;
+var VIRTUAL_SCROLL_IDLE_TIMER = null;
+var VIRTUAL_PENDING_HEIGHTS = Object.create(null);
+var VIRTUAL_SUPPRESS_AUTO_MEASURE = false;
 
-  var info = document.createElement('div');
-  info.className = 'entry-info';
+function ensureVirtualRoot() {
+    if (VIRTUAL_ROOT) return;
 
-  var timeLine = document.createElement('div');
-  timeLine.textContent = time;
-  info.appendChild(timeLine);
+    var root = document.createElement('div');
+    root.id = 'virtual-entry-root';
+    root.style.width = '100%';
 
-  if (tags.length) {
-      var tagLine = document.createElement('div');
-      tagLine.textContent = 'Tags: ' + tags.join(', ');
-      info.appendChild(tagLine);
-  }
+    var topSpacer = document.createElement('div');
+    topSpacer.id = 'virtual-top-spacer';
 
-  header.appendChild(info);
-  div.appendChild(header);
+    var itemsHost = document.createElement('div');
+    itemsHost.id = 'virtual-items-host';
 
-  var contentArea = document.createElement('div');
-  contentArea.className = 'content-area';
+    var bottomSpacer = document.createElement('div');
+    bottomSpacer.id = 'virtual-bottom-spacer';
 
-  var rendered = document.createElement('div');
-  rendered.id = 'rendered_' + id;
-  rendered.className = 'rendered-html';
-  contentArea.appendChild(rendered);
+    root.appendChild(topSpacer);
+    root.appendChild(itemsHost);
+    root.appendChild(bottomSpacer);
+    document.body.appendChild(root);
 
-  var raw = document.createElement('div');
-  raw.id = 'raw_' + id;
-  raw.className = 'raw-text';
-  raw.style.display = 'none';
-  raw.spellcheck = false;
-  contentArea.appendChild(raw);
+    VIRTUAL_ROOT = root;
+    VIRTUAL_TOP_SPACER = topSpacer;
+    VIRTUAL_ITEMS_HOST = itemsHost;
+    VIRTUAL_BOTTOM_SPACER = bottomSpacer;
+}
 
-  div.appendChild(contentArea);
-  document.body.appendChild(div);
-  
-  var rawContainer = document.getElementById('raw_' + id);
-  if (rawContainer) {
-      rawContainer.textContent = originalRaw; 
-      renderContent(id);
-  }
+function bindVirtualEventsOnce() {
+    if (VIRTUAL_EVENTS_BOUND) return;
+    VIRTUAL_EVENTS_BOUND = true;
+
+    window.addEventListener('scroll', function() {
+        markVirtualScrollActivity();
+        scheduleVirtualRender();
+    }, { passive: true });
+
+    window.addEventListener('resize', function() {
+        scheduleVirtualRender();
+    }, { passive: true });
+}
+
+function markVirtualScrollActivity() {
+    VIRTUAL_IS_SCROLLING = true;
+    if (VIRTUAL_SCROLL_IDLE_TIMER) {
+        clearTimeout(VIRTUAL_SCROLL_IDLE_TIMER);
+    }
+    VIRTUAL_SCROLL_IDLE_TIMER = setTimeout(function() {
+        VIRTUAL_SCROLL_IDLE_TIMER = null;
+        VIRTUAL_IS_SCROLLING = false;
+        commitPendingMeasuredHeights(true);
+    }, VIRTUAL_SCROLL_IDLE_MS);
+}
+
+function normalizeEntryPayload(entry) {
+    if (!entry || typeof entry !== 'object') return null;
+    var id = String(entry.id || '');
+    if (!id) return null;
+    return {
+        id: id,
+        time: String(entry.time || ''),
+        originalRaw: String(entry.originalRaw || ''),
+        tags: Array.isArray(entry.tags) ? entry.tags.slice() : []
+    };
+}
+
+function getItemBlockHeightByIndex(index) {
+    var e = ENTRY_DATA[index];
+    if (!e) return VIRTUAL_ESTIMATED_HEIGHT + VIRTUAL_ENTRY_GAP;
+    var h = ENTRY_HEIGHTS[e.id];
+    if (!(h > 0)) h = VIRTUAL_ESTIMATED_HEIGHT;
+    return h + VIRTUAL_ENTRY_GAP;
+}
+
+function rebuildVirtualIndex() {
+    ENTRY_INDEX = Object.create(null);
+    ENTRY_OFFSETS = new Array(ENTRY_DATA.length);
+    var offset = 0;
+
+    for (var i = 0; i < ENTRY_DATA.length; i++) {
+        var e = ENTRY_DATA[i];
+        ENTRY_INDEX[e.id] = i;
+        ENTRY_OFFSETS[i] = offset;
+        offset += getItemBlockHeightByIndex(i);
+    }
+
+    ENTRY_TOTAL_HEIGHT = offset;
+}
+
+function lowerBoundByItemBottom(viewTop) {
+    var n = ENTRY_DATA.length;
+    if (!n) return 0;
+    var lo = 0;
+    var hi = n - 1;
+    var ans = n - 1;
+    while (lo <= hi) {
+        var mid = (lo + hi) >> 1;
+        var itemBottom = ENTRY_OFFSETS[mid] + getItemBlockHeightByIndex(mid);
+        if (itemBottom >= viewTop) {
+            ans = mid;
+            hi = mid - 1;
+        } else {
+            lo = mid + 1;
+        }
+    }
+    return ans;
+}
+
+function upperBoundByItemTop(viewBottom) {
+    var n = ENTRY_DATA.length;
+    if (!n) return -1;
+    var lo = 0;
+    var hi = n - 1;
+    var ans = -1;
+    while (lo <= hi) {
+        var mid = (lo + hi) >> 1;
+        if (ENTRY_OFFSETS[mid] <= viewBottom) {
+            ans = mid;
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    return ans;
+}
+
+function lowerBoundByItemBottomFromArrays(offsets, blockHeights, viewTop) {
+    var n = offsets.length;
+    if (!n) return 0;
+    var lo = 0;
+    var hi = n - 1;
+    var ans = n - 1;
+    while (lo <= hi) {
+        var mid = (lo + hi) >> 1;
+        var itemBottom = offsets[mid] + blockHeights[mid];
+        if (itemBottom >= viewTop) {
+            ans = mid;
+            hi = mid - 1;
+        } else {
+            lo = mid + 1;
+        }
+    }
+    return ans;
+}
+
+function preserveViewportAnchorDuringRebuild(rebuildFn) {
+    if (!VIRTUAL_ROOT || !ENTRY_DATA.length) {
+        rebuildFn();
+        return;
+    }
+
+    var oldOffsets = ENTRY_OFFSETS.slice();
+    var oldBlockHeights = new Array(ENTRY_DATA.length);
+    for (var i = 0; i < ENTRY_DATA.length; i++) {
+        oldBlockHeights[i] = getItemBlockHeightByIndex(i);
+    }
+
+    var rootRect = VIRTUAL_ROOT.getBoundingClientRect();
+    var oldViewTop = Math.max(0, -rootRect.top);
+    var anchorIdx = lowerBoundByItemBottomFromArrays(oldOffsets, oldBlockHeights, oldViewTop);
+    if (!(anchorIdx >= 0 && anchorIdx < ENTRY_DATA.length)) {
+        rebuildFn();
+        return;
+    }
+
+    var anchorOffsetInItem = oldViewTop - oldOffsets[anchorIdx];
+    rebuildFn();
+
+    if (!(anchorIdx < ENTRY_OFFSETS.length)) return;
+    var newViewTop = ENTRY_OFFSETS[anchorIdx] + anchorOffsetInItem;
+    var delta = newViewTop - oldViewTop;
+    if (Math.abs(delta) > 0.5) {
+        window.scrollTo(0, window.scrollY + delta);
+    }
+}
+
+function getPinnedEntryId() {
+    var active = document.activeElement;
+    if (active) {
+        var focusedEntry = active.closest('.entry');
+        if (focusedEntry) {
+            return focusedEntry.getAttribute('data-id');
+        }
+    }
+    if (LAST_ENTRY && LAST_ENTRY.isConnected) {
+        return LAST_ENTRY.getAttribute('data-id');
+    }
+    return '';
+}
+
+function computeVirtualRange() {
+    var n = ENTRY_DATA.length;
+    if (!n) return { start: 0, end: -1 };
+
+    ensureVirtualRoot();
+
+    var rootRect = VIRTUAL_ROOT.getBoundingClientRect();
+    var viewTop = Math.max(0, -rootRect.top);
+    var viewBottom = viewTop + window.innerHeight;
+
+    var firstVisible = lowerBoundByItemBottom(viewTop);
+    var lastVisible = upperBoundByItemTop(viewBottom);
+    if (lastVisible < firstVisible) lastVisible = firstVisible;
+
+    var start = Math.max(0, firstVisible - VIRTUAL_OVERSCAN_ITEMS);
+    var end = Math.min(n - 1, lastVisible + VIRTUAL_OVERSCAN_ITEMS);
+
+    var pinnedId = getPinnedEntryId();
+    if (pinnedId && typeof ENTRY_INDEX[pinnedId] !== 'undefined') {
+        var pinnedIdx = ENTRY_INDEX[pinnedId];
+        if (pinnedIdx < start) start = pinnedIdx;
+        if (pinnedIdx > end) end = pinnedIdx;
+    }
+
+    return { start: start, end: end };
+}
+
+function applySelectionStateToNode(entryNode, id) {
+    if (!entryNode) return;
+    var cb = entryNode.querySelector('.selection-checkbox');
+    if (!cb) return;
+    cb.style.display = SELECTION_MODE ? 'block' : 'none';
+    cb.checked = !!SELECTED_IDS[id];
+    entryNode.classList.toggle('selected', SELECTION_MODE && !!SELECTED_IDS[id]);
+}
+
+function syncNodeMeta(entryNode, entry) {
+    if (!entryNode || !entry) return;
+    var timeLine = entryNode.querySelector('.entry-time');
+    if (timeLine) timeLine.textContent = entry.time;
+
+    var tagLine = entryNode.querySelector('.entry-tags');
+    if (tagLine) {
+        if (entry.tags && entry.tags.length) {
+            tagLine.textContent = 'Tags: ' + entry.tags.join(', ');
+            tagLine.style.display = '';
+        } else {
+            tagLine.textContent = '';
+            tagLine.style.display = 'none';
+        }
+    }
+}
+
+function buildEntryNode(entry) {
+    var id = entry.id;
+
+    var div = document.createElement('div');
+    div.className = 'entry mode-view';
+    div.id = 'entry_' + id;
+    div.setAttribute('data-id', id);
+    div.tabIndex = 0;
+
+    var header = document.createElement('div');
+    header.className = 'entry-header';
+
+    var checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'selection-checkbox';
+    checkbox.setAttribute('data-id', id);
+    header.appendChild(checkbox);
+
+    var info = document.createElement('div');
+    info.className = 'entry-info';
+
+    var timeLine = document.createElement('div');
+    timeLine.className = 'entry-time';
+    timeLine.textContent = entry.time;
+    info.appendChild(timeLine);
+
+    var tagLine = document.createElement('div');
+    tagLine.className = 'entry-tags';
+    if (entry.tags && entry.tags.length) {
+        tagLine.textContent = 'Tags: ' + entry.tags.join(', ');
+    } else {
+        tagLine.style.display = 'none';
+    }
+    info.appendChild(tagLine);
+
+    header.appendChild(info);
+    div.appendChild(header);
+
+    var contentArea = document.createElement('div');
+    contentArea.className = 'content-area';
+
+    var rendered = document.createElement('div');
+    rendered.id = 'rendered_' + id;
+    rendered.className = 'rendered-html';
+    contentArea.appendChild(rendered);
+
+    var raw = document.createElement('div');
+    raw.id = 'raw_' + id;
+    raw.className = 'raw-text';
+    raw.style.display = 'none';
+    raw.spellcheck = false;
+    raw.textContent = entry.originalRaw;
+    contentArea.appendChild(raw);
+
+    div.appendChild(contentArea);
+    applySelectionStateToNode(div, id);
+    renderContentForElements(raw, rendered, entry.originalRaw);
+    return div;
+}
+
+function updateSpacers(start, end) {
+    if (!VIRTUAL_TOP_SPACER || !VIRTUAL_BOTTOM_SPACER) return;
+    if (end < start || !ENTRY_DATA.length) {
+        VIRTUAL_TOP_SPACER.style.height = '0px';
+        VIRTUAL_BOTTOM_SPACER.style.height = '0px';
+        return;
+    }
+
+    var top = ENTRY_OFFSETS[start] || 0;
+    var endBottom = (ENTRY_OFFSETS[end] || 0) + getItemBlockHeightByIndex(end);
+    var bottom = Math.max(0, ENTRY_TOTAL_HEIGHT - endBottom);
+
+    VIRTUAL_TOP_SPACER.style.height = top + 'px';
+    VIRTUAL_BOTTOM_SPACER.style.height = bottom + 'px';
+}
+
+function requestMeasureRenderedHeights() {
+    if (VIRTUAL_MEASURE_SCHEDULED) return;
+    VIRTUAL_MEASURE_SCHEDULED = true;
+
+    requestAnimationFrame(function() {
+        VIRTUAL_MEASURE_SCHEDULED = false;
+        var hasPending = false;
+
+        for (var id in RENDERED_ENTRY_NODES) {
+            if (!Object.prototype.hasOwnProperty.call(RENDERED_ENTRY_NODES, id)) continue;
+            var node = RENDERED_ENTRY_NODES[id];
+            if (!node || !node.isConnected) continue;
+            var h = Math.ceil(node.getBoundingClientRect().height);
+            if (!(h > 0)) continue;
+            var current = ENTRY_HEIGHTS[id] || 0;
+            var pending = VIRTUAL_PENDING_HEIGHTS[id] || 0;
+            if (Math.abs(current - h) > 1 || Math.abs(pending - h) > 1) {
+                VIRTUAL_PENDING_HEIGHTS[id] = h;
+                hasPending = true;
+            }
+        }
+
+        if (!hasPending) return;
+
+        // Freeze total height during scrolling; align once scrolling stops.
+        if (VIRTUAL_IS_SCROLLING) {
+            return;
+        }
+        commitPendingMeasuredHeights(true);
+    });
+}
+
+function commitPendingMeasuredHeights(lockTopAnchor) {
+    if (VIRTUAL_IS_SCROLLING) return false;
+
+    var changed = false;
+    for (var id in VIRTUAL_PENDING_HEIGHTS) {
+        if (!Object.prototype.hasOwnProperty.call(VIRTUAL_PENDING_HEIGHTS, id)) continue;
+        var h = VIRTUAL_PENDING_HEIGHTS[id];
+        delete VIRTUAL_PENDING_HEIGHTS[id];
+        if (!(h > 0)) continue;
+        if (Math.abs((ENTRY_HEIGHTS[id] || 0) - h) > 1) {
+            ENTRY_HEIGHTS[id] = h;
+            changed = true;
+        }
+    }
+
+    if (!changed) return false;
+
+    if (lockTopAnchor !== false) {
+        // Lock the upper edge of current viewport while rebuilding offsets.
+        preserveViewportAnchorDuringRebuild(function() {
+            rebuildVirtualIndex();
+        });
+    } else {
+        rebuildVirtualIndex();
+    }
+
+    VIRTUAL_SUPPRESS_AUTO_MEASURE = true;
+    renderVirtualWindow(true);
+    requestAnimationFrame(function() {
+        VIRTUAL_SUPPRESS_AUTO_MEASURE = false;
+        requestMeasureRenderedHeights();
+    });
+    return true;
+}
+
+function scheduleVirtualRender() {
+    if (VIRTUAL_SCROLL_SCHEDULED) return;
+    VIRTUAL_SCROLL_SCHEDULED = true;
+    requestAnimationFrame(function() {
+        VIRTUAL_SCROLL_SCHEDULED = false;
+        renderVirtualWindow(false);
+    });
+}
+
+function renderVirtualWindow(force) {
+    ensureVirtualRoot();
+    bindVirtualEventsOnce();
+
+    if (!ENTRY_DATA.length) {
+        for (var rid in RENDERED_ENTRY_NODES) {
+            if (!Object.prototype.hasOwnProperty.call(RENDERED_ENTRY_NODES, rid)) continue;
+            var staleNode = RENDERED_ENTRY_NODES[rid];
+            if (staleNode) staleNode.remove();
+        }
+        RENDERED_ENTRY_NODES = Object.create(null);
+        VIRTUAL_RANGE_START = 0;
+        VIRTUAL_RANGE_END = -1;
+        updateSpacers(0, -1);
+        if (LAST_ENTRY && !LAST_ENTRY.isConnected) LAST_ENTRY = null;
+        return;
+    }
+
+    var range = computeVirtualRange();
+    if (!force && range.start === VIRTUAL_RANGE_START && range.end === VIRTUAL_RANGE_END) {
+        return;
+    }
+
+    var wanted = Object.create(null);
+    for (var i = range.start; i <= range.end; i++) {
+        var entry = ENTRY_DATA[i];
+        if (!entry) continue;
+        wanted[entry.id] = true;
+        if (!RENDERED_ENTRY_NODES[entry.id]) {
+            RENDERED_ENTRY_NODES[entry.id] = buildEntryNode(entry);
+        } else {
+            syncNodeMeta(RENDERED_ENTRY_NODES[entry.id], entry);
+            applySelectionStateToNode(RENDERED_ENTRY_NODES[entry.id], entry.id);
+        }
+    }
+
+    for (var id in RENDERED_ENTRY_NODES) {
+        if (!Object.prototype.hasOwnProperty.call(RENDERED_ENTRY_NODES, id)) continue;
+        if (wanted[id]) continue;
+        if (LAST_ENTRY === RENDERED_ENTRY_NODES[id]) LAST_ENTRY = null;
+        RENDERED_ENTRY_NODES[id].remove();
+        delete RENDERED_ENTRY_NODES[id];
+    }
+
+    for (var j = range.start; j <= range.end; j++) {
+        var e2 = ENTRY_DATA[j];
+        if (!e2) continue;
+        VIRTUAL_ITEMS_HOST.appendChild(RENDERED_ENTRY_NODES[e2.id]);
+    }
+
+    updateSpacers(range.start, range.end);
+    VIRTUAL_RANGE_START = range.start;
+    VIRTUAL_RANGE_END = range.end;
+
+    if (LAST_ENTRY && !LAST_ENTRY.isConnected) LAST_ENTRY = null;
+    if (!VIRTUAL_SUPPRESS_AUTO_MEASURE) {
+        requestMeasureRenderedHeights();
+    }
+}
+
+function setEntriesFromNative(entries, isSelectionMode) {
+    ensureVirtualRoot();
+    bindVirtualEventsOnce();
+
+    SELECTION_MODE = !!isSelectionMode;
+    SELECTED_IDS = Object.create(null);
+    LAST_ENTRY = null;
+    VIRTUAL_IS_SCROLLING = false;
+    if (VIRTUAL_SCROLL_IDLE_TIMER) {
+        clearTimeout(VIRTUAL_SCROLL_IDLE_TIMER);
+        VIRTUAL_SCROLL_IDLE_TIMER = null;
+    }
+    VIRTUAL_PENDING_HEIGHTS = Object.create(null);
+    VIRTUAL_SUPPRESS_AUTO_MEASURE = false;
+
+    for (var id in RENDERED_ENTRY_NODES) {
+        if (!Object.prototype.hasOwnProperty.call(RENDERED_ENTRY_NODES, id)) continue;
+        if (RENDERED_ENTRY_NODES[id]) RENDERED_ENTRY_NODES[id].remove();
+    }
+    RENDERED_ENTRY_NODES = Object.create(null);
+
+    ENTRY_DATA = [];
+    if (Array.isArray(entries)) {
+        for (var i = 0; i < entries.length; i++) {
+            var normalized = normalizeEntryPayload(entries[i]);
+            if (normalized) ENTRY_DATA.push(normalized);
+        }
+    }
+
+    rebuildVirtualIndex();
+    VIRTUAL_RANGE_START = 0;
+    VIRTUAL_RANGE_END = -1;
+    renderVirtualWindow(true);
+}
+
+function resetEntriesFromNative() {
+    setEntriesFromNative([], SELECTION_MODE);
+}
+
+function replaceEntriesFromNative(entries, isSelectionMode) {
+    setEntriesFromNative(Array.isArray(entries) ? entries : [], isSelectionMode);
 }
 
 function addEntryFromNative(entry, isSelectionMode) {
-    if (!entry || typeof entry !== 'object') return;
-    var tags = Array.isArray(entry.tags) ? entry.tags : [];
-    addEntryToDom(
-        String(entry.id || ''),
-        String(entry.time || ''),
-        '',
-        [],
-        String(entry.originalRaw || ''),
-        !!isSelectionMode,
-        tags
-    );
+    ensureVirtualRoot();
+    bindVirtualEventsOnce();
+
+    if (typeof isSelectionMode !== 'undefined') {
+        SELECTION_MODE = !!isSelectionMode;
+    }
+
+    var normalized = normalizeEntryPayload(entry);
+    if (!normalized) return;
+
+    var idx = ENTRY_INDEX[normalized.id];
+    if (typeof idx === 'undefined') {
+        ENTRY_DATA.push(normalized);
+    } else {
+        ENTRY_DATA[idx] = normalized;
+    }
+
+    rebuildVirtualIndex();
+    renderVirtualWindow(true);
 }
 
 function bootstrapEntriesFromNative(scriptId, isSelectionMode) {
@@ -496,37 +988,62 @@ function bootstrapEntriesFromNative(scriptId, isSelectionMode) {
         return;
     }
     if (!Array.isArray(entries)) return;
-    SELECTION_MODE = !!isSelectionMode;
-    entries.forEach(function(entry) {
-        addEntryFromNative(entry, isSelectionMode);
-    });
+    setEntriesFromNative(entries, isSelectionMode);
+}
+
+function removeEntryById(id) {
+    var idx = ENTRY_INDEX[id];
+    if (typeof idx === 'undefined') return;
+
+    delete SELECTED_IDS[id];
+
+    if (RENDERED_ENTRY_NODES[id]) {
+        if (LAST_ENTRY === RENDERED_ENTRY_NODES[id]) LAST_ENTRY = null;
+        RENDERED_ENTRY_NODES[id].remove();
+        delete RENDERED_ENTRY_NODES[id];
+    }
+
+    ENTRY_DATA.splice(idx, 1);
+    rebuildVirtualIndex();
+    renderVirtualWindow(true);
 }
 
 function toggleSelectionMode(show) {
     SELECTION_MODE = !!show;
-    var checkboxes = document.querySelectorAll('.selection-checkbox');
-    checkboxes.forEach(cb => {
-        cb.style.display = show ? 'block' : 'none';
-        if (!show) {
-            cb.checked = false;
-            var entry = cb.closest('.entry');
-            if (entry) entry.classList.remove('selected');
-        }
-    });
+    if (!SELECTION_MODE) {
+        SELECTED_IDS = Object.create(null);
+    }
+
+    for (var id in RENDERED_ENTRY_NODES) {
+        if (!Object.prototype.hasOwnProperty.call(RENDERED_ENTRY_NODES, id)) continue;
+        applySelectionStateToNode(RENDERED_ENTRY_NODES[id], id);
+    }
 }
 
 function getSelectedIds() {
-    var checkboxes = document.querySelectorAll('.selection-checkbox:checked');
-    return Array.from(checkboxes).map(cb => cb.getAttribute('data-id'));
+    if (!SELECTION_MODE) return [];
+    var ids = [];
+    for (var i = 0; i < ENTRY_DATA.length; i++) {
+        var id = ENTRY_DATA[i].id;
+        if (SELECTED_IDS[id]) ids.push(id);
+    }
+    return ids;
 }
 
 function selectAllEntries(select) {
-    var checkboxes = document.querySelectorAll('.selection-checkbox');
-    checkboxes.forEach(cb => {
-        cb.checked = select;
-        var entry = cb.closest('.entry');
-        if (entry) entry.classList.toggle('selected', select);
-    });
+    if (!SELECTION_MODE) return;
+    if (select) {
+        for (var i = 0; i < ENTRY_DATA.length; i++) {
+            SELECTED_IDS[ENTRY_DATA[i].id] = true;
+        }
+    } else {
+        SELECTED_IDS = Object.create(null);
+    }
+
+    for (var id in RENDERED_ENTRY_NODES) {
+        if (!Object.prototype.hasOwnProperty.call(RENDERED_ENTRY_NODES, id)) continue;
+        applySelectionStateToNode(RENDERED_ENTRY_NODES[id], id);
+    }
 }
 
 // Click-to-select in selection mode
@@ -534,18 +1051,21 @@ document.addEventListener('click', function(e) {
     if (!SELECTION_MODE) return;
     var entry = e.target.closest('.entry');
     if (!entry) return;
-    var cb = entry.querySelector('.selection-checkbox');
-    if (!cb) return;
-    cb.checked = !cb.checked;
-    entry.classList.toggle('selected', cb.checked);
+    var id = entry.getAttribute('data-id');
+    if (!id) return;
+
+    if (SELECTED_IDS[id]) delete SELECTED_IDS[id];
+    else SELECTED_IDS[id] = true;
+
+    applySelectionStateToNode(entry, id);
     e.preventDefault();
 });
 
 // Drag rectangle selection
-let dragSelect = false;
-let dragStart = {x:0, y:0};
-let selectionRectEl = null;
-document.addEventListener('mousedown', function(e){
+var dragSelect = false;
+var dragStart = {x: 0, y: 0};
+var selectionRectEl = null;
+document.addEventListener('mousedown', function(e) {
     if (!SELECTION_MODE || e.button !== 0) return;
     dragSelect = true;
     dragStart = {x: e.clientX, y: e.clientY};
@@ -553,7 +1073,7 @@ document.addEventListener('mousedown', function(e){
     selectionRectEl.className = 'selection-rect';
     document.body.appendChild(selectionRectEl);
 });
-document.addEventListener('mousemove', function(e){
+document.addEventListener('mousemove', function(e) {
     if (!dragSelect || !selectionRectEl) return;
     var x1 = Math.min(dragStart.x, e.clientX);
     var y1 = Math.min(dragStart.y, e.clientY);
@@ -563,17 +1083,19 @@ document.addEventListener('mousemove', function(e){
     selectionRectEl.style.top = y1 + 'px';
     selectionRectEl.style.width = (x2 - x1) + 'px';
     selectionRectEl.style.height = (y2 - y1) + 'px';
-    var checkboxes = document.querySelectorAll('.selection-checkbox');
-    checkboxes.forEach(cb => {
-        var entry = cb.closest('.entry');
-        if (!entry) return;
+
+    for (var id in RENDERED_ENTRY_NODES) {
+        if (!Object.prototype.hasOwnProperty.call(RENDERED_ENTRY_NODES, id)) continue;
+        var entry = RENDERED_ENTRY_NODES[id];
+        if (!entry) continue;
         var rect = entry.getBoundingClientRect();
         var overlap = rect.left < x2 && rect.right > x1 && rect.top < y2 && rect.bottom > y1;
-        cb.checked = overlap;
-        entry.classList.toggle('selected', cb.checked);
-    });
+        if (overlap) SELECTED_IDS[id] = true;
+        else delete SELECTED_IDS[id];
+        applySelectionStateToNode(entry, id);
+    }
 });
-document.addEventListener('mouseup', function(e){
+document.addEventListener('mouseup', function() {
     if (!dragSelect) return;
     dragSelect = false;
     if (selectionRectEl) {

@@ -66,16 +66,39 @@ void SummaryWindow::initHtml()
     if (m_htmlLoaded)
     {
         QList<TranslationEntry> filteredEntries = getFilteredEntries();
+        QJsonArray payloadArray;
+        for (const auto &entry : filteredEntries)
+            payloadArray.append(makeEntryPayload(entry));
+        const QString entriesJson = makeHtmlSafeJson(QJsonDocument(payloadArray));
 
         QString js;
         js += "(()=>{";
         js += QString("try{applyDarkMode(%1);}catch(e){};").arg(isDark ? "true" : "false");
         js += QString("try{SELECTION_MODE=%1;}catch(e){};").arg(m_selectionMode ? "true" : "false");
-        js += "try{document.querySelectorAll('.entry').forEach(function(n){n.remove();});}catch(e){};";
-        for (const auto &entry : filteredEntries)
-        {
-            js += getAddEntryJs(entry) + ";";
-        }
+        js += "try{"
+              "var __nativeEntries=" +
+              entriesJson +
+              ";"
+              "var __nativeSel=" +
+              (m_selectionMode ? QString("true") : QString("false")) +
+              ";"
+              "var __applyEntries=function(){"
+              "if(window.replaceEntriesFromNative){window.replaceEntriesFromNative(__nativeEntries,__nativeSel);return true;}"
+              "if(window.resetEntriesFromNative&&window.addEntryFromNative){"
+              "window.resetEntriesFromNative();"
+              "for(var i=0;i<__nativeEntries.length;i++){window.addEntryFromNative(__nativeEntries[i],__nativeSel);}"
+              "return true;"
+              "}"
+              "return false;"
+              "};"
+              "if(!__applyEntries()){"
+              "var __tries=0;"
+              "var __timer=setInterval(function(){"
+              "__tries++;"
+              "if(__applyEntries()||__tries>80){clearInterval(__timer);}"
+              "},25);"
+              "}"
+              "}catch(e){};";
         if (m_currentZoom != 1.0)
         {
             js += QString("try{document.body.style.zoom='%1';}catch(e){};").arg(m_currentZoom);
