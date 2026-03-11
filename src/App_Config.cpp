@@ -365,7 +365,7 @@ void App::presentConfigDialog(bool allowToggle, bool focusGlobalHotkeys, bool fo
     }
 
     // Create new dialog
-    ConfigDialog *dlg = new ConfigDialog(&m_configManager);
+    ConfigDialog *dlg = new ConfigDialog(&m_configManager, &m_historyManager);
     dlg->setAttribute(Qt::WA_DeleteOnClose, false); // Don't delete on close, allow toggle
     m_activeConfigDialog = dlg;
 

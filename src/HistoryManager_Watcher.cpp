@@ -23,9 +23,9 @@ void HistoryManager::onFileChanged(const QString &path)
     }
 
     // Re-arm watcher if the file was recreated by external edits
-    if (m_watcher && !m_watchedJsonPath.isEmpty() && !m_watcher->files().contains(m_watchedJsonPath))
+    if (m_watcher && !m_watchedDbPath.isEmpty() && !m_watcher->files().contains(m_watchedDbPath))
     {
-        m_watcher->addPath(m_watchedJsonPath);
+        m_watcher->addPath(m_watchedDbPath);
     }
 
     emit historyFileChanged();

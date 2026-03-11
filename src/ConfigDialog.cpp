@@ -7,6 +7,7 @@
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QFile>
+#include <QFileDialog>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -24,6 +25,8 @@
 #include <QTcpSocket>
 #include <QTimer>
 #include <QUrl>
+
+#include "HistoryManager.h"
 
 static bool tryBuildProxyFromUrl(const QString &proxyUrl, QNetworkProxy &outProxy, QString &outErr)
 {
@@ -1270,6 +1273,81 @@ void ConfigDialog::onPickAdvancedJsonFields()
 
     if (m_advancedApiResultEdit)
         m_advancedApiResultEdit->appendPlainText(tm.tr("adv_json_selected_count").arg(selectedFields.size()));
+}
+
+void ConfigDialog::onImportLegacyHistory()
+{
+    TranslationManager &tm = TranslationManager::instance();
+
+    if (!m_historyManager)
+    {
+        QMessageBox::warning(this, tm.tr("history_io_title"), tm.tr("history_manager_unavailable"));
+        return;
+    }
+
+    const QString defaultJsonPath = QDir(m_historyManager->getStoragePath()).filePath("history.json");
+    const QString initialPath = QFile::exists(defaultJsonPath) ? defaultJsonPath : m_historyManager->getStoragePath();
+    const QString jsonPath = QFileDialog::getOpenFileName(
+        this,
+        tm.tr("import_legacy_title"),
+        initialPath,
+        tm.tr("json_files") + ";;All Files (*)");
+    if (jsonPath.trimmed().isEmpty())
+        return;
+
+    int importedCount = 0;
+    QString error;
+    const bool ok = m_historyManager->importLegacyJson(jsonPath, &importedCount, &error);
+    if (!ok)
+    {
+        QMessageBox::warning(
+            this,
+            tm.tr("import_legacy_title"),
+            error.isEmpty() ? tm.tr("import_legacy_failed") : error);
+        return;
+    }
+
+    QMessageBox::information(
+        this,
+        tm.tr("import_legacy_title"),
+        tm.tr("import_legacy_success").arg(importedCount));
+}
+
+void ConfigDialog::onExportHistory()
+{
+    TranslationManager &tm = TranslationManager::instance();
+
+    if (!m_historyManager)
+    {
+        QMessageBox::warning(this, tm.tr("history_io_title"), tm.tr("history_manager_unavailable"));
+        return;
+    }
+
+    const QString initialPath = QDir(m_historyManager->getStoragePath()).filePath("history_export.json");
+    const QString jsonPath = QFileDialog::getSaveFileName(
+        this,
+        tm.tr("export_history_title"),
+        initialPath,
+        tm.tr("json_files") + ";;All Files (*)");
+    if (jsonPath.trimmed().isEmpty())
+        return;
+
+    int exportedCount = 0;
+    QString error;
+    const bool ok = m_historyManager->exportHistoryJson(jsonPath, &exportedCount, &error);
+    if (!ok)
+    {
+        QMessageBox::warning(
+            this,
+            tm.tr("export_history_title"),
+            error.isEmpty() ? tm.tr("export_history_failed") : error);
+        return;
+    }
+
+    QMessageBox::information(
+        this,
+        tm.tr("export_history_title"),
+        tm.tr("export_history_success").arg(exportedCount));
 }
 
 ConfigDialog::~ConfigDialog() = default;

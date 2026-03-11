@@ -8,8 +8,8 @@
 #include <QNetworkAccessManager>
 #include <QTimer>
 
-ConfigDialog::ConfigDialog(ConfigManager *configManager, QWidget *parent)
-    : QDialog(parent), m_configManager(configManager)
+ConfigDialog::ConfigDialog(ConfigManager *configManager, HistoryManager *historyManager, QWidget *parent)
+    : QDialog(parent), m_configManager(configManager), m_historyManager(historyManager)
 {
     setWindowTitle("Settings");
 

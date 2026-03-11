@@ -29,6 +29,7 @@
 class QFileSystemWatcher;
 class QColor;
 class QTimer;
+class HistoryManager;
 
 // ...
 
@@ -36,7 +37,7 @@ class ConfigDialog : public QDialog
 {
     Q_OBJECT
 public:
-    explicit ConfigDialog(ConfigManager *configManager, QWidget *parent = nullptr);
+    explicit ConfigDialog(ConfigManager *configManager, HistoryManager *historyManager = nullptr, QWidget *parent = nullptr);
     ~ConfigDialog();
 
     void updateTheme(bool isDark);
@@ -52,6 +53,8 @@ private slots:
     void copyProfile();
     void importProfile();
     void exportProfile();
+    void onImportLegacyHistory();
+    void onExportHistory();
 
     // Live refresh when profiles/*.json changes on disk
     void onProfilesDirChanged(const QString &path);
@@ -64,6 +67,7 @@ signals:
 
 private:
     ConfigManager *m_configManager;
+    HistoryManager *m_historyManager = nullptr;
 
     QString defaultEndpointForProvider(const QString &provider) const;
     void maybeApplyEndpointDefaultForProvider(const QString &provider);
@@ -141,6 +145,8 @@ private:
     QLineEdit *m_highlightMarkColorDarkEdit;
     QLabel *m_highlightMarkColorPreview;
     QLabel *m_highlightMarkColorDarkPreview;
+    QPushButton *m_importLegacyHistoryBtn = nullptr;
+    QPushButton *m_exportHistoryBtn = nullptr;
 
     QTabWidget *m_tabWidget;
     // Tabs

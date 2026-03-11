@@ -3,9 +3,13 @@
 #include "TranslationManager.h"
 
 #include <QFormLayout>
+#include <QHBoxLayout>
+#include <QPushButton>
 
 void ConfigDialog::setupArchiveTab()
 {
+    TranslationManager &tm = TranslationManager::instance();
+
     m_archiveTab = new QWidget();
     auto *archiveMainLayout = new QVBoxLayout(m_archiveTab);
 
@@ -71,6 +75,27 @@ void ConfigDialog::setupArchiveTab()
     editLayout->addRow("Highlight Color (Dark):", hl2w);
 
     archiveMainLayout->addWidget(grpEdit);
+
+    auto *grpData = new QGroupBox(tm.tr("grp_data_migration"), m_archiveTab);
+    grpData->setObjectName("grpDataMigration");
+    auto *dataLayout = new QVBoxLayout(grpData);
+    m_importLegacyHistoryBtn = new QPushButton(tm.tr("btn_import_legacy_history"), this);
+    connect(m_importLegacyHistoryBtn, &QPushButton::clicked, this, &ConfigDialog::onImportLegacyHistory);
+    m_exportHistoryBtn = new QPushButton(tm.tr("btn_export_history"), this);
+    connect(m_exportHistoryBtn, &QPushButton::clicked, this, &ConfigDialog::onExportHistory);
+    m_importLegacyHistoryBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    m_exportHistoryBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    m_importLegacyHistoryBtn->setFixedWidth(96);
+    m_exportHistoryBtn->setFixedWidth(96);
+    auto *dataBtnRow = new QHBoxLayout();
+    dataBtnRow->setContentsMargins(0, 0, 0, 0);
+    dataBtnRow->setSpacing(8);
+    dataBtnRow->addWidget(m_importLegacyHistoryBtn);
+    dataBtnRow->addWidget(m_exportHistoryBtn);
+    dataBtnRow->addStretch();
+    dataLayout->addLayout(dataBtnRow);
+    archiveMainLayout->addWidget(grpData);
+
     archiveMainLayout->addStretch();
 
     m_tabWidget->addTab(m_archiveTab, "Archive Interface");

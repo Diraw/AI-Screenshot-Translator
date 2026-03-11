@@ -9,6 +9,7 @@ HistoryManager::HistoryManager(QObject *parent) : QObject(parent)
 {
     m_watcher = new QFileSystemWatcher(this);
     connect(m_watcher, &QFileSystemWatcher::fileChanged, this, &HistoryManager::onFileChanged);
+    m_dbConnectionName = QString("history_%1").arg(reinterpret_cast<quintptr>(this), 0, 16);
 
     // Default
     setStoragePath("");

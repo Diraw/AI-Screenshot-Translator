@@ -3,36 +3,65 @@
 #include <QBuffer>
 #include <QDateTime>
 #include <QDebug>
+#include <QDir>
 #include <QFile>
 #include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QJsonObject>
-#include <QSet>
+#include <QJsonParseError>
+#include <QScopedValueRollback>
+#include <QSqlError>
+#include <QSqlQuery>
+#include <QVariant>
+
+namespace
+{
+QStringList parseTagsJson(const QString &tagsJson)
+{
+    if (tagsJson.trimmed().isEmpty())
+        return QStringList();
+
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(tagsJson.toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError || !doc.isArray())
+        return QStringList();
+    QStringList tags;
+    const QJsonArray arr = doc.array();
+    for (const QJsonValue &v : arr)
+    {
+        if (!v.isString())
+            continue;
+        const QString tag = v.toString();
+        if (!tags.contains(tag))
+            tags.append(tag);
+    }
+    return tags;
+}
+
+QString stringifyTags(const QStringList &tags)
+{
+    return QString::fromUtf8(QJsonDocument(QJsonArray::fromStringList(tags)).toJson(QJsonDocument::Compact));
+}
+} // namespace
 
 void HistoryManager::saveEntry(const TranslationEntry &entry)
 {
-    m_ignoreNextChange = true;
+    QScopedValueRollback<bool> guard(m_ignoreNextChange, true);
     ensureDirectories();
-    ensureJsonFileExists();
+    if (!ensureDatabaseReady())
+        return;
 
-    // 1. Save Image
-    // Entry has originalBase64. Convert to Image and save.
     QByteArray bytes = QByteArray::fromBase64(entry.originalBase64.toLatin1());
     QImage img;
     if (!img.loadFromData(bytes) || img.isNull())
     {
         qWarning() << "HistoryManager::saveEntry skipped: invalid image payload for entry" << entry.id;
-        m_ignoreNextChange = false;
         return;
     }
 
-    // User Request: Use timestamp for filename to allow sorting/deletion
     QString timeStr = entry.timestamp.toString("yyyyMMdd_HHmmss_zzz");
     QString imgFilename = timeStr + ".png";
     QString fullImgPath = getImagesPath() + "/" + imgFilename;
-
-    // Handle potential collision (extremely rare)
     if (QFile::exists(fullImgPath))
     {
         imgFilename = timeStr + "_" + entry.id.left(4) + ".png";
@@ -42,144 +71,124 @@ void HistoryManager::saveEntry(const TranslationEntry &entry)
     if (!img.save(fullImgPath, "PNG"))
     {
         qWarning() << "HistoryManager::saveEntry failed to write image:" << fullImgPath;
-        m_ignoreNextChange = false;
         return;
     }
 
-    // 2. Load existing JSON
-    QFile file(getJsonPath());
-    QJsonArray array;
-    if (file.exists() && file.open(QIODevice::ReadOnly))
+    QString previousImageRelPath;
     {
-        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-        if (doc.isArray())
-            array = doc.array();
-        file.close();
+        QSqlQuery existing(m_db);
+        existing.prepare("SELECT image_file FROM entries WHERE id = ?");
+        existing.addBindValue(entry.id);
+        if (existing.exec() && existing.next())
+            previousImageRelPath = existing.value(0).toString();
     }
 
-    // 3. Append new entry
-    QJsonObject obj;
-    obj["id"] = entry.id;
-    obj["timestamp"] = entry.timestamp.toString(Qt::ISODate);
-    obj["image_file"] = "images/" + imgFilename;
-    obj["prompt"] = entry.prompt;
-    obj["markdown"] = entry.translatedMarkdown;
-    obj["tags"] = QJsonArray::fromStringList(entry.tags);
-
-    array.append(obj);
-
-    // 4. Write back
-    if (file.open(QIODevice::WriteOnly))
+    const QString imageRelPath = "images/" + imgFilename;
+    QSqlQuery upsert(m_db);
+    upsert.prepare(
+        "INSERT OR REPLACE INTO entries (id, timestamp, image_file, prompt, markdown, tags_json) "
+        "VALUES (?, ?, ?, ?, ?, ?)");
+    upsert.addBindValue(entry.id);
+    upsert.addBindValue(entry.timestamp.toString(Qt::ISODate));
+    upsert.addBindValue(imageRelPath);
+    upsert.addBindValue(entry.prompt);
+    upsert.addBindValue(HistoryManager::normalizeMarkdown(entry.translatedMarkdown));
+    upsert.addBindValue(stringifyTags(entry.tags));
+    if (!upsert.exec())
     {
-        QJsonDocument doc(array);
-        file.write(doc.toJson());
-        file.close();
-
-        // Update caches
-        TranslationEntry cachedEntry = entry;
-        cachedEntry.translatedMarkdown = HistoryManager::normalizeMarkdown(entry.translatedMarkdown);
-        cachedEntry.localImagePath = fullImgPath;
-        m_markdownCache[entry.id] = cachedEntry.translatedMarkdown;
-        m_entryCache[entry.id] = cachedEntry;
+        qWarning() << "HistoryManager::saveEntry sqlite upsert failed:" << upsert.lastError().text();
+        QFile::remove(fullImgPath);
+        return;
     }
-    m_ignoreNextChange = false;
+
+    if (!previousImageRelPath.isEmpty() && previousImageRelPath != imageRelPath)
+    {
+        QFile::remove(QDir(m_basePath).filePath(previousImageRelPath));
+    }
+
+    TranslationEntry cachedEntry = entry;
+    cachedEntry.translatedMarkdown = HistoryManager::normalizeMarkdown(entry.translatedMarkdown);
+    cachedEntry.localImagePath = fullImgPath;
+    m_markdownCache[entry.id] = cachedEntry.translatedMarkdown;
+    m_entryCache[entry.id] = cachedEntry;
 }
 
 QList<TranslationEntry> HistoryManager::loadEntries()
 {
     QList<TranslationEntry> entries;
-    ensureJsonFileExists();
-    QFile file(getJsonPath());
-
-    if (!file.exists() || !file.open(QIODevice::ReadOnly))
-    {
-        return entries;
-    }
-
-    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-    file.close();
-
-    if (!doc.isArray())
+    if (!ensureDatabaseReady())
         return entries;
 
     m_entryCache.clear();
     m_markdownCache.clear();
 
-    QJsonArray array = doc.array();
-    QJsonArray validArray;
-    bool modified = false;
-
-    for (const auto &val : array)
+    QSqlQuery query(m_db);
+    if (!query.exec("SELECT id, timestamp, image_file, prompt, markdown, tags_json FROM entries"))
     {
-        if (!val.isObject())
-            continue;
-        QJsonObject obj = val.toObject();
-
-        // Load Image
-        QString relPath = obj["image_file"].toString();
-        QString fullPath = m_basePath + "/" + relPath;
-
-        // Validation: Check if image exists
-        if (!QFile::exists(fullPath))
-        {
-            modified = true;
-            continue;
-        }
-
-        TranslationEntry entry;
-        entry.id = obj["id"].toString();
-
-        // Parse timestamp
-        entry.timestamp = QDateTime::fromString(obj["timestamp"].toString(), Qt::ISODate);
-        if (!entry.timestamp.isValid())
-        {
-            entry.timestamp = QDateTime::currentDateTime();
-        }
-
-        entry.translatedMarkdown = HistoryManager::normalizeMarkdown(obj["markdown"].toString());
-        entry.prompt = obj["prompt"].toString();
-
-        // Load tags
-        if (obj.contains("tags") && obj["tags"].isArray())
-        {
-            entry.tags = obj["tags"].toVariant().toStringList();
-        }
-
-        QImage img(fullPath);
-        if (!img.isNull())
-        {
-            QByteArray ba;
-            QBuffer buffer(&ba);
-            buffer.open(QIODevice::WriteOnly);
-            img.save(&buffer, "PNG");
-            entry.originalBase64 = ba.toBase64();
-            entry.localImagePath = fullPath;
-
-            // Update caches
-            m_markdownCache[entry.id] = entry.translatedMarkdown;
-            m_entryCache[entry.id] = entry;
-        }
-        else
-        {
-            continue;
-        }
-
-        entries.append(entry);
-        validArray.append(obj);
+        qWarning() << "HistoryManager::loadEntries sqlite query failed:" << query.lastError().text();
+        return entries;
     }
 
-    // If we removed items, update the JSON file on disk
-    if (modified)
+    QStringList staleIds;
+    while (query.next())
     {
-        m_ignoreNextChange = true;
-        QFile outFile(getJsonPath());
-        if (outFile.open(QIODevice::WriteOnly))
+        TranslationEntry entry;
+        entry.id = query.value(0).toString();
+        entry.timestamp = QDateTime::fromString(query.value(1).toString(), Qt::ISODate);
+        if (!entry.timestamp.isValid())
+            entry.timestamp = QDateTime::currentDateTime();
+
+        QString imagePath = query.value(2).toString();
+        if (imagePath.isEmpty())
         {
-            QJsonDocument outDoc(validArray);
-            outFile.write(outDoc.toJson());
-            outFile.close();
+            staleIds << entry.id;
+            continue;
         }
-        m_ignoreNextChange = false;
+
+        if (!QDir::isAbsolutePath(imagePath))
+            imagePath = QDir(m_basePath).filePath(imagePath);
+        if (!QFile::exists(imagePath))
+        {
+            staleIds << entry.id;
+            continue;
+        }
+
+        QImage img(imagePath);
+        if (img.isNull())
+        {
+            staleIds << entry.id;
+            continue;
+        }
+
+        entry.prompt = query.value(3).toString();
+        entry.translatedMarkdown = HistoryManager::normalizeMarkdown(query.value(4).toString());
+        entry.tags = parseTagsJson(query.value(5).toString());
+        entry.localImagePath = imagePath;
+
+        QByteArray ba;
+        QBuffer buffer(&ba);
+        buffer.open(QIODevice::WriteOnly);
+        img.save(&buffer, "PNG");
+        entry.originalBase64 = ba.toBase64();
+
+        m_markdownCache[entry.id] = entry.translatedMarkdown;
+        m_entryCache[entry.id] = entry;
+        entries.append(entry);
+    }
+
+    if (!staleIds.isEmpty())
+    {
+        QScopedValueRollback<bool> guard(m_ignoreNextChange, true);
+        QSqlQuery tx(m_db);
+        tx.exec("BEGIN IMMEDIATE TRANSACTION");
+        QSqlQuery del(m_db);
+        del.prepare("DELETE FROM entries WHERE id = ?");
+        for (const QString &id : staleIds)
+        {
+            del.bindValue(0, id);
+            del.exec();
+        }
+        tx.exec("COMMIT");
     }
 
     return entries;
@@ -187,198 +196,140 @@ QList<TranslationEntry> HistoryManager::loadEntries()
 
 bool HistoryManager::deleteEntry(const QString &id)
 {
-    QFile file(getJsonPath());
-    if (!file.exists() || !file.open(QIODevice::ReadOnly))
-    {
+    if (id.trimmed().isEmpty())
         return false;
-    }
-
-    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-    file.close();
-
-    if (!doc.isArray())
-        return false;
-
-    QJsonArray array = doc.array();
-    bool found = false;
-
-    for (int i = 0; i < array.size(); ++i)
-    {
-        QJsonObject obj = array[i].toObject();
-        if (obj["id"].toString() == id)
-        {
-            // Found it. Delete image file.
-            QString relPath = obj["image_file"].toString();
-            QString fullPath = m_basePath + "/" + relPath;
-            QFile::remove(fullPath);
-
-            // Remove from array
-            array.removeAt(i);
-            found = true;
-            break;
-        }
-    }
-
-    if (found)
-    {
-        // Save back to JSON
-        if (file.open(QIODevice::WriteOnly))
-        {
-            QJsonDocument outDoc(array);
-            file.write(outDoc.toJson());
-            file.close();
-            m_entryCache.remove(id);
-            m_markdownCache.remove(id);
-            return true;
-        }
-    }
-
-    return false;
+    return deleteEntries(QStringList{id});
 }
 
 bool HistoryManager::deleteEntries(const QStringList &ids)
 {
-    qDebug() << "HistoryManager::deleteEntries called with IDs:" << ids;
     if (ids.isEmpty())
         return true;
-    m_ignoreNextChange = true;
+    if (!ensureDatabaseReady())
+        return false;
 
-    QFile file(getJsonPath());
-    if (!file.exists() || !file.open(QIODevice::ReadOnly))
+    QScopedValueRollback<bool> guard(m_ignoreNextChange, true);
+    QSqlQuery tx(m_db);
+    if (!tx.exec("BEGIN IMMEDIATE TRANSACTION"))
     {
-        qDebug() << "Failed to open history.json for reading";
-        m_ignoreNextChange = false;
+        qWarning() << "HistoryManager::deleteEntries failed to begin transaction:" << tx.lastError().text();
         return false;
     }
 
-    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-    file.close();
-
-    if (!doc.isArray())
-    {
-        qDebug() << "history.json is not an array";
-        m_ignoreNextChange = false;
-        return false;
-    }
-
-    QJsonArray array = doc.array();
     bool modified = false;
-    QSet<QString> idSet = QSet<QString>(ids.begin(), ids.end());
+    QSqlQuery select(m_db);
+    QSqlQuery del(m_db);
+    select.prepare("SELECT image_file FROM entries WHERE id = ?");
+    del.prepare("DELETE FROM entries WHERE id = ?");
 
-    qDebug() << "Current history array size:" << array.size();
-    for (int i = array.size() - 1; i >= 0; --i)
+    for (const QString &id : ids)
     {
-        QJsonObject obj = array[i].toObject();
-        QString currentId = obj["id"].toString();
-        if (idSet.contains(currentId))
+        QString imageRelPath;
+        select.bindValue(0, id);
+        if (select.exec() && select.next())
         {
-            qDebug() << "Matched ID for deletion:" << currentId;
-            QString relPath = obj["image_file"].toString();
-            QString fullPath = m_basePath + "/" + relPath;
-            QFile::remove(fullPath);
-            array.removeAt(i);
-            m_markdownCache.remove(currentId);
-            m_entryCache.remove(currentId);
+            imageRelPath = select.value(0).toString();
+        }
+        select.finish();
+
+        del.bindValue(0, id);
+        if (del.exec() && del.numRowsAffected() > 0)
+        {
             modified = true;
+            m_markdownCache.remove(id);
+            m_entryCache.remove(id);
+            if (!imageRelPath.isEmpty())
+            {
+                const QString fullPath = QDir(m_basePath).filePath(imageRelPath);
+                QFile::remove(fullPath);
+            }
         }
+        del.finish();
     }
 
-    if (modified)
+    QSqlQuery commit(m_db);
+    if (!commit.exec("COMMIT"))
     {
-        if (file.open(QIODevice::WriteOnly))
-        {
-            QJsonDocument outDoc(array);
-            file.write(outDoc.toJson());
-            file.close();
-            qDebug() << "Successfully saved updated history.json after deletion";
-            m_ignoreNextChange = false;
-            return true;
-        }
-        else
-        {
-            qDebug() << "Failed to open history.json for writing";
-        }
+        QSqlQuery rollback(m_db);
+        rollback.exec("ROLLBACK");
+        qWarning() << "HistoryManager::deleteEntries failed to commit transaction:" << commit.lastError().text();
+        return false;
     }
-    else
-    {
-        qDebug() << "No IDs matched for deletion";
-    }
-    m_ignoreNextChange = false;
+
     return modified;
 }
 
 TranslationEntry HistoryManager::getEntryById(const QString &id)
 {
     if (m_entryCache.contains(id))
-    {
         return m_entryCache.value(id);
-    }
+    if (!ensureDatabaseReady())
+        return TranslationEntry();
 
-    loadEntries();
-    if (m_entryCache.contains(id))
-    {
-        return m_entryCache.value(id);
-    }
+    QSqlQuery query(m_db);
+    query.prepare("SELECT id, timestamp, image_file, prompt, markdown, tags_json FROM entries WHERE id = ?");
+    query.addBindValue(id);
+    if (!query.exec() || !query.next())
+        return TranslationEntry();
 
-    return TranslationEntry();
+    TranslationEntry entry;
+    entry.id = query.value(0).toString();
+    entry.timestamp = QDateTime::fromString(query.value(1).toString(), Qt::ISODate);
+    if (!entry.timestamp.isValid())
+        entry.timestamp = QDateTime::currentDateTime();
+
+    QString imagePath = query.value(2).toString();
+    if (!QDir::isAbsolutePath(imagePath))
+        imagePath = QDir(m_basePath).filePath(imagePath);
+    if (!QFile::exists(imagePath))
+        return TranslationEntry();
+
+    entry.prompt = query.value(3).toString();
+    entry.translatedMarkdown = HistoryManager::normalizeMarkdown(query.value(4).toString());
+    entry.tags = parseTagsJson(query.value(5).toString());
+    entry.localImagePath = imagePath;
+
+    QImage img(imagePath);
+    if (img.isNull())
+        return TranslationEntry();
+    QByteArray ba;
+    QBuffer buffer(&ba);
+    buffer.open(QIODevice::WriteOnly);
+    img.save(&buffer, "PNG");
+    entry.originalBase64 = ba.toBase64();
+
+    m_markdownCache[entry.id] = entry.translatedMarkdown;
+    m_entryCache[entry.id] = entry;
+    return entry;
 }
 
 bool HistoryManager::updateEntryContent(const QString &id, const QString &newMarkdown)
 {
-    m_ignoreNextChange = true;
-    QString normalized = HistoryManager::normalizeMarkdown(newMarkdown);
+    if (!ensureDatabaseReady())
+        return false;
 
-    QFile file(getJsonPath());
-    if (!file.exists() || !file.open(QIODevice::ReadOnly))
+    const QString normalized = HistoryManager::normalizeMarkdown(newMarkdown);
+    QScopedValueRollback<bool> guard(m_ignoreNextChange, true);
+
+    QSqlQuery query(m_db);
+    query.prepare("UPDATE entries SET markdown = ? WHERE id = ?");
+    query.addBindValue(normalized);
+    query.addBindValue(id);
+    if (!query.exec())
     {
-        m_ignoreNextChange = false;
+        qWarning() << "HistoryManager::updateEntryContent sqlite update failed:" << query.lastError().text();
         return false;
     }
-
-    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-    file.close();
-
-    if (!doc.isArray())
-    {
-        m_ignoreNextChange = false;
+    if (query.numRowsAffected() <= 0)
         return false;
-    }
 
-    QJsonArray array = doc.array();
-    bool found = false;
-
-    for (int i = 0; i < array.size(); ++i)
+    m_markdownCache[id] = normalized;
+    if (m_entryCache.contains(id))
     {
-        QJsonObject obj = array[i].toObject();
-        if (obj["id"].toString() == id)
-        {
-            obj["markdown"] = normalized;
-            array[i] = obj;
-            found = true;
-            break;
-        }
+        TranslationEntry cached = m_entryCache.value(id);
+        cached.translatedMarkdown = normalized;
+        m_entryCache[id] = cached;
     }
-
-    if (found)
-    {
-        if (file.open(QIODevice::WriteOnly))
-        {
-            QJsonDocument outDoc(array);
-            file.write(outDoc.toJson());
-            file.close();
-            m_markdownCache[id] = normalized;
-            if (m_entryCache.contains(id))
-            {
-                TranslationEntry cached = m_entryCache.value(id);
-                cached.translatedMarkdown = normalized;
-                m_entryCache[id] = cached;
-            }
-            emit entryMarkdownChanged(id, normalized);
-            m_ignoreNextChange = false;
-            return true;
-        }
-    }
-
-    m_ignoreNextChange = false;
-    return false;
+    emit entryMarkdownChanged(id, normalized);
+    return true;
 }

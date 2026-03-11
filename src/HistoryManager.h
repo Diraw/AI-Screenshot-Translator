@@ -6,6 +6,7 @@
 #include <QList>
 #include <QFileSystemWatcher>
 #include <QMap>
+#include <QSqlDatabase>
 #include "TranslationEntry.h"
 
 class HistoryManager : public QObject
@@ -44,6 +45,11 @@ public:
     // Get a single entry by ID (helper for App.cpp)
     TranslationEntry getEntryById(const QString &id);
 
+    // Import legacy history.json into SQLite storage.
+    // If jsonPath is empty, defaults to "<storage>/history.json".
+    bool importLegacyJson(const QString &jsonPath = QString(), int *importedCount = nullptr, QString *errorMessage = nullptr);
+    bool exportHistoryJson(const QString &jsonPath, int *exportedCount = nullptr, QString *errorMessage = nullptr);
+
 signals:
     void entryMarkdownChanged(const QString &id, const QString &newMarkdown);
     void historyFileChanged();
@@ -54,15 +60,21 @@ private slots:
 private:
     QString m_basePath;
     QFileSystemWatcher *m_watcher;
-    QString m_watchedJsonPath;
+    QString m_watchedDbPath;
+    QString m_dbConnectionName;
+    QSqlDatabase m_db;
     QMap<QString, QString> m_markdownCache;
     QMap<QString, TranslationEntry> m_entryCache;
     bool m_ignoreNextChange = false;
 
     QString getImagesPath() const;
     QString getJsonPath() const;
+    QString getDbPath() const;
     void ensureDirectories() const;
-    void ensureJsonFileExists() const;
+    bool ensureDatabaseReady();
+    void closeDatabase();
+    bool maybeAutoImportLegacyJson();
+    bool importLegacyJsonInternal(const QString &jsonPath, int *importedCount, QString *errorMessage);
 };
 
 #endif // HISTORYMANAGER_H

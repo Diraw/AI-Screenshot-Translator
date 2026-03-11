@@ -9,7 +9,7 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Network Gui Core Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Network Gui Core Concurrent Sql)
 
 # Ensure assets are copied to the build directory
 
@@ -114,7 +114,10 @@ target_link_libraries(AI-Screenshot-Translator-Cpp PRIVATE
     Qt6::Gui
     Qt6::Core
     Qt6::Concurrent
+    Qt6::Sql
 )
+
+get_filename_component(QT6_ROOT_DIR "${Qt6_DIR}/../../.." ABSOLUTE)
 
 if(WIN32)
     target_link_libraries(AI-Screenshot-Translator-Cpp PRIVATE
@@ -146,4 +149,23 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     "${CMAKE_CURRENT_SOURCE_DIR}/assets"
     "$<TARGET_FILE_DIR:${PROJECT_NAME}>/assets"
     COMMENT "Copying assets to output directory"
+)
+
+# Copy runtime DLL dependencies (including Qt6Sql.dll).
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy -t "$<TARGET_FILE_DIR:${PROJECT_NAME}>" $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>
+    COMMAND_EXPAND_LISTS
+    COMMENT "Copying runtime DLLs"
+)
+
+# Ensure SQLite driver plugin is deployed.
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${PROJECT_NAME}>/sqldrivers"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${QT6_ROOT_DIR}/plugins/sqldrivers/qsqlite.dll"
+    "$<TARGET_FILE_DIR:${PROJECT_NAME}>/sqldrivers/qsqlite.dll"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${QT6_ROOT_DIR}/plugins/sqldrivers/qsqlited.dll"
+    "$<TARGET_FILE_DIR:${PROJECT_NAME}>/sqldrivers/qsqlited.dll"
+    COMMENT "Copying qsqlite driver plugin"
 )

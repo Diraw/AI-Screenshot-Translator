@@ -118,6 +118,16 @@ void ConfigDialog::retranslateUi()
         }
     }
 
+    QGroupBox *grpData = m_archiveTab->findChild<QGroupBox *>("grpDataMigration");
+    if (grpData)
+    {
+        grpData->setTitle(tm.tr("grp_data_migration"));
+        if (m_importLegacyHistoryBtn)
+            m_importLegacyHistoryBtn->setText(tm.tr("btn_import_legacy_history"));
+        if (m_exportHistoryBtn)
+            m_exportHistoryBtn->setText(tm.tr("btn_export_history"));
+    }
+
     QGroupBox *grpApi = m_generalTab->findChild<QGroupBox *>("grpApi");
     if (grpApi)
     {
