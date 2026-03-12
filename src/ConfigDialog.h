@@ -17,8 +17,10 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPointer>
+#include <QPalette>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QHash>
 
 #include "ConfigManager.h"
 
@@ -30,6 +32,7 @@ class QFileSystemWatcher;
 class QColor;
 class QTimer;
 class HistoryManager;
+class QEvent;
 
 // ...
 
@@ -65,6 +68,9 @@ signals:
     void saved();
     void languageChanged(const QString &lang);
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 private:
     ConfigManager *m_configManager;
     HistoryManager *m_historyManager = nullptr;
@@ -90,6 +96,12 @@ private:
     void syncAdvancedTemplateFromRegular();
     void syncRegularFieldsFromAdvancedTemplate();
     void updateAdvancedApiUiState();
+    void ensureRegularApiInteractionHooks();
+    void updateRegularApiTextGrayState(bool advancedOn);
+    QList<QWidget *> regularApiControlWidgets() const;
+    QList<QLabel *> regularApiLabelWidgets() const;
+    void applyRegularApiTextColor(QWidget *widget, bool advancedOn);
+    void recordRegularApiClickAndMaybeWarn(QObject *clickedObject);
     void updateAdvancedTemplateStatusLabel();
     void ensureAdvancedProviderOption(bool enabled);
     void resetAdvancedApiToDefault();
@@ -101,92 +113,96 @@ private:
     bool m_advancedTemplateDetached = false;
     QString m_lastAutoEndpoint;
     QString m_lastRegularProvider = "openai";
+    bool m_isDarkTheme = false;
+    QObject *m_lastRegularApiClickObject = nullptr;
+    qint64 m_lastRegularApiClickMs = 0;
+    QHash<QWidget *, QPalette> m_regularApiOriginalPalettes;
 
     // Profile UI
     QGroupBox *m_profileGroup = nullptr;
-    QListWidget *m_profileList;
-    QPushButton *m_newProfileBtn;
-    QPushButton *m_deleteProfileBtn;
-    QPushButton *m_renameProfileBtn;
-    QPushButton *m_copyProfileBtn;
-    QPushButton *m_importProfileBtn;
-    QPushButton *m_exportProfileBtn;
+    QListWidget *m_profileList = nullptr;
+    QPushButton *m_newProfileBtn = nullptr;
+    QPushButton *m_deleteProfileBtn = nullptr;
+    QPushButton *m_renameProfileBtn = nullptr;
+    QPushButton *m_copyProfileBtn = nullptr;
+    QPushButton *m_importProfileBtn = nullptr;
+    QPushButton *m_exportProfileBtn = nullptr;
 
     // Settings UI
-    QLineEdit *m_apiKeyEdit;
-    QLineEdit *m_baseUrlEdit;
+    QLineEdit *m_apiKeyEdit = nullptr;
+    QLineEdit *m_baseUrlEdit = nullptr;
     QLineEdit *m_endpointPathEdit = nullptr;
-    QLineEdit *m_modelNameEdit;
+    QLineEdit *m_modelNameEdit = nullptr;
     QPushButton *m_testConnectionBtn = nullptr;
-    QTextEdit *m_promptEdit;
-    QComboBox *m_apiProviderCombo;
-    QLineEdit *m_proxyUrlEdit;
-    QCheckBox *m_useProxyCheck;
-    QLabel *m_proxyLabel;
-    QSpinBox *m_targetScreenSpin;
+    QTextEdit *m_promptEdit = nullptr;
+    QComboBox *m_apiProviderCombo = nullptr;
+    QLineEdit *m_proxyUrlEdit = nullptr;
+    QCheckBox *m_useProxyCheck = nullptr;
+    QLabel *m_proxyLabel = nullptr;
+    QSpinBox *m_targetScreenSpin = nullptr;
 
     // Test connectivity helpers
     QNetworkAccessManager *m_testNam = nullptr;
     QPointer<QNetworkReply> m_testReply;
 
-    QLineEdit *m_hotkeyEdit;
-    QLineEdit *m_summaryHotkeyEdit;
-    QLineEdit *m_settingsHotkeyEdit;
-    QLineEdit *m_editHotkeyEdit;
-    QLineEdit *m_viewToggleHotkeyEdit;
-    QLineEdit *m_screenshotToggleHotkeyEdit;
-    QLineEdit *m_selectionToggleHotkeyEdit;
+    QLineEdit *m_hotkeyEdit = nullptr;
+    QLineEdit *m_summaryHotkeyEdit = nullptr;
+    QLineEdit *m_settingsHotkeyEdit = nullptr;
+    QLineEdit *m_editHotkeyEdit = nullptr;
+    QLineEdit *m_viewToggleHotkeyEdit = nullptr;
+    QLineEdit *m_screenshotToggleHotkeyEdit = nullptr;
+    QLineEdit *m_selectionToggleHotkeyEdit = nullptr;
     QComboBox *m_archiveLoadModeCombo = nullptr;
     QSpinBox *m_archivePageSizeSpin = nullptr;
 
-    QLineEdit *m_boldHotkeyEdit;
-    QLineEdit *m_underlineHotkeyEdit;
-    QLineEdit *m_highlightHotkeyEdit;
+    QLineEdit *m_boldHotkeyEdit = nullptr;
+    QLineEdit *m_underlineHotkeyEdit = nullptr;
+    QLineEdit *m_highlightHotkeyEdit = nullptr;
 
-    QLineEdit *m_highlightMarkColorEdit;
-    QLineEdit *m_highlightMarkColorDarkEdit;
-    QLabel *m_highlightMarkColorPreview;
-    QLabel *m_highlightMarkColorDarkPreview;
+    QLineEdit *m_highlightMarkColorEdit = nullptr;
+    QLineEdit *m_highlightMarkColorDarkEdit = nullptr;
+    QLabel *m_highlightMarkColorPreview = nullptr;
+    QLabel *m_highlightMarkColorDarkPreview = nullptr;
     QPushButton *m_importLegacyHistoryBtn = nullptr;
     QPushButton *m_exportHistoryBtn = nullptr;
 
-    QTabWidget *m_tabWidget;
+    QTabWidget *m_tabWidget = nullptr;
     // Tabs
-    QWidget *m_generalTab;
+    QWidget *m_generalTab = nullptr;
     QFormLayout *m_generalFormLayout = nullptr;
-    QWidget *m_transTab;   // Translation Window
-    QWidget *m_archiveTab; // Archive Window
-    QWidget *m_otherTab;   // Other
+    QWidget *m_transTab = nullptr;   // Translation Window
+    QWidget *m_archiveTab = nullptr; // Archive Window
+    QWidget *m_otherTab = nullptr;   // Other
     QWidget *m_advancedApiTab = nullptr;
     // Deprecated m_advTab variable to be removed or reused for one of these, removing to avoid confusion
 
     // Translation Tab UI
-    QCheckBox *m_defaultLookCheck;
-    QComboBox *m_lockBehaviorCombo;
-    QLineEdit *m_prevPageHotkeyEdit;
-    QLineEdit *m_nextPageHotkeyEdit;
-    QLineEdit *m_tagHotkeyEdit;
-    QLineEdit *m_retranslateHotkeyEdit;
+    QCheckBox *m_defaultLookCheck = nullptr;
+    QComboBox *m_lockBehaviorCombo = nullptr;
+    QLineEdit *m_prevPageHotkeyEdit = nullptr;
+    QLineEdit *m_nextPageHotkeyEdit = nullptr;
+    QLineEdit *m_tagHotkeyEdit = nullptr;
+    QLineEdit *m_retranslateHotkeyEdit = nullptr;
 
-    QLineEdit *m_cardBorderColorEdit;
-    QLabel *m_lblCardBorderColor;
-    QLabel *m_cardBorderColorPreview;
-    QCheckBox *m_useBorderCheck;
-    QSpinBox *m_initialFontSizeSpin;
-    QLabel *m_lblInitialFontSize;
-    QDoubleSpinBox *m_zoomSensitivitySpin;
+    QLineEdit *m_cardBorderColorEdit = nullptr;
+    QLabel *m_lblCardBorderColor = nullptr;
+    QLabel *m_cardBorderColorPreview = nullptr;
+    QCheckBox *m_useBorderCheck = nullptr;
+    QSpinBox *m_initialFontSizeSpin = nullptr;
+    QLabel *m_lblInitialFontSize = nullptr;
+    QDoubleSpinBox *m_zoomSensitivitySpin = nullptr;
 
-    QCheckBox *m_showPreviewCheck;
-    QCheckBox *m_showResultCheck;
-    QCheckBox *m_launchAtStartupCheck;
-    QCheckBox *m_enableUmamiAnalyticsCheck;
-    QCheckBox *m_debugModeCheck;
+    QCheckBox *m_showPreviewCheck = nullptr;
+    QCheckBox *m_showResultCheck = nullptr;
+    QCheckBox *m_launchAtStartupCheck = nullptr;
+    QCheckBox *m_enableUmamiAnalyticsCheck = nullptr;
+    QCheckBox *m_debugModeCheck = nullptr;
 
-    QCheckBox *m_enableQuitHotkeyCheck;
-    QLabel *m_quitHotkeyLabel;
-    QLineEdit *m_quitHotkeyEdit;
+    QCheckBox *m_enableQuitHotkeyCheck = nullptr;
+    QLabel *m_quitHotkeyLabel = nullptr;
+    QLineEdit *m_quitHotkeyEdit = nullptr;
 
-    QLineEdit *m_storagePathEdit;
+    QLineEdit *m_storagePathEdit = nullptr;
     QPushButton *m_browseBtn = nullptr;
 
     // Advanced API Tab UI
@@ -215,8 +231,8 @@ private:
     QString m_profilesChangedFile;
 
     // Localization
-    QComboBox *m_languageCombo;
-    QComboBox *m_screenCombo;
+    QComboBox *m_languageCombo = nullptr;
+    QComboBox *m_screenCombo = nullptr;
     void retranslateUi();
     QLineEdit *globalHotkeyEditForKey(const QString &labelKey) const;
     void applyGlobalHotkeyConflictIndicators(bool focusConflicts);

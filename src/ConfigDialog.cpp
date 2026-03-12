@@ -6,6 +6,8 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
+#include <QDateTime>
+#include <QEvent>
 #include <QFile>
 #include <QFileDialog>
 #include <QJsonArray>
@@ -25,6 +27,7 @@
 #include <QTcpSocket>
 #include <QTimer>
 #include <QUrl>
+#include <QVariant>
 
 #include "HistoryManager.h"
 
@@ -679,29 +682,213 @@ void ConfigDialog::ensureAdvancedProviderOption(bool enabled)
         m_apiProviderCombo->removeItem(advancedIndex);
 }
 
+QList<QWidget *> ConfigDialog::regularApiControlWidgets() const
+{
+    QList<QWidget *> widgets;
+    widgets << m_apiKeyEdit
+            << m_apiProviderCombo
+            << m_baseUrlEdit
+            << m_endpointPathEdit
+            << m_modelNameEdit
+            << m_promptEdit
+            << m_testConnectionBtn;
+    return widgets;
+}
+
+QList<QLabel *> ConfigDialog::regularApiLabelWidgets() const
+{
+    QList<QLabel *> labels;
+    if (!m_generalFormLayout)
+        return labels;
+
+    const int labelRows[] = {2, 3, 4, 5, 6};
+    for (const int row : labelRows)
+    {
+        QLayoutItem *item = m_generalFormLayout->itemAt(row, QFormLayout::LabelRole);
+        if (!item)
+            continue;
+        if (QLabel *label = qobject_cast<QLabel *>(item->widget()))
+            labels << label;
+    }
+    return labels;
+}
+
+void ConfigDialog::applyRegularApiTextColor(QWidget *widget, bool advancedOn)
+{
+    if (!widget)
+        return;
+
+    if (!m_regularApiOriginalPalettes.contains(widget))
+        m_regularApiOriginalPalettes.insert(widget, widget->palette());
+
+    if (!advancedOn)
+    {
+        widget->setPalette(m_regularApiOriginalPalettes.value(widget));
+        return;
+    }
+
+    const QColor grayText = m_isDarkTheme ? QColor(165, 165, 165) : QColor(135, 135, 135);
+    const QColor grayPlaceholder = m_isDarkTheme ? QColor(125, 125, 125) : QColor(165, 165, 165);
+
+    QPalette pal = m_regularApiOriginalPalettes.value(widget);
+    if (qobject_cast<QLabel *>(widget))
+    {
+        pal.setColor(QPalette::WindowText, grayText);
+    }
+    else if (qobject_cast<QLineEdit *>(widget))
+    {
+        pal.setColor(QPalette::Text, grayText);
+        pal.setColor(QPalette::PlaceholderText, grayPlaceholder);
+    }
+    else if (qobject_cast<QTextEdit *>(widget))
+    {
+        pal.setColor(QPalette::Text, grayText);
+        pal.setColor(QPalette::PlaceholderText, grayPlaceholder);
+    }
+    else if (qobject_cast<QComboBox *>(widget))
+    {
+        pal.setColor(QPalette::Text, grayText);
+        pal.setColor(QPalette::ButtonText, grayText);
+        pal.setColor(QPalette::WindowText, grayText);
+    }
+    else if (qobject_cast<QPushButton *>(widget))
+    {
+        pal.setColor(QPalette::ButtonText, grayText);
+    }
+
+    widget->setPalette(pal);
+}
+
+void ConfigDialog::updateRegularApiTextGrayState(bool advancedOn)
+{
+    const QList<QWidget *> controls = regularApiControlWidgets();
+    for (QWidget *widget : controls)
+        applyRegularApiTextColor(widget, advancedOn);
+
+    const QList<QLabel *> labels = regularApiLabelWidgets();
+    for (QLabel *label : labels)
+        applyRegularApiTextColor(label, advancedOn);
+}
+
+void ConfigDialog::recordRegularApiClickAndMaybeWarn(QObject *clickedObject)
+{
+    if (!clickedObject)
+        return;
+
+    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    constexpr qint64 kDoubleClickWindowMs = 650;
+    const bool isSecondClick = (m_lastRegularApiClickObject == clickedObject) &&
+                               (nowMs - m_lastRegularApiClickMs <= kDoubleClickWindowMs);
+
+    m_lastRegularApiClickObject = clickedObject;
+    m_lastRegularApiClickMs = nowMs;
+
+    if (isSecondClick)
+    {
+        QMessageBox::information(this, QStringLiteral("提示"),
+                                 QStringLiteral("常规模式和高级模式只能二选一"));
+        m_lastRegularApiClickObject = nullptr;
+        m_lastRegularApiClickMs = 0;
+    }
+}
+
+void ConfigDialog::ensureRegularApiInteractionHooks()
+{
+    const QList<QWidget *> controls = regularApiControlWidgets();
+    for (QWidget *widget : controls)
+    {
+        if (!widget)
+            continue;
+
+        if (!widget->property("regularApiControl").toBool())
+            widget->setProperty("regularApiControl", true);
+
+        if (!widget->property("regularApiFilterInstalled").toBool())
+        {
+            widget->installEventFilter(this);
+            widget->setProperty("regularApiFilterInstalled", true);
+        }
+
+        if (QTextEdit *textEdit = qobject_cast<QTextEdit *>(widget))
+        {
+            QWidget *viewport = textEdit->viewport();
+            if (viewport && !viewport->property("regularApiFilterInstalled").toBool())
+            {
+                viewport->setProperty("regularApiControlRoot", QVariant::fromValue(static_cast<QObject *>(widget)));
+                viewport->installEventFilter(this);
+                viewport->setProperty("regularApiFilterInstalled", true);
+            }
+        }
+    }
+}
+
+bool ConfigDialog::eventFilter(QObject *watched, QEvent *event)
+{
+    QObject *regularRoot = nullptr;
+    if (watched && watched->property("regularApiControl").toBool())
+    {
+        regularRoot = watched;
+    }
+    else if (watched)
+    {
+        const QVariant rootVar = watched->property("regularApiControlRoot");
+        if (rootVar.isValid())
+            regularRoot = qvariant_cast<QObject *>(rootVar);
+    }
+
+    const bool advancedOn = m_enableAdvancedApiCheck && m_enableAdvancedApiCheck->isChecked();
+    if (!regularRoot || !advancedOn)
+        return QDialog::eventFilter(watched, event);
+
+    const QEvent::Type type = event->type();
+    const bool isClickEvent = (type == QEvent::MouseButtonPress || type == QEvent::MouseButtonDblClick);
+    if (isClickEvent)
+        recordRegularApiClickAndMaybeWarn(regularRoot);
+
+    const bool blockComboInteraction = (regularRoot == m_apiProviderCombo) &&
+                                       (type == QEvent::MouseButtonPress ||
+                                        type == QEvent::MouseButtonRelease ||
+                                        type == QEvent::MouseButtonDblClick ||
+                                        type == QEvent::Wheel ||
+                                        type == QEvent::KeyPress ||
+                                        type == QEvent::KeyRelease);
+
+    const bool blockTestButtonInteraction = (regularRoot == m_testConnectionBtn) &&
+                                            (type == QEvent::MouseButtonPress ||
+                                             type == QEvent::MouseButtonRelease ||
+                                             type == QEvent::MouseButtonDblClick ||
+                                             type == QEvent::KeyPress ||
+                                             type == QEvent::KeyRelease);
+
+    if (blockComboInteraction || blockTestButtonInteraction)
+        return true;
+
+    return QDialog::eventFilter(watched, event);
+}
+
 void ConfigDialog::updateAdvancedApiUiState()
 {
     const bool advancedOn = m_enableAdvancedApiCheck && m_enableAdvancedApiCheck->isChecked();
 
     ensureAdvancedProviderOption(advancedOn);
+    ensureRegularApiInteractionHooks();
 
     if (m_advancedApiTemplateEdit)
         m_advancedApiTemplateEdit->setReadOnly(!advancedOn);
 
     if (m_apiKeyEdit)
-        m_apiKeyEdit->setEnabled(!advancedOn);
-    if (m_apiProviderCombo)
-        m_apiProviderCombo->setEnabled(!advancedOn);
+        m_apiKeyEdit->setReadOnly(advancedOn);
     if (m_baseUrlEdit)
-        m_baseUrlEdit->setEnabled(!advancedOn);
+        m_baseUrlEdit->setReadOnly(advancedOn);
     if (m_endpointPathEdit)
-        m_endpointPathEdit->setEnabled(!advancedOn);
+        m_endpointPathEdit->setReadOnly(advancedOn);
     if (m_modelNameEdit)
-        m_modelNameEdit->setEnabled(!advancedOn);
+        m_modelNameEdit->setReadOnly(advancedOn);
     if (m_promptEdit)
-        m_promptEdit->setEnabled(!advancedOn);
-    if (m_testConnectionBtn)
-        m_testConnectionBtn->setEnabled(!advancedOn);
+        m_promptEdit->setReadOnly(advancedOn);
+
+    updateRegularApiTextGrayState(advancedOn);
+
     if (m_pickAdvancedJsonFieldsBtn)
         m_pickAdvancedJsonFieldsBtn->setEnabled(advancedOn && m_hasLastAdvancedApiTestJson);
     if (m_advancedDebugDisplayLabel)

@@ -267,6 +267,11 @@ void ConfigDialog::save()
 
 void ConfigDialog::updateTheme(bool isDark)
 {
+    m_isDarkTheme = isDark;
     ThemeUtils::applyThemeToWindow(this, isDark);
     setStyleSheet(""); // Keep default widget look
+    // updateTheme() is called before setupDialogUi() in ctor; avoid touching UI pointers until created.
+    if (!m_generalFormLayout)
+        return;
+    updateRegularApiTextGrayState(m_enableAdvancedApiCheck && m_enableAdvancedApiCheck->isChecked());
 }
