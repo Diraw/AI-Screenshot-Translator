@@ -8,6 +8,7 @@
 #include <QPointer>
 #include <QTimer>
 #include <QPixmap>
+#include <QStringList>
 
 extern bool g_enableLogging;
 
@@ -31,11 +32,11 @@ public:
 
 private slots:
     void onScreenshotRequested();
-    void onScreenshotCaptured(const QPixmap &pixmap, const QRect &rect);
-    void onScreenshotCancelled();
+    void onScreenshotCaptured(const QPixmap &pixmap, const QRect &rect, bool batchMode, bool finalizeBatch);
+    void onScreenshotCancelled(bool clearPendingBatch);
 
     void onResultWindowScreenshotRequested(const QString &entryId, const QString &base64);
-    void onRetranslateRequested(const QString &base64Image);
+    void onRetranslateRequested(const QStringList &base64Images);
 
     void onApiSuccess(const QString &text, const QString &originalBase64, const QString &originalPrompt, void *context);
     void onApiError(const QString &errorMsg, void *context);
@@ -76,12 +77,19 @@ private:
     QList<QPointer<QWidget>> m_activeWindows;
     QMap<QString, QPointer<PreviewCard>> m_previewCards; // ID -> Card (Restored for history)
     QMap<QString, QRect> m_previewGeometries;            // ID -> Last known geometry
-    QMap<QString, QPixmap> m_previewImageCache;          // ID -> Recently decoded preview image
+    QMap<QString, QList<QPixmap>> m_previewImageCache;   // ID -> Recently decoded preview images
     QMap<QString, QPointer<QTimer>> m_previewReleaseTimers; // ID -> Delayed release timers
     QPointer<PreviewCard> m_activePreviewCard;           // The main/initial screenshot card
     QRect m_lastPreviewGeometry;                         // Persistence for screenshot card
 
     QPointer<ScreenshotTool> m_activeScreenshotTool;
+
+    struct PendingBatchCapture
+    {
+        QPixmap pixmap;
+        QRect rect;
+    };
+    QList<PendingBatchCapture> m_pendingBatchCaptures;
 
     void setupTray();
     void notifyHotkeyConflicts(const QString &message, bool interactive);
@@ -92,6 +100,8 @@ private:
     QString updateConfig(const AppConfig &cfg);
     void schedulePreviewImageRelease(const QString &entryId);
     void cancelPreviewImageRelease(const QString &entryId);
+    void clearPendingBatchCaptures();
+    void submitCapturedImages(const QList<PendingBatchCapture> &captures);
     // New hotkey configuration
 
     // Dynamic State

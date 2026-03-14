@@ -54,7 +54,22 @@ void ConfigDialog::retranslateUi()
             m_browseBtn->setText(tm.tr("btn_browse"));
     }
 
+    QGroupBox *grpCaptureMode = m_transTab->findChild<QGroupBox *>("grpCaptureMode");
+    if (grpCaptureMode)
+    {
+        grpCaptureMode->setTitle(tm.getLanguage() == QStringLiteral("zh")
+                                     ? QStringLiteral("截图模式")
+                                     : QStringLiteral("Capture Mode"));
+    }
+
     QGroupBox *grpCard = m_transTab->findChild<QGroupBox *>("grpCard");
+    if (m_batchScreenshotToggleHotkeyLabel)
+    {
+        m_batchScreenshotToggleHotkeyLabel->setText(tm.getLanguage() == QStringLiteral("zh")
+                                                        ? QStringLiteral("批量模式切换快捷键")
+                                                        : QStringLiteral("Batch Mode Toggle"));
+    }
+
     if (grpCard)
     {
         grpCard->setTitle(tm.tr("grp_card_settings"));
@@ -194,7 +209,7 @@ void ConfigDialog::retranslateUi()
     {
         if (g->objectName() == "profileDetails")
             continue;
-        if (g->title().contains("Profiles") || g->title().contains("é…ç½®"))
+        if (g->title().contains("Profiles") || g->title().contains("配置"))
             g->setTitle(tm.tr("grp_profiles"));
     }
 
@@ -227,7 +242,7 @@ void ConfigDialog::retranslateUi()
         {
             b->setText(tm.tr("btn_save"));
         }
-        else if (b->text().contains("Save") || b->text().contains("ä¿å­˜"))
+        else if (b->text().contains("Save") || b->text().contains("保存"))
         {
             b->setText(tm.tr("btn_save"));
         }

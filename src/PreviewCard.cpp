@@ -1,135 +1,175 @@
 #include "PreviewCard.h"
-#include <QPainter>
-#include <QStyle>
-#include <QDebug>
-#include <QMouseEvent>
+
 #include <QCloseEvent>
-#include <QRegularExpression>
 #include <QColor>
+#include <QDebug>
+#include <QKeyEvent>
+#include <QKeySequence>
+#include <QPainter>
+#include <QRegularExpression>
+#include <QStyle>
+#include <algorithm>
 
 namespace
 {
-    class BorderLabel final : public QLabel
+QString normalizeHotkey(QString key)
+{
+    key = key.trimmed().toLower();
+    key.replace(" ", "");
+    return key;
+}
+
+class BorderLabel final : public QLabel
+{
+public:
+    explicit BorderLabel(QWidget *parent = nullptr)
+        : QLabel(parent)
     {
-    public:
-        explicit BorderLabel(QWidget *parent = nullptr)
-            : QLabel(parent)
+        setAttribute(Qt::WA_TranslucentBackground);
+    }
+
+    void setBorderEnabled(bool enabled)
+    {
+        if (m_borderEnabled == enabled)
+            return;
+        m_borderEnabled = enabled;
+        update();
+    }
+
+    void setBorderColor(const QColor &color)
+    {
+        if (m_borderColor == color)
+            return;
+        m_borderColor = color;
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent *event) override
+    {
+        QLabel::paintEvent(event);
+
+        if (!m_borderEnabled)
+            return;
+
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, false);
+
+        const int borderW = 2;
+        QColor c = m_borderColor;
+        if (!c.isValid())
+            c = QColor(100, 100, 100, 255);
+
+        QPixmap pm = pixmap(Qt::ReturnByValue);
+        int drawW = width();
+        int drawH = height();
+        if (!pm.isNull())
         {
-            setAttribute(Qt::WA_TranslucentBackground);
+            const qreal dpr = pm.devicePixelRatio();
+            const QSize logicalSize = (dpr > 0.0) ? QSize(qRound(pm.width() / dpr), qRound(pm.height() / dpr)) : pm.size();
+            drawW = qMin(drawW, logicalSize.width());
+            drawH = qMin(drawH, logicalSize.height());
         }
 
-        void setBorderEnabled(bool enabled)
-        {
-            if (m_borderEnabled == enabled)
-                return;
-            m_borderEnabled = enabled;
-            update();
-        }
+        if (drawW <= 0 || drawH <= 0)
+            return;
 
-        void setBorderColor(const QColor &color)
-        {
-            if (m_borderColor == color)
-                return;
-            m_borderColor = color;
-            update();
-        }
+        painter.fillRect(QRect(0, 0, drawW, borderW), c);
+        painter.fillRect(QRect(0, 0, borderW, drawH), c);
+    }
 
-    protected:
-        void paintEvent(QPaintEvent *event) override
-        {
-            QLabel::paintEvent(event);
-
-            if (!m_borderEnabled)
-                return;
-
-            // Draw overlay border without affecting contents rect.
-            QPainter painter(this);
-            painter.setRenderHint(QPainter::Antialiasing, false);
-
-            const int borderW = 2;
-            QColor c = m_borderColor;
-            if (!c.isValid())
-                c = QColor(100, 100, 100, 255);
-
-            // When the screenshot is very small, the PreviewCard clamps the label to a minimum size.
-            // In that case, the pixmap is smaller than the label, and drawing the border using the
-            // label's full width/height makes the border "stick out" past the image.
-            // Fix: draw border only over the actually displayed pixmap rect (logical pixels).
-            QPixmap pm = pixmap(Qt::ReturnByValue);
-            int drawW = width();
-            int drawH = height();
-            if (!pm.isNull())
-            {
-                const qreal dpr = pm.devicePixelRatio();
-                const QSize logicalSize = (dpr > 0.0) ? QSize(qRound(pm.width() / dpr), qRound(pm.height() / dpr)) : pm.size();
-                drawW = qMin(drawW, logicalSize.width());
-                drawH = qMin(drawH, logicalSize.height());
-            }
-
-            if (drawW <= 0 || drawH <= 0)
-                return;
-
-            painter.fillRect(QRect(0, 0, drawW, borderW), c); // top
-            painter.fillRect(QRect(0, 0, borderW, drawH), c); // left
-        }
-
-    private:
-        bool m_borderEnabled{false};
-        QColor m_borderColor;
-    };
+private:
+    bool m_borderEnabled{false};
+    QColor m_borderColor;
+};
 } // namespace
 
-// Constants for window chrome/frame overhead
-static const int EXTRA_W = 0;
-static const int EXTRA_H = 22; // 0 margins + 2 spacing + 20 button height
 static const int MIN_IMG_SIDE = 50;
+static const int CONTROL_BUTTON_SIZE = 22;
+static const int CONTROL_BAR_HEIGHT = 32;
 
-PreviewCard::PreviewCard(const QPixmap &pixmap, QWidget *parent)
-    : QWidget(parent), m_pixmap(pixmap), m_isDragging(false), m_isResizing(false)
+QString PreviewCard::navigationButtonStyle(const QString &backgroundColor, const QString &hoverColor,
+                                           const QString &pressedColor, const QString &disabledColor) const
 {
+    return QString(
+               "QPushButton{background-color:%1;color:white;border:none;border-radius:%2px;font-weight:bold;font-size:14px;}"
+               "QPushButton:hover{background-color:%3;}"
+               "QPushButton:pressed{background-color:%4;}"
+               "QPushButton:disabled{background-color:%5;color:rgba(255,255,255,210);}")
+        .arg(backgroundColor)
+        .arg(CONTROL_BUTTON_SIZE / 2)
+        .arg(hoverColor)
+        .arg(pressedColor)
+        .arg(disabledColor);
+}
 
-    setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::Tool | Qt::WindowDoesNotAcceptFocus);
+PreviewCard::PreviewCard(const QList<QPixmap> &pixmaps, QWidget *parent)
+    : QWidget(parent)
+{
+    setWindowFlags(Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::Tool);
     setAttribute(Qt::WA_TranslucentBackground);
-    setAttribute(Qt::WA_DeleteOnClose); // Ensure widget is deleted so QPointer becomes null
-    setAttribute(Qt::WA_ShowWithoutActivating);
+    setAttribute(Qt::WA_DeleteOnClose);
+    setFocusPolicy(Qt::StrongFocus);
+    m_controlsH = CONTROL_BAR_HEIGHT;
 
-    // 1. Initialize Base Size (Strict 1:1 Logical Size)
-    m_baseSize = m_pixmap.deviceIndependentSize().toSize();
-    if (m_baseSize.isEmpty())
-        m_baseSize = QSize(1, 1);
-
-    // 2. Image Label (Absolute Positioning)
     m_imageLabel = new BorderLabel(this);
     m_imageLabel->setScaledContents(false);
     m_imageLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-    // Transparent background to avoid white borders
     m_imageLabel->setStyleSheet("QLabel{background:transparent;border:none;}");
 
-    // 3. Controls Widget (Absolute Positioning)
     m_controlsWidget = new QWidget(this);
     m_controlsWidget->setStyleSheet("background:transparent;");
 
     QHBoxLayout *controlsLayout = new QHBoxLayout(m_controlsWidget);
-    controlsLayout->setContentsMargins(0, 0, 0, 0);
-    controlsLayout->setSpacing(0);
+    controlsLayout->setContentsMargins(0, 5, 0, 5);
+    controlsLayout->setSpacing(6);
+
+    m_prevBtn = new QPushButton(QString::fromUtf8("\u2190"), m_controlsWidget);
+    m_prevBtn->setFixedSize(CONTROL_BUTTON_SIZE, CONTROL_BUTTON_SIZE);
+    m_prevBtn->setStyleSheet(navigationButtonStyle("#2faa60", "#37ba6d", "#1d8c4c", "#5f5f5f"));
+    connect(m_prevBtn, &QPushButton::clicked, this, &PreviewCard::showPreviousImage);
+    controlsLayout->addWidget(m_prevBtn);
+
+    m_nextBtn = new QPushButton(QString::fromUtf8("\u2192"), m_controlsWidget);
+    m_nextBtn->setFixedSize(CONTROL_BUTTON_SIZE, CONTROL_BUTTON_SIZE);
+    m_nextBtn->setStyleSheet(navigationButtonStyle("#2f7ff7", "#4590ff", "#2464c3", "#5f5f5f"));
+    connect(m_nextBtn, &QPushButton::clicked, this, &PreviewCard::showNextImage);
+    controlsLayout->addWidget(m_nextBtn);
+
     controlsLayout->addStretch();
 
-    // Zoom Button (Yellow, ? U+2921)
     m_zoomBtn = new QPushButton(QString::fromUtf8("\u2921"), m_controlsWidget);
-    m_zoomBtn->setFixedSize(20, 20);
-    m_zoomBtn->setStyleSheet("background-color:#ffc107;color:black;border-radius:10px;font-weight:bold;font-size:14px;");
-    m_zoomBtn->installEventFilter(this); // Handle drag to zoom
+    m_zoomBtn->setFixedSize(CONTROL_BUTTON_SIZE, CONTROL_BUTTON_SIZE);
+    m_zoomBtn->setStyleSheet("background-color:#ffc107;color:black;border-radius:11px;font-weight:bold;font-size:14px;");
+    m_zoomBtn->installEventFilter(this);
+
+    m_indexLabel = new QLabel(m_controlsWidget);
+    m_indexLabel->setAlignment(Qt::AlignCenter);
+    m_indexLabel->setStyleSheet(
+        "color:white;"
+        "background-color:rgba(22,22,22,155);"
+        "border:1px solid rgba(255,255,255,55);"
+        "border-radius:8px;"
+        "padding:2px 10px;");
+    m_indexLabel->setMinimumWidth(56);
+    m_indexLabel->setMinimumHeight(CONTROL_BUTTON_SIZE);
+    controlsLayout->addWidget(m_indexLabel);
+
+    controlsLayout->addStretch();
     controlsLayout->addWidget(m_zoomBtn);
 
     m_closeBtn = new QPushButton("X", m_controlsWidget);
-    m_closeBtn->setFixedSize(20, 20);
-    m_closeBtn->setStyleSheet("background-color:red;color:white;border-radius:10px;font-weight:bold;");
+    m_closeBtn->setFixedSize(CONTROL_BUTTON_SIZE, CONTROL_BUTTON_SIZE);
+    m_closeBtn->setStyleSheet("background-color:red;color:white;border-radius:11px;font-weight:bold;");
     connect(m_closeBtn, &QPushButton::clicked, this, &QWidget::close);
     controlsLayout->addWidget(m_closeBtn);
 
-    // Initial State
-    m_scale = 1.0;
-    applyScale();
+    setImages(pixmaps);
+}
+
+PreviewCard::PreviewCard(const QPixmap &pixmap, QWidget *parent)
+    : PreviewCard(QList<QPixmap>{pixmap}, parent)
+{
 }
 
 void PreviewCard::closeEvent(QCloseEvent *event)
@@ -161,26 +201,20 @@ bool PreviewCard::eventFilter(QObject *watched, QEvent *event)
                 QPoint globalPos = me->globalPosition().toPoint();
                 int dy = globalPos.y() - m_resizeDragPosition.y();
 
-                // Sensitivity
                 double factor = m_zoomSensitivity / 500.0;
                 int effectiveDy = (int)qRound(dy * factor);
 
-                // Drive scale by HEIGHT change: newScale = (currentHeight + dy) / baseHeight
                 int currentImgH = (int)qRound(m_baseSize.height() * m_scale);
                 int newImgH = currentImgH + effectiveDy;
-
-                // Clamp
                 int minH = qMax(MIN_IMG_SIDE, 1);
                 if (newImgH < minH)
                     newImgH = minH;
 
-                // Update Scale
                 m_scale = (double)newImgH / (double)m_baseSize.height();
                 if (m_scale < 0.01)
                     m_scale = 0.01;
 
                 applyScale();
-
                 m_resizeDragPosition = globalPos;
                 return true;
             }
@@ -200,38 +234,28 @@ bool PreviewCard::eventFilter(QObject *watched, QEvent *event)
 void PreviewCard::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
-    // 1:1 Scale Logic - No aspect locking or adjustment needed here
-    // Window size is strictly controlled by applyScale()
 }
 
 void PreviewCard::applyScale()
 {
-    // 1. Calculate Target Dimenions
     int imgW = qMax(MIN_IMG_SIDE, (int)qRound(m_baseSize.width() * m_scale));
     int imgH = qMax(MIN_IMG_SIDE, (int)qRound(m_baseSize.height() * m_scale));
 
-    // 2. Set Label Size & Position (Absolute)
     m_imageLabel->setFixedSize(imgW, imgH);
     m_imageLabel->move(0, 0);
 
-    // 3. Set Controls Size & Position (Absolute - below image)
     m_controlsWidget->setFixedSize(imgW, m_controlsH);
     m_controlsWidget->move(0, imgH);
 
-    // 4. Set Window Size
     setFixedSize(imgW, imgH + m_controlsH);
 
-    // 5. Update Content
     if (qAbs(m_scale - 1.0) < 0.001)
     {
-        // Strict 1:1 - No re-sampling
         m_imageLabel->setPixmap(m_pixmap);
     }
     else
     {
-        // Scaled Preview - Handle HiDPI: Scale in physical pixels + Restore DPR
         const qreal dpr = m_pixmap.devicePixelRatio();
-
         const int physW = qRound(imgW * dpr);
         const int physH = qRound(imgH * dpr);
 
@@ -241,14 +265,12 @@ void PreviewCard::applyScale()
             return;
         }
 
-        QPixmap scaled = m_pixmap.scaled(
-            physW, physH,
-            Qt::IgnoreAspectRatio,
-            Qt::SmoothTransformation);
-        scaled.setDevicePixelRatio(dpr); // Critical: ensure logical size matches label
-
+        QPixmap scaled = m_pixmap.scaled(physW, physH, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        scaled.setDevicePixelRatio(dpr);
         m_imageLabel->setPixmap(scaled);
     }
+
+    updateImageIndexLabel();
 }
 
 void PreviewCard::paintEvent(QPaintEvent *event)
@@ -256,9 +278,6 @@ void PreviewCard::paintEvent(QPaintEvent *event)
     Q_UNUSED(event);
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
-
-    // Border is now drawn via QLabel stylesheet in setUseBorder()
-    // No need to draw anything here
 }
 
 void PreviewCard::setUseBorder(bool use)
@@ -266,7 +285,6 @@ void PreviewCard::setUseBorder(bool use)
     m_useBorder = use;
     if (m_imageLabel)
     {
-        // Keep the label borderless; draw the border as an overlay to avoid shrinking the contents rect.
         m_imageLabel->setStyleSheet("QLabel { background: transparent; border: none; }");
         auto *bl = static_cast<BorderLabel *>(m_imageLabel);
         bl->setBorderColor(m_borderColor);
@@ -279,6 +297,9 @@ void PreviewCard::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton)
     {
+        activateWindow();
+        raise();
+        setFocus(Qt::MouseFocusReason);
         m_dragPosition = event->globalPosition().toPoint() - frameGeometry().topLeft();
         m_isDragging = true;
         event->accept();
@@ -326,7 +347,6 @@ void PreviewCard::setBorderColor(const QString &colorStr)
 
     QColor parsed;
 
-    // rgba(r,g,b,a) where a is 0..1 or 0..255
     {
         QRegularExpression re(
             "^rgba\\(\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})\\s*,\\s*(\\d{1,3})\\s*,\\s*([0-9]*\\.?[0-9]+)\\s*\\)$",
@@ -340,13 +360,10 @@ void PreviewCard::setBorderColor(const QString &colorStr)
             int b = m.captured(3).toInt(&ok3);
             double a = m.captured(4).toDouble(&ok4);
             if (ok1 && ok2 && ok3 && ok4)
-            {
                 parsed = QColor(clamp255(r), clamp255(g), clamp255(b), parseAlpha255(a));
-            }
         }
     }
 
-    // rgb(r,g,b)
     if (!parsed.isValid())
     {
         QRegularExpression re(
@@ -364,7 +381,6 @@ void PreviewCard::setBorderColor(const QString &colorStr)
         }
     }
 
-    // r,g,b or r,g,b,a
     if (!parsed.isValid())
     {
         QStringList parts = s.split(',', Qt::SkipEmptyParts);
@@ -389,7 +405,6 @@ void PreviewCard::setBorderColor(const QString &colorStr)
         }
     }
 
-    // #RGB / #RRGGBB / #RGBA / #RRGGBBAA
     if (!parsed.isValid() && s.startsWith('#'))
     {
         const QString hex = s.mid(1);
@@ -438,7 +453,6 @@ void PreviewCard::setBorderColor(const QString &colorStr)
         }
         else if (hex.size() == 8)
         {
-            // CSS-style #RRGGBBAA
             const int r = hex.mid(0, 2).toInt(&ok, 16);
             if (!ok)
                 return;
@@ -462,21 +476,129 @@ void PreviewCard::setBorderColor(const QString &colorStr)
     setUseBorder(m_useBorder);
 }
 
-// Fix for High DPI: Pixmap size is in physical pixels, but widget resize expects logical pixels.
 void PreviewCard::setImage(const QPixmap &pixmap)
 {
     m_pixmap = pixmap;
-
-    // Reset to new 1:1 base
     m_baseSize = m_pixmap.deviceIndependentSize().toSize();
     if (m_baseSize.isEmpty())
         m_baseSize = QSize(1, 1);
-
-    m_imageLabel->setPixmap(m_pixmap); // Update internal pixmap
-
-    // Reset Scale
+    if (m_imageLabel)
+        m_imageLabel->setPixmap(m_pixmap);
     m_scale = 1.0;
     applyScale();
+}
+
+void PreviewCard::setImages(const QList<QPixmap> &pixmaps)
+{
+    m_pixmaps = pixmaps;
+    if (m_pixmaps.isEmpty())
+        m_pixmaps.append(QPixmap());
+
+    m_currentImageIndex = qBound(0, m_currentImageIndex, m_pixmaps.size() - 1);
+    setImage(m_pixmaps.value(m_currentImageIndex));
+}
+
+void PreviewCard::setNavigationHotkeys(const QString &prevKey, const QString &nextKey)
+{
+    m_prevHotkey = normalizeHotkey(prevKey.isEmpty() ? QStringLiteral("z") : prevKey);
+    m_nextHotkey = normalizeHotkey(nextKey.isEmpty() ? QStringLiteral("x") : nextKey);
+
+    if (m_prevShortcut)
+    {
+        m_prevShortcut->deleteLater();
+        m_prevShortcut = nullptr;
+    }
+    if (m_nextShortcut)
+    {
+        m_nextShortcut->deleteLater();
+        m_nextShortcut = nullptr;
+    }
+
+    if (!m_prevHotkey.isEmpty())
+    {
+        m_prevShortcut = new QShortcut(QKeySequence(m_prevHotkey), this);
+        m_prevShortcut->setContext(Qt::WindowShortcut);
+        connect(m_prevShortcut, &QShortcut::activated, this, &PreviewCard::showPreviousImage);
+    }
+
+    if (!m_nextHotkey.isEmpty())
+    {
+        m_nextShortcut = new QShortcut(QKeySequence(m_nextHotkey), this);
+        m_nextShortcut->setContext(Qt::WindowShortcut);
+        connect(m_nextShortcut, &QShortcut::activated, this, &PreviewCard::showNextImage);
+    }
+
+    updateImageIndexLabel();
+}
+
+void PreviewCard::updateImageIndexLabel()
+{
+    if (!m_indexLabel)
+        return;
+    if (m_pixmaps.size() <= 1)
+    {
+        m_indexLabel->hide();
+        m_indexLabel->clear();
+        if (m_prevBtn)
+            m_prevBtn->setEnabled(false);
+        if (m_nextBtn)
+            m_nextBtn->setEnabled(false);
+        return;
+    }
+    m_indexLabel->show();
+    m_indexLabel->setText(QString("%1/%2").arg(m_currentImageIndex + 1).arg(m_pixmaps.size()));
+    if (m_prevBtn)
+        m_prevBtn->setEnabled(m_currentImageIndex > 0);
+    if (m_nextBtn)
+        m_nextBtn->setEnabled(m_currentImageIndex < m_pixmaps.size() - 1);
+}
+
+void PreviewCard::showPreviousImage()
+{
+    if (m_pixmaps.size() <= 1 || m_currentImageIndex <= 0)
+        return;
+    --m_currentImageIndex;
+    setImage(m_pixmaps.value(m_currentImageIndex));
+}
+
+void PreviewCard::showNextImage()
+{
+    if (m_pixmaps.size() <= 1 || m_currentImageIndex >= m_pixmaps.size() - 1)
+        return;
+    ++m_currentImageIndex;
+    setImage(m_pixmaps.value(m_currentImageIndex));
+}
+
+bool PreviewCard::matchesHotkey(QKeyEvent *event, const QString &hotkey) const
+{
+    const QString normalized = normalizeHotkey(hotkey);
+    if (normalized.isEmpty())
+        return false;
+
+    const QString eventHotkey = normalizeHotkey(QKeySequence(event->modifiers() | event->key()).toString(QKeySequence::NativeText));
+    if (eventHotkey == normalized)
+        return true;
+
+    return normalizeHotkey(event->text()) == normalized;
+}
+
+void PreviewCard::keyPressEvent(QKeyEvent *event)
+{
+    if (m_pixmaps.size() > 1 && matchesHotkey(event, m_prevHotkey))
+    {
+        showPreviousImage();
+        event->accept();
+        return;
+    }
+
+    if (m_pixmaps.size() > 1 && matchesHotkey(event, m_nextHotkey))
+    {
+        showNextImage();
+        event->accept();
+        return;
+    }
+
+    QWidget::keyPressEvent(event);
 }
 
 void PreviewCard::wheelEvent(QWheelEvent *event)
@@ -492,7 +614,6 @@ void PreviewCard::wheelEvent(QWheelEvent *event)
     double mul = (delta > 0) ? (1.0 + factor) : (1.0 / (1.0 + factor));
     m_scale *= mul;
 
-    // Clamp Scale
     double minScaleW = (double)MIN_IMG_SIDE / (double)m_baseSize.width();
     double minScaleH = (double)MIN_IMG_SIDE / (double)m_baseSize.height();
     double minScale = qMax(minScaleW, minScaleH);

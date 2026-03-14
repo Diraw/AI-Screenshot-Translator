@@ -1,13 +1,14 @@
 #include "ApiClient.h"
-#include <QNetworkRequest>
-#include <QJsonObject>
+
+#include <QDebug>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QNetworkProxy>
-#include <QUrl>
-#include <QDebug>
+#include <QJsonObject>
 #include <QJsonParseError>
+#include <QNetworkProxy>
+#include <QNetworkRequest>
 #include <QStringList>
+#include <QUrl>
 
 struct JsonPathStep
 {
@@ -95,7 +96,6 @@ static bool parseJsonPathSteps(const QString &path, QList<JsonPathStep> &outStep
             return false;
 
         JsonPathStep step;
-        step.isIndex = false;
         step.key = key;
         outSteps.append(step);
         i = j;
@@ -167,12 +167,7 @@ static QString buildAdvancedDebugHeader(const QJsonObject &responseRoot, const Q
     for (const QString &path : fields)
     {
         QJsonValue value;
-        QString valueText;
-        if (resolveJsonPath(responseRoot, path, value))
-            valueText = toDebugValueString(value);
-        else
-            valueText = "<missing>";
-
+        QString valueText = resolveJsonPath(responseRoot, path, value) ? toDebugValueString(value) : QString("<missing>");
         valueText.replace('\n', ' ');
         if (valueText.size() > 200)
             valueText = valueText.left(197) + "...";
@@ -182,14 +177,44 @@ static QString buildAdvancedDebugHeader(const QJsonObject &responseRoot, const Q
     return QString("```text\n%1\n```\n\n").arg(lines.join('\n'));
 }
 
-ApiClient::ApiClient(QObject *parent) : QObject(parent)
+static QStringList toStringList(const QList<QByteArray> &images)
+{
+    QStringList out;
+    out.reserve(images.size());
+    for (const QByteArray &image : images)
+        out.append(QString::fromLatin1(image));
+    return out;
+}
+
+static QList<QByteArray> normalizedImages(const QList<QByteArray> &images)
+{
+    QList<QByteArray> normalized = images;
+    QList<QByteArray> filtered;
+    filtered.reserve(normalized.size());
+    for (const QByteArray &image : normalized)
+    {
+        if (!image.isEmpty())
+            filtered.append(image);
+    }
+    return filtered;
+}
+
+static bool advancedTemplateContainsMultiImageTokens(const QJsonObject &root)
+{
+    const QString compact = QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact));
+    return compact.contains("{{gemini_parts}}") ||
+           compact.contains("{{claude_user_content}}") ||
+           compact.contains("{{openai_user_content}}");
+}
+
+ApiClient::ApiClient(QObject *parent)
+    : QObject(parent)
 {
     m_manager = new QNetworkAccessManager(this);
 }
 
 ApiClient::~ApiClient()
 {
-    // m_manager is a child, so it cleans up itself
 }
 
 void ApiClient::configure(const QString &apiKey, const QString &baseUrl, const QString &modelName,
@@ -210,28 +235,14 @@ void ApiClient::configure(const QString &apiKey, const QString &baseUrl, const Q
     {
         QUrl url(proxyUrl);
         QNetworkProxy proxy;
-
-        QString scheme = url.scheme().toLower();
-        if (scheme == "socks5" || scheme == "socks")
-        {
-            proxy.setType(QNetworkProxy::Socks5Proxy);
-        }
-        else
-        {
-            proxy.setType(QNetworkProxy::HttpProxy);
-        }
-
+        const QString scheme = url.scheme().toLower();
+        proxy.setType((scheme == "socks5" || scheme == "socks") ? QNetworkProxy::Socks5Proxy : QNetworkProxy::HttpProxy);
         proxy.setHostName(url.host());
         proxy.setPort(url.port(8080));
-
         if (!url.userName().isEmpty())
-        {
             proxy.setUser(url.userName());
-        }
         if (!url.password().isEmpty())
-        {
             proxy.setPassword(url.password());
-        }
 
         m_manager->setProxy(proxy);
         qDebug() << "Proxy set to:" << proxyUrl
@@ -239,7 +250,6 @@ void ApiClient::configure(const QString &apiKey, const QString &baseUrl, const Q
     }
     else
     {
-        // If empty, use system proxy settings instead of forcing NoProxy
         m_manager->setProxy(QNetworkProxy::DefaultProxy);
         qDebug() << "Proxy set to Default (System settings)";
     }
@@ -247,80 +257,84 @@ void ApiClient::configure(const QString &apiKey, const QString &baseUrl, const Q
 
 void ApiClient::processImage(const QByteArray &base64Image, const QString &promptText, void *context)
 {
+    processImages(QList<QByteArray>{base64Image}, promptText, context);
+}
+
+void ApiClient::processImages(const QList<QByteArray> &base64Images, const QString &promptText, void *context)
+{
+    const QList<QByteArray> images = normalizedImages(base64Images);
+    if (images.isEmpty())
+    {
+        emit error("Image payload is empty.", context);
+        return;
+    }
+
     QNetworkRequest request((QUrl()));
     QByteArray data;
 
     if (m_useAdvancedApi)
     {
         QString advancedErr;
-        if (!buildAdvancedRequest(base64Image, promptText, request, data, advancedErr))
+        if (!buildAdvancedRequest(images, promptText, request, data, advancedErr))
         {
             emit error(QString("Advanced API Error: %1").arg(advancedErr), context);
             return;
         }
     }
 
-    if (m_apiKey.isEmpty() || m_baseUrl.isEmpty() || m_modelName.isEmpty())
+    if ((m_apiKey.isEmpty() || m_baseUrl.isEmpty() || m_modelName.isEmpty()) && !m_useAdvancedApi)
     {
-        if (!m_useAdvancedApi)
-        {
-            emit error("API Configuration invalid. Please check settings.", context);
-            return;
-        }
+        emit error("API Configuration invalid. Please check settings.", context);
+        return;
     }
 
     if (!m_useAdvancedApi)
     {
         QString endpoint = getEndpoint();
         QUrl url = joinBaseAndEndpoint(m_baseUrl, endpoint);
-
-        // For Gemini, add API key to URL parameter
         if (m_provider == ApiProvider::Gemini)
             url.setQuery(QString("key=%1").arg(m_apiKey));
 
         request = QNetworkRequest(url);
         setProviderHeaders(request);
 
-        // Format request based on provider
         switch (m_provider)
         {
         case ApiProvider::OpenAI:
-            data = formatOpenAIRequest(base64Image, promptText);
+            data = formatOpenAIRequest(images, promptText);
             break;
         case ApiProvider::Gemini:
-            data = formatGeminiRequest(base64Image, promptText);
+            data = formatGeminiRequest(images, promptText);
             break;
         case ApiProvider::Claude:
-            data = formatClaudeRequest(base64Image, promptText);
+            data = formatClaudeRequest(images, promptText);
             break;
         }
     }
 
     qDebug() << "ApiClient: Sending POST request to" << request.url().toString();
-    // qDebug() << "ApiClient: Payload size:" << data.size();
 
     QNetworkReply *reply = m_manager->post(request, data);
-
-    // Attach context properties to the reply object
-    reply->setProperty("originalBase64", base64Image);
+    reply->setProperty("originalBase64", images.first());
+    reply->setProperty("originalBase64List", toStringList(images));
     reply->setProperty("originalPrompt", promptText);
     reply->setProperty("requestContext", (qulonglong)context);
 
     connect(reply, &QNetworkReply::finished, this, [this, reply]()
             {
-        qDebug() << "ApiClient: Reply finished. Error:" << reply->error();
-        onReplyFinished(reply); });
+                qDebug() << "ApiClient: Reply finished. Error:" << reply->error();
+                onReplyFinished(reply);
+            });
 
-    // Add detailed error logging
     connect(reply, &QNetworkReply::errorOccurred, this, [reply](QNetworkReply::NetworkError code)
             { qWarning() << "ApiClient: Network Error occurred:" << code << reply->errorString()
                          << "URL:" << reply->url().toString(); });
 
     connect(reply, &QNetworkReply::sslErrors, this, [reply](const QList<QSslError> &errors)
             {
-        for (const QSslError &error : errors) {
-            qWarning() << "SSL Error:" << error.errorString();
-        } });
+                for (const QSslError &error : errors)
+                    qWarning() << "SSL Error:" << error.errorString();
+            });
 }
 
 void ApiClient::onReplyFinished(QNetworkReply *reply)
@@ -328,39 +342,41 @@ void ApiClient::onReplyFinished(QNetworkReply *reply)
     reply->deleteLater();
 
     void *context = (void *)reply->property("requestContext").toULongLong();
-    QByteArray originalBase64 = reply->property("originalBase64").toByteArray();
-    QString originalPrompt = reply->property("originalPrompt").toString();
+    const QByteArray originalBase64 = reply->property("originalBase64").toByteArray();
+    const QStringList originalBase64List = reply->property("originalBase64List").toStringList();
+    const QString originalPrompt = reply->property("originalPrompt").toString();
 
     if (reply->error() != QNetworkReply::NoError)
     {
-        // Retry logic for specific transitional network errors
         if (reply->error() == QNetworkReply::RemoteHostClosedError ||
             reply->error() == QNetworkReply::ConnectionRefusedError)
         {
-
             if (!m_retriedContexts.contains(context))
             {
                 qWarning() << "Network transition error detected (" << reply->error() << "), retrying once for context:" << context;
                 m_retriedContexts.insert(context);
-                processImage(originalBase64, originalPrompt, context);
+                QList<QByteArray> images;
+                images.reserve(originalBase64List.size());
+                for (const QString &image : originalBase64List)
+                    images.append(image.toLatin1());
+                processImages(images, originalPrompt, context);
                 return;
             }
         }
 
-        m_retriedContexts.remove(context); // Clear retry state for this request
-        QString err = reply->errorString();
-        QByteArray response = reply->readAll();
+        m_retriedContexts.remove(context);
+        const QString err = reply->errorString();
+        const QByteArray response = reply->readAll();
         qWarning() << "API Error:" << err << "Response:" << response;
         emit error(QString("Network Error: %1").arg(err), context);
         return;
     }
 
-    m_retriedContexts.remove(context); // Clear retry state on success
-    QByteArray response = reply->readAll();
-    qDebug() << "ApiClient: Response Body:" << response; // Debug log
+    m_retriedContexts.remove(context);
+    const QByteArray response = reply->readAll();
+    qDebug() << "ApiClient: Response Body:" << response;
 
-    QJsonDocument doc = QJsonDocument::fromJson(response);
-
+    const QJsonDocument doc = QJsonDocument::fromJson(response);
     if (doc.isNull())
     {
         qWarning() << "ApiClient: Failed to parse JSON response";
@@ -368,23 +384,18 @@ void ApiClient::onReplyFinished(QNetworkReply *reply)
         return;
     }
 
-    QJsonObject root = doc.object();
-
-    // Check for API errors first
+    const QJsonObject root = doc.object();
     if (root.contains("error"))
     {
-        QJsonObject errObj = root["error"].toObject();
-        QString errMsg = errObj["message"].toString();
+        const QJsonObject errObj = root["error"].toObject();
+        const QString errMsg = errObj["message"].toString();
         emit error(QString("API Error: %1").arg(errMsg), context);
         return;
     }
 
-    // Parse response based on provider
     QString content;
-    ApiProvider parseProvider = m_provider;
     if (m_useAdvancedApi)
     {
-        // Advanced mode accepts mixed provider schemas and falls back to generic extraction.
         content = parseOpenAIResponse(root);
         if (content.isEmpty())
             content = parseGeminiResponse(root);
@@ -395,7 +406,7 @@ void ApiClient::onReplyFinished(QNetworkReply *reply)
     }
     else
     {
-        switch (parseProvider)
+        switch (m_provider)
         {
         case ApiProvider::OpenAI:
             content = parseOpenAIResponse(root);
@@ -410,7 +421,6 @@ void ApiClient::onReplyFinished(QNetworkReply *reply)
     }
 
     qDebug() << "ApiClient: Parsed Content Length:" << content.length();
-
     if (content.isEmpty())
     {
         qWarning() << "ApiClient: Parsed content is empty. Check parser logic.";
@@ -428,9 +438,8 @@ void ApiClient::onReplyFinished(QNetworkReply *reply)
     emit success(content, originalBase64, originalPrompt, context);
 }
 
-bool ApiClient::buildAdvancedRequest(const QByteArray &base64Image, const QString &promptText,
-                                     QNetworkRequest &request, QByteArray &payload,
-                                     QString &outError) const
+bool ApiClient::buildAdvancedRequest(const QList<QByteArray> &base64Images, const QString &promptText,
+                                     QNetworkRequest &request, QByteArray &payload, QString &outError) const
 {
     outError.clear();
 
@@ -467,19 +476,54 @@ bool ApiClient::buildAdvancedRequest(const QByteArray &base64Image, const QStrin
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setRawHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
+    const QHash<QString, QString> headerTokens = {
+        {"api_key", apiKey},
+        {"model", model},
+        {"prompt", prompt},
+        {"temperature", QString::number(temperature, 'g', 6)},
+        {"top_p", QString::number(topP, 'g', 6)},
+        {"max_tokens", QString::number(maxTokens)},
+        {"base64_image", QString::fromLatin1(base64Images.first())},
+        {"gemini_parts", QString::fromUtf8(QJsonDocument([&base64Images, &prompt]()
+                                                         {
+                                                             QJsonArray parts;
+                                                             for (const QByteArray &image : base64Images)
+                                                             {
+                                                                 parts.append(QJsonObject{{"inline_data", QJsonObject{{"mime_type", "image/png"},
+                                                                                                                      {"data", QString::fromLatin1(image)}}}});
+                                                             }
+                                                             parts.append(QJsonObject{{"text", prompt}});
+                                                             return parts;
+                                                         }()).toJson(QJsonDocument::Compact))},
+        {"claude_user_content", QString::fromUtf8(QJsonDocument([&base64Images, &prompt]()
+                                                                {
+                                                                    QJsonArray content;
+                                                                    for (const QByteArray &image : base64Images)
+                                                                    {
+                                                                        content.append(QJsonObject{{"type", "image"},
+                                                                                                   {"source", QJsonObject{{"type", "base64"},
+                                                                                                                          {"media_type", "image/png"},
+                                                                                                                          {"data", QString::fromLatin1(image)}}}});
+                                                                    }
+                                                                    content.append(QJsonObject{{"type", "text"}, {"text", prompt}});
+                                                                    return content;
+                                                                }()).toJson(QJsonDocument::Compact))},
+        {"openai_user_content", QString::fromUtf8(QJsonDocument([&base64Images, &prompt]()
+                                                                {
+                                                                    QJsonArray content;
+                                                                    for (const QByteArray &image : base64Images)
+                                                                    {
+                                                                        content.append(QJsonObject{{"type", "image_url"},
+                                                                                                   {"image_url", QJsonObject{{"url", QString("data:image/png;base64,%1").arg(QString::fromLatin1(image))}}}});
+                                                                    }
+                                                                    content.append(QJsonObject{{"type", "text"}, {"text", prompt}});
+                                                                    return content;
+                                                                }()).toJson(QJsonDocument::Compact))},
+    };
+
     if (root.contains("headers") && root.value("headers").isObject())
     {
         const QJsonObject headers = root.value("headers").toObject();
-        const QHash<QString, QString> headerTokens = {
-            {"api_key", apiKey},
-            {"model", model},
-            {"prompt", prompt},
-            {"temperature", QString::number(temperature, 'g', 6)},
-            {"top_p", QString::number(topP, 'g', 6)},
-            {"max_tokens", QString::number(maxTokens)},
-            {"base64_image", QString::fromLatin1(base64Image)},
-        };
-
         for (auto it = headers.constBegin(); it != headers.constEnd(); ++it)
         {
             QString headerValue = it.value().toString();
@@ -505,67 +549,82 @@ bool ApiClient::buildAdvancedRequest(const QByteArray &base64Image, const QStrin
     if (looksOpenAICompatible && !apiKey.isEmpty() && !request.hasRawHeader("Authorization"))
         request.setRawHeader("Authorization", QByteArray("Bearer ") + apiKey.toUtf8());
 
-    const QHash<QString, QString> tokens = {
-        {"api_key", apiKey},
-        {"model", model},
-        {"prompt", prompt},
-        {"temperature", QString::number(temperature, 'g', 6)},
-        {"top_p", QString::number(topP, 'g', 6)},
-        {"max_tokens", QString::number(maxTokens)},
-        {"base64_image", QString::fromLatin1(base64Image)},
-    };
-
     QJsonObject body;
-    if (root.contains("request_body") && root.value("request_body").isObject())
+    if (root.contains("request_body") && root.value("request_body").isObject() &&
+        (base64Images.size() <= 1 || advancedTemplateContainsMultiImageTokens(root)))
     {
-        body = applyTemplateTokens(root.value("request_body"), tokens).toObject();
+        body = applyTemplateTokens(root.value("request_body"), headerTokens).toObject();
     }
     else if (provider == "gemini")
     {
-        QJsonObject inlineData;
-        inlineData["mime_type"] = "image/png";
-        inlineData["data"] = QString::fromLatin1(base64Image);
+        QJsonArray parts;
+        for (const QByteArray &image : base64Images)
+        {
+            QJsonObject inlineData;
+            inlineData["mime_type"] = "image/png";
+            inlineData["data"] = QString::fromLatin1(image);
 
-        QJsonObject imagePart;
-        imagePart["inline_data"] = inlineData;
+            QJsonObject imagePart;
+            imagePart["inline_data"] = inlineData;
+            parts.append(imagePart);
+        }
         QJsonObject textPart;
         textPart["text"] = prompt;
+        parts.append(textPart);
+
         QJsonObject content;
-        content["parts"] = QJsonArray{imagePart, textPart};
+        content["parts"] = parts;
         body["contents"] = QJsonArray{content};
     }
     else if (provider == "claude")
     {
-        QJsonObject source;
-        source["type"] = "base64";
-        source["media_type"] = "image/png";
-        source["data"] = QString::fromLatin1(base64Image);
-        QJsonObject imagePart;
-        imagePart["type"] = "image";
-        imagePart["source"] = source;
+        QJsonArray content;
+        for (const QByteArray &image : base64Images)
+        {
+            QJsonObject source;
+            source["type"] = "base64";
+            source["media_type"] = "image/png";
+            source["data"] = QString::fromLatin1(image);
+
+            QJsonObject imagePart;
+            imagePart["type"] = "image";
+            imagePart["source"] = source;
+            content.append(imagePart);
+        }
+
         QJsonObject textPart;
         textPart["type"] = "text";
         textPart["text"] = prompt;
+        content.append(textPart);
+
         QJsonObject msg;
         msg["role"] = "user";
-        msg["content"] = QJsonArray{imagePart, textPart};
+        msg["content"] = content;
         body["messages"] = QJsonArray{msg};
         body["model"] = model;
         body["max_tokens"] = maxTokens;
     }
     else
     {
-        QJsonObject imageContent;
-        imageContent["type"] = "image_url";
-        QJsonObject imageUrl;
-        imageUrl["url"] = QString("data:image/png;base64,%1").arg(QString::fromLatin1(base64Image));
-        imageContent["image_url"] = imageUrl;
+        QJsonArray contentArray;
+        for (const QByteArray &image : base64Images)
+        {
+            QJsonObject imageContent;
+            imageContent["type"] = "image_url";
+            QJsonObject imageUrl;
+            imageUrl["url"] = QString("data:image/png;base64,%1").arg(QString::fromLatin1(image));
+            imageContent["image_url"] = imageUrl;
+            contentArray.append(imageContent);
+        }
+
         QJsonObject textContent;
         textContent["type"] = "text";
         textContent["text"] = prompt;
+        contentArray.append(textContent);
+
         QJsonObject userMessage;
         userMessage["role"] = "user";
-        userMessage["content"] = QJsonArray{imageContent, textContent};
+        userMessage["content"] = contentArray;
         body["model"] = model;
         body["messages"] = QJsonArray{userMessage};
         body["temperature"] = temperature;
@@ -583,12 +642,27 @@ QJsonValue ApiClient::applyTemplateTokens(const QJsonValue &value, const QHash<Q
     {
         const QString raw = value.toString();
         const QString trimmed = raw.trimmed();
-
-        // Keep numeric placeholders typed as numbers in JSON.
         if (trimmed == "{{temperature}}" || trimmed == "{{top_p}}")
             return QJsonValue(tokens.value(trimmed.mid(2, trimmed.length() - 4)).toDouble());
         if (trimmed == "{{max_tokens}}")
             return QJsonValue(tokens.value("max_tokens").toInt());
+        if (trimmed.startsWith("{{") && trimmed.endsWith("}}"))
+        {
+            const QString tokenName = trimmed.mid(2, trimmed.length() - 4);
+            const QString tokenValue = tokens.value(tokenName);
+            if (!tokenValue.isEmpty() && (tokenValue.trimmed().startsWith('[') || tokenValue.trimmed().startsWith('{')))
+            {
+                QJsonParseError err;
+                const QJsonDocument doc = QJsonDocument::fromJson(tokenValue.toUtf8(), &err);
+                if (err.error == QJsonParseError::NoError)
+                {
+                    if (doc.isArray())
+                        return doc.array();
+                    if (doc.isObject())
+                        return doc.object();
+                }
+            }
+        }
 
         QString out = raw;
         for (auto it = tokens.constBegin(); it != tokens.constEnd(); ++it)
@@ -626,9 +700,12 @@ QString ApiClient::extractGenericText(const QJsonObject &root) const
     return QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact));
 }
 
-// Provider-specific request formatters
-
 QByteArray ApiClient::formatOpenAIRequest(const QByteArray &base64Image, const QString &prompt)
+{
+    return formatOpenAIRequest(QList<QByteArray>{base64Image}, prompt);
+}
+
+QByteArray ApiClient::formatOpenAIRequest(const QList<QByteArray> &base64Images, const QString &prompt)
 {
     QJsonObject systemMessage;
     systemMessage["role"] = "system";
@@ -638,18 +715,19 @@ QByteArray ApiClient::formatOpenAIRequest(const QByteArray &base64Image, const Q
     userMessage["role"] = "user";
 
     QJsonArray contentArray;
-
-    QJsonObject imageContent;
-    imageContent["type"] = "image_url";
-    QJsonObject imageUrl;
-    imageUrl["url"] = QString("data:image/png;base64,%1").arg(QString(base64Image));
-    imageContent["image_url"] = imageUrl;
+    for (const QByteArray &image : base64Images)
+    {
+        QJsonObject imageContent;
+        imageContent["type"] = "image_url";
+        QJsonObject imageUrl;
+        imageUrl["url"] = QString("data:image/png;base64,%1").arg(QString::fromLatin1(image));
+        imageContent["image_url"] = imageUrl;
+        contentArray.append(imageContent);
+    }
 
     QJsonObject textContent;
     textContent["type"] = "text";
     textContent["text"] = prompt;
-
-    contentArray.append(imageContent);
     contentArray.append(textContent);
     userMessage["content"] = contentArray;
 
@@ -660,90 +738,89 @@ QByteArray ApiClient::formatOpenAIRequest(const QByteArray &base64Image, const Q
     QJsonObject payload;
     payload["model"] = m_modelName;
     payload["messages"] = messages;
-
     return QJsonDocument(payload).toJson();
 }
 
 QByteArray ApiClient::formatGeminiRequest(const QByteArray &base64Image, const QString &prompt)
 {
+    return formatGeminiRequest(QList<QByteArray>{base64Image}, prompt);
+}
+
+QByteArray ApiClient::formatGeminiRequest(const QList<QByteArray> &base64Images, const QString &prompt)
+{
     QJsonArray parts;
+    for (const QByteArray &image : base64Images)
+    {
+        QJsonObject inlineData;
+        inlineData["mime_type"] = "image/png";
+        inlineData["data"] = QString::fromLatin1(image);
 
-    QJsonObject inlineData;
-    inlineData["mime_type"] = "image/png";
-    inlineData["data"] = QString(base64Image);
-
-    QJsonObject imagePart;
-    imagePart["inline_data"] = inlineData;
+        QJsonObject imagePart;
+        imagePart["inline_data"] = inlineData;
+        parts.append(imagePart);
+    }
 
     QJsonObject textPart;
     textPart["text"] = prompt;
-
-    parts.append(imagePart);
     parts.append(textPart);
 
     QJsonObject content;
     content["parts"] = parts;
 
-    QJsonArray contents;
-    contents.append(content);
-
     QJsonObject payload;
-    payload["contents"] = contents;
-
+    payload["contents"] = QJsonArray{content};
     return QJsonDocument(payload).toJson();
 }
 
 QByteArray ApiClient::formatClaudeRequest(const QByteArray &base64Image, const QString &prompt)
 {
+    return formatClaudeRequest(QList<QByteArray>{base64Image}, prompt);
+}
+
+QByteArray ApiClient::formatClaudeRequest(const QList<QByteArray> &base64Images, const QString &prompt)
+{
     QJsonArray content;
+    for (const QByteArray &image : base64Images)
+    {
+        QJsonObject source;
+        source["type"] = "base64";
+        source["media_type"] = "image/png";
+        source["data"] = QString::fromLatin1(image);
 
-    QJsonObject source;
-    source["type"] = "base64";
-    source["media_type"] = "image/png";
-    source["data"] = QString(base64Image);
-
-    QJsonObject imagePart;
-    imagePart["type"] = "image";
-    imagePart["source"] = source;
+        QJsonObject imagePart;
+        imagePart["type"] = "image";
+        imagePart["source"] = source;
+        content.append(imagePart);
+    }
 
     QJsonObject textPart;
     textPart["type"] = "text";
     textPart["text"] = prompt;
-
-    content.append(imagePart);
     content.append(textPart);
 
     QJsonObject userMessage;
     userMessage["role"] = "user";
     userMessage["content"] = content;
 
-    QJsonArray messages;
-    messages.append(userMessage);
-
     QJsonObject payload;
     payload["model"] = m_modelName;
     payload["max_tokens"] = 1024;
-    payload["messages"] = messages;
-
+    payload["messages"] = QJsonArray{userMessage};
     return QJsonDocument(payload).toJson();
 }
-
-// Provider-specific response parsers
 
 QString ApiClient::parseOpenAIResponse(const QJsonObject &root)
 {
     if (root.contains("choices") && root["choices"].isArray())
     {
-        QJsonArray choices = root["choices"].toArray();
+        const QJsonArray choices = root["choices"].toArray();
         if (!choices.isEmpty())
         {
-            QJsonObject firstChoice = choices[0].toObject();
-            QJsonObject message = firstChoice["message"].toObject();
-            QJsonValue contentVal = message.value("content");
+            const QJsonObject firstChoice = choices[0].toObject();
+            const QJsonObject message = firstChoice["message"].toObject();
+            const QJsonValue contentVal = message.value("content");
             if (contentVal.isString())
-            {
                 return contentVal.toString();
-            }
             if (contentVal.isArray())
             {
                 QStringList parts;
@@ -751,11 +828,10 @@ QString ApiClient::parseOpenAIResponse(const QJsonObject &root)
                 {
                     if (!v.isObject())
                         continue;
-                    QJsonObject obj = v.toObject();
-                    QString type = obj.value("type").toString();
-                    if (type == "text")
+                    const QJsonObject obj = v.toObject();
+                    if (obj.value("type").toString() == "text")
                     {
-                        QString text = obj.value("text").toString();
+                        const QString text = obj.value("text").toString();
                         if (!text.isEmpty())
                             parts << text;
                     }
@@ -764,49 +840,53 @@ QString ApiClient::parseOpenAIResponse(const QJsonObject &root)
             }
         }
     }
-    return QString();
+    return {};
 }
 
 QString ApiClient::parseGeminiResponse(const QJsonObject &root)
 {
     if (root.contains("candidates") && root["candidates"].isArray())
     {
-        QJsonArray candidates = root["candidates"].toArray();
+        const QJsonArray candidates = root["candidates"].toArray();
         if (!candidates.isEmpty())
         {
-            QJsonObject firstCandidate = candidates[0].toObject();
-            QJsonObject content = firstCandidate["content"].toObject();
-            QJsonArray parts = content["parts"].toArray();
-            if (!parts.isEmpty())
+            const QJsonObject firstCandidate = candidates[0].toObject();
+            const QJsonObject content = firstCandidate["content"].toObject();
+            const QJsonArray parts = content["parts"].toArray();
+            QStringList textParts;
+            for (const QJsonValue &partValue : parts)
             {
-                return parts[0].toObject()["text"].toString();
+                const QString text = partValue.toObject()["text"].toString();
+                if (!text.isEmpty())
+                    textParts << text;
             }
+            return textParts.join("\n");
         }
     }
-    return QString();
+    return {};
 }
 
 QString ApiClient::parseClaudeResponse(const QJsonObject &root)
 {
     if (root.contains("content") && root["content"].isArray())
     {
-        QJsonArray content = root["content"].toArray();
-        if (!content.isEmpty())
+        const QJsonArray content = root["content"].toArray();
+        QStringList textParts;
+        for (const QJsonValue &partValue : content)
         {
-            return content[0].toObject()["text"].toString();
+            const QString text = partValue.toObject()["text"].toString();
+            if (!text.isEmpty())
+                textParts << text;
         }
+        return textParts.join("\n");
     }
-    return QString();
+    return {};
 }
-
-// Helper methods
 
 QString ApiClient::getEndpoint() const
 {
     if (!m_endpointPath.trimmed().isEmpty())
-    {
         return m_endpointPath;
-    }
 
     switch (m_provider)
     {
@@ -817,29 +897,25 @@ QString ApiClient::getEndpoint() const
     case ApiProvider::Claude:
         return "/v1/messages";
     }
-    return "/v1/chat/completions"; // Default
+    return "/v1/chat/completions";
 }
 
 void ApiClient::setProviderHeaders(QNetworkRequest &request) const
 {
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    // Add standard browser User-Agent to avoid being blocked by some CDNs/providers
     request.setRawHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
     switch (m_provider)
     {
     case ApiProvider::OpenAI:
         if (!m_apiKey.isEmpty())
-        {
             request.setRawHeader("Authorization", "Bearer " + m_apiKey.toUtf8());
-        }
         break;
     case ApiProvider::Claude:
         request.setRawHeader("x-api-key", m_apiKey.toUtf8());
         request.setRawHeader("anthropic-version", "2023-06-01");
         break;
     case ApiProvider::Gemini:
-        // Gemini uses API key in URL, not header
         break;
     }
 }

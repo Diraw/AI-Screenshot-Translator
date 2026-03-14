@@ -55,11 +55,13 @@ ResultWindow::ProtectedContent ResultWindow::protectMath(const QString &m)
     return p;
 }
 
-void ResultWindow::setContent(const QString &markdown, const QString &originalBase64, const QString &prompt, const QString &entryId)
+void ResultWindow::setContent(const QString &markdown, const QString &originalBase64, const QStringList &originalBase64List,
+                              const QString &prompt, const QString &entryId)
 {
     bool sameContent = m_htmlLoaded && (entryId == m_entryId) && (markdown == m_currentMarkdown);
 
     m_originalBase64 = originalBase64;
+    m_originalBase64List = originalBase64List;
     m_originalPrompt = prompt;
     m_entryId = entryId;
     m_currentMarkdown = markdown;
@@ -81,6 +83,7 @@ void ResultWindow::setContent(const QString &markdown, const QString &originalBa
         e.id = entryId;
         e.translatedMarkdown = markdown;
         e.originalBase64 = originalBase64;
+        e.originalBase64List = originalBase64List;
         e.prompt = prompt;
         m_history.append(e);
         m_currentIndex = 0;

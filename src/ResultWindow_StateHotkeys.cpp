@@ -66,9 +66,9 @@ void ResultWindow::configureHotkeys(const QString &v, const QString &e, const QS
                 m_webView->eval("applyFormat('highlight');"); });
 
     add(m_prevKey, [this]()
-        { showPrevious(); }, Qt::ApplicationShortcut, true);
+        { showPrevious(); }, Qt::WindowShortcut, true);
     add(m_nextKey, [this]()
-        { showNext(); }, Qt::ApplicationShortcut, true);
+        { showNext(); }, Qt::WindowShortcut, true);
     add(m_tagKey, [this]()
         { openTagDialog(); }, Qt::ApplicationShortcut);
 
@@ -80,7 +80,7 @@ void ResultWindow::addEntry(const TranslationEntry &entry)
     m_history.append(entry);
     m_currentIndex = m_history.size() - 1;
     updateNavigation();
-    setContent(entry.translatedMarkdown, entry.originalBase64, entry.prompt, entry.id);
+    setContent(entry.translatedMarkdown, entry.originalBase64, entry.originalBase64List, entry.prompt, entry.id);
 }
 
 void ResultWindow::showPrevious()
@@ -99,7 +99,7 @@ void ResultWindow::showPrevious()
                 e = fresh;
             }
         }
-        setContent(e.translatedMarkdown, e.originalBase64, e.prompt, e.id);
+        setContent(e.translatedMarkdown, e.originalBase64, e.originalBase64List, e.prompt, e.id);
         updateNavigation();
     }
 }
@@ -120,7 +120,7 @@ void ResultWindow::showNext()
                 e = fresh;
             }
         }
-        setContent(e.translatedMarkdown, e.originalBase64, e.prompt, e.id);
+        setContent(e.translatedMarkdown, e.originalBase64, e.originalBase64List, e.prompt, e.id);
         updateNavigation();
     }
 }
@@ -163,26 +163,30 @@ void ResultWindow::triggerRetranslateFromNative()
             showNext();
         } else {
             // Already at latest, trigger retranslate in locked window (adds new entry)
-            QString base64ToUse;
+            QStringList base64ImagesToUse;
             if (m_currentIndex >= 0 && m_currentIndex < m_history.size()) {
-                base64ToUse = m_history[m_currentIndex].originalBase64;
+                base64ImagesToUse = m_history[m_currentIndex].originalBase64List;
+            } else if (!m_originalBase64List.isEmpty()) {
+                base64ImagesToUse = m_originalBase64List;
             } else if (!m_originalBase64.isEmpty()) {
-                base64ToUse = m_originalBase64;
+                base64ImagesToUse << m_originalBase64;
             }
-            if (!base64ToUse.isEmpty()) {
-                emit retranslateRequested(base64ToUse);
+            if (!base64ImagesToUse.isEmpty()) {
+                emit retranslateRequested(base64ImagesToUse);
             }
         }
     } else {
         // When not locked, trigger retranslate with current image
-        QString base64ToUse;
+        QStringList base64ImagesToUse;
         if (m_currentIndex >= 0 && m_currentIndex < m_history.size()) {
-            base64ToUse = m_history[m_currentIndex].originalBase64;
+            base64ImagesToUse = m_history[m_currentIndex].originalBase64List;
+        } else if (!m_originalBase64List.isEmpty()) {
+            base64ImagesToUse = m_originalBase64List;
         } else if (!m_originalBase64.isEmpty()) {
-            base64ToUse = m_originalBase64;
+            base64ImagesToUse << m_originalBase64;
         }
-        if (!base64ToUse.isEmpty()) {
-            emit retranslateRequested(base64ToUse);
+        if (!base64ImagesToUse.isEmpty()) {
+            emit retranslateRequested(base64ImagesToUse);
         }
     }
 }

@@ -150,7 +150,7 @@ void App::showResult(const QString &entryId)
             this, &App::onRetranslateRequested,
             Qt::UniqueConnection);
 
-    window->setContent(entry.translatedMarkdown, entry.originalBase64, entry.prompt, entry.id);
+    window->setContent(entry.translatedMarkdown, entry.originalBase64, entry.originalBase64List, entry.prompt, entry.id);
     window->show();
 
     // Show result-window hints unless user opted out.
@@ -283,7 +283,8 @@ void App::restorePreview(const QString &entryId)
     cancelPreviewImageRelease(entryId);
 
     AppConfig cfg = m_configManager.getConfig();
-    QPixmap pixmap = m_previewImageCache.value(entryId);
+    QList<QPixmap> pixmaps = m_previewImageCache.value(entryId);
+    QPixmap pixmap = pixmaps.value(0);
 
     if (pixmap.isNull())
     {
@@ -304,9 +305,12 @@ void App::restorePreview(const QString &entryId)
         }
 #endif
 
-        if (!entry.originalBase64.isEmpty())
+        const QStringList base64Images = entry.originalBase64List.isEmpty()
+                                             ? QStringList{entry.originalBase64}
+                                             : entry.originalBase64List;
+        for (const QString &base64Image : base64Images)
         {
-            QByteArray bytes = QByteArray::fromBase64(entry.originalBase64.toLatin1());
+            QByteArray bytes = QByteArray::fromBase64(base64Image.toLatin1());
 #ifdef _WIN32
             {
                 QString msg = QString("[APP] decoded bytes=%1").arg(bytes.size());
@@ -314,16 +318,20 @@ void App::restorePreview(const QString &entryId)
                 WinKeyForwarder::trace(line.constData());
             }
 #endif
-            pixmap.loadFromData(bytes);
+            QPixmap decoded;
+            decoded.loadFromData(bytes);
+            if (!decoded.isNull())
+                pixmaps.append(decoded);
         }
 
-        if (entry.originalBase64.isEmpty())
+        if (base64Images.isEmpty())
         {
 #ifdef _WIN32
             WinKeyForwarder::trace("[APP] restorePreview abort: entry.originalBase64 empty");
 #endif
         }
 
+        pixmap = pixmaps.value(0);
         if (pixmap.isNull())
         {
 #ifdef _WIN32
@@ -385,12 +393,18 @@ void App::restorePreview(const QString &entryId)
     }
 
     // Keep one decoded image in-memory per preview entry; released 5s after close.
-    m_previewImageCache[entryId] = pixmap;
+    for (QPixmap &image : pixmaps)
+    {
+        if (qAbs(image.devicePixelRatio() - pixmap.devicePixelRatio()) > 0.001)
+            image.setDevicePixelRatio(pixmap.devicePixelRatio());
+    }
+    m_previewImageCache[entryId] = pixmaps;
 
-    PreviewCard *card = new PreviewCard(pixmap);
+    PreviewCard *card = new PreviewCard(pixmaps);
     card->setZoomSensitivity(cfg.zoomSensitivity);
     card->setBorderColor(cfg.cardBorderColor);
     card->setUseBorder(cfg.useCardBorder);
+    card->setNavigationHotkeys(cfg.prevResultShortcut, cfg.nextResultShortcut);
 
     // Restore geometry if available
     if (m_previewGeometries.contains(entryId))
@@ -415,15 +429,15 @@ void App::restorePreview(const QString &entryId)
             });
 }
 
-void App::onRetranslateRequested(const QString &base64Image)
+void App::onRetranslateRequested(const QStringList &base64Images)
 {
     // Track retranslation
     if (m_analytics)
         m_analytics->trackRetranslation();
 
-    if (base64Image.isEmpty())
+    if (base64Images.isEmpty())
     {
-        qWarning() << "[App] onRetranslateRequested: empty base64 image";
+        qWarning() << "[App] onRetranslateRequested: empty base64 image list";
         return;
     }
 
@@ -446,7 +460,8 @@ void App::onRetranslateRequested(const QString &base64Image)
     entry.timestamp = QDateTime::currentDateTime();
     entry.prompt = cfg.promptText;
     entry.translatedMarkdown = "Processing...";
-    entry.originalBase64 = base64Image;
+    entry.originalBase64 = base64Images.first();
+    entry.originalBase64List = base64Images;
 
     m_historyManager.saveEntry(entry);
 
@@ -474,10 +489,12 @@ void App::onRetranslateRequested(const QString &base64Image)
     // Store entryId in heap to pass as context
     QByteArray *contextData = new QByteArray(entryId.toUtf8());
 
-    // Convert base64 string back to QByteArray for API call
-    QByteArray base64Bytes = base64Image.toLatin1();
+    QList<QByteArray> base64Bytes;
+    base64Bytes.reserve(base64Images.size());
+    for (const QString &base64Image : base64Images)
+        base64Bytes.append(base64Image.toLatin1());
 
-    m_apiClient->processImage(base64Bytes, cfg.promptText, (void *)contextData);
+    m_apiClient->processImages(base64Bytes, cfg.promptText, (void *)contextData);
 
     qDebug() << "[App] Retranslation request sent for entry:" << entryId;
 }

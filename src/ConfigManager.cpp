@@ -536,6 +536,7 @@ void ConfigManager::parseJson(const QJsonObject &root)
         m_config.language = app["language"].toString("zh"); // Default Chinese
         m_config.zoomSensitivity = app["zoom_sensitivity"].toDouble(500.0);
         m_config.screenshotHotkey = app["screenshot_hotkey"].toString("ctrl+alt+s");
+        m_config.batchScreenshotToggleHotkey = app["batch_screenshot_toggle_hotkey"].toString("d");
 
         QString sumKey = app["summary_hotkey"].toString();
         if (sumKey.isEmpty())
@@ -629,6 +630,7 @@ QJsonObject ConfigManager::toJson() const
     app["language"] = m_config.language;
     app["zoom_sensitivity"] = m_config.zoomSensitivity;
     app["screenshot_hotkey"] = m_config.screenshotHotkey;
+    app["batch_screenshot_toggle_hotkey"] = m_config.batchScreenshotToggleHotkey;
     app["summary_hotkey"] = m_config.summaryHotkey;
     app["settings_hotkey"] = m_config.settingsHotkey;
 

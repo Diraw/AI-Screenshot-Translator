@@ -19,6 +19,25 @@
 
 namespace
 {
+QStringList parseStringListJson(const QString &json)
+{
+    if (json.trimmed().isEmpty())
+        return QStringList();
+
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError || !doc.isArray())
+        return QStringList();
+
+    QStringList out;
+    for (const QJsonValue &v : doc.array())
+    {
+        if (v.isString())
+            out.append(v.toString());
+    }
+    return out;
+}
+
 QStringList parseTagsJsonString(const QString &tagsJson)
 {
     if (tagsJson.trimmed().isEmpty())
@@ -126,6 +145,7 @@ bool HistoryManager::ensureDatabaseReady()
             "id TEXT PRIMARY KEY,"
             "timestamp TEXT NOT NULL,"
             "image_file TEXT NOT NULL,"
+            "image_files_json TEXT NOT NULL DEFAULT '[]',"
             "prompt TEXT,"
             "markdown TEXT,"
             "tags_json TEXT NOT NULL DEFAULT '[]'"
@@ -133,6 +153,21 @@ bool HistoryManager::ensureDatabaseReady()
     {
         qWarning() << "HistoryManager failed to create entries table:" << query.lastError().text();
         return false;
+    }
+
+    QStringList columns;
+    if (query.exec("PRAGMA table_info(entries)"))
+    {
+        while (query.next())
+            columns << query.value(1).toString();
+    }
+    if (!columns.contains("image_files_json"))
+    {
+        if (!query.exec("ALTER TABLE entries ADD COLUMN image_files_json TEXT NOT NULL DEFAULT '[]'"))
+        {
+            qWarning() << "HistoryManager failed to add image_files_json column:" << query.lastError().text();
+            return false;
+        }
     }
 
     if (!query.exec("CREATE INDEX IF NOT EXISTS idx_entries_timestamp ON entries(timestamp DESC)"))
@@ -205,8 +240,8 @@ bool HistoryManager::importLegacyJsonInternal(const QString &jsonPath, int *impo
 
     QSqlQuery upsert(m_db);
     upsert.prepare(
-        "INSERT OR REPLACE INTO entries (id, timestamp, image_file, prompt, markdown, tags_json) "
-        "VALUES (?, ?, ?, ?, ?, ?)");
+        "INSERT OR REPLACE INTO entries (id, timestamp, image_file, image_files_json, prompt, markdown, tags_json) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)");
 
     int inserted = 0;
     for (const QJsonValue &value : array)
@@ -223,53 +258,78 @@ bool HistoryManager::importLegacyJsonInternal(const QString &jsonPath, int *impo
         if (!timestamp.isValid())
             timestamp = QDateTime::currentDateTime();
 
-        QString imagePathField = obj.value("image_file").toString().trimmed();
-        if (imagePathField.isEmpty())
-            continue;
-
-        QString sourceImagePath = imagePathField;
-        if (!QDir::isAbsolutePath(sourceImagePath))
-            sourceImagePath = QDir(sourceDir).filePath(imagePathField);
-
-        const QFileInfo sourceInfo(sourceImagePath);
-        if (!sourceInfo.exists() || !sourceInfo.isFile())
-            continue;
-
-        QString fileName = sourceInfo.fileName();
-        if (fileName.isEmpty())
-            fileName = id + ".png";
-
-        QString relPath = "images/" + fileName;
-        QString destPath = QDir(m_basePath).filePath(relPath);
-
-        const QString srcNorm = QDir::toNativeSeparators(QDir::cleanPath(sourceInfo.absoluteFilePath()));
-        const QString dstNorm = QDir::toNativeSeparators(QDir::cleanPath(destPath));
-        const bool samePath = (srcNorm.compare(dstNorm, Qt::CaseInsensitive) == 0);
-        if (!samePath)
+        QStringList sourceImagePaths;
+        if (obj.contains("image_files") && obj.value("image_files").isArray())
         {
-            if (QFile::exists(destPath))
+            const QJsonArray imageFiles = obj.value("image_files").toArray();
+            for (const QJsonValue &imageFileValue : imageFiles)
             {
-                const QString base = QFileInfo(fileName).completeBaseName();
-                const QString suffix = QFileInfo(fileName).suffix();
-                QString candidate;
-                int n = 1;
-                do
-                {
-                    candidate = suffix.isEmpty()
-                                    ? QString("%1_%2").arg(base, QString::number(n))
-                                    : QString("%1_%2.%3").arg(base, QString::number(n), suffix);
-                    relPath = "images/" + candidate;
-                    destPath = QDir(m_basePath).filePath(relPath);
-                    ++n;
-                } while (QFile::exists(destPath));
-            }
-
-            if (!QFile::copy(sourceInfo.absoluteFilePath(), destPath))
-            {
-                qWarning() << "HistoryManager migration skipped image copy failure:" << sourceInfo.absoluteFilePath();
-                continue;
+                if (imageFileValue.isString())
+                    sourceImagePaths << imageFileValue.toString().trimmed();
             }
         }
+        if (sourceImagePaths.isEmpty())
+            sourceImagePaths << obj.value("image_file").toString().trimmed();
+        sourceImagePaths.removeAll(QString());
+        if (sourceImagePaths.isEmpty())
+            continue;
+
+        QStringList relPaths;
+        bool copyFailed = false;
+        for (int imageIndex = 0; imageIndex < sourceImagePaths.size(); ++imageIndex)
+        {
+            QString sourceImagePath = sourceImagePaths[imageIndex];
+            if (!QDir::isAbsolutePath(sourceImagePath))
+                sourceImagePath = QDir(sourceDir).filePath(sourceImagePath);
+
+            const QFileInfo sourceInfo(sourceImagePath);
+            if (!sourceInfo.exists() || !sourceInfo.isFile())
+            {
+                copyFailed = true;
+                break;
+            }
+
+            QString fileName = sourceInfo.fileName();
+            if (fileName.isEmpty())
+                fileName = sourceImagePaths.size() == 1 ? (id + ".png") : QString("%1_%2.png").arg(id).arg(imageIndex + 1);
+
+            QString relPath = "images/" + fileName;
+            QString destPath = QDir(m_basePath).filePath(relPath);
+
+            const QString srcNorm = QDir::toNativeSeparators(QDir::cleanPath(sourceInfo.absoluteFilePath()));
+            const QString dstNorm = QDir::toNativeSeparators(QDir::cleanPath(destPath));
+            const bool samePath = (srcNorm.compare(dstNorm, Qt::CaseInsensitive) == 0);
+            if (!samePath)
+            {
+                if (QFile::exists(destPath))
+                {
+                    const QString base = QFileInfo(fileName).completeBaseName();
+                    const QString suffix = QFileInfo(fileName).suffix();
+                    QString candidate;
+                    int n = 1;
+                    do
+                    {
+                        candidate = suffix.isEmpty()
+                                        ? QString("%1_%2").arg(base, QString::number(n))
+                                        : QString("%1_%2.%3").arg(base, QString::number(n), suffix);
+                        relPath = "images/" + candidate;
+                        destPath = QDir(m_basePath).filePath(relPath);
+                        ++n;
+                    } while (QFile::exists(destPath));
+                }
+
+                if (!QFile::copy(sourceInfo.absoluteFilePath(), destPath))
+                {
+                    qWarning() << "HistoryManager migration skipped image copy failure:" << sourceInfo.absoluteFilePath();
+                    copyFailed = true;
+                    break;
+                }
+            }
+
+            relPaths << relPath;
+        }
+        if (copyFailed || relPaths.isEmpty())
+            continue;
 
         QStringList tags;
         if (obj.contains("tags") && obj.value("tags").isArray())
@@ -281,10 +341,11 @@ bool HistoryManager::importLegacyJsonInternal(const QString &jsonPath, int *impo
 
         upsert.bindValue(0, id);
         upsert.bindValue(1, timestamp.toString(Qt::ISODate));
-        upsert.bindValue(2, relPath);
-        upsert.bindValue(3, prompt);
-        upsert.bindValue(4, markdown);
-        upsert.bindValue(5, tagsJson);
+        upsert.bindValue(2, relPaths.value(0));
+        upsert.bindValue(3, QString::fromUtf8(QJsonDocument(QJsonArray::fromStringList(relPaths)).toJson(QJsonDocument::Compact)));
+        upsert.bindValue(4, prompt);
+        upsert.bindValue(5, markdown);
+        upsert.bindValue(6, tagsJson);
         if (!upsert.exec())
         {
             qWarning() << "HistoryManager migration upsert failed for id" << id << ":" << upsert.lastError().text();
@@ -370,7 +431,7 @@ bool HistoryManager::exportHistoryJson(const QString &jsonPath, int *exportedCou
     }
 
     QSqlQuery query(m_db);
-    if (!query.exec("SELECT id, timestamp, image_file, prompt, markdown, tags_json FROM entries ORDER BY timestamp ASC"))
+    if (!query.exec("SELECT id, timestamp, image_file, image_files_json, prompt, markdown, tags_json FROM entries ORDER BY timestamp ASC"))
     {
         if (errorMessage)
             *errorMessage = QString("Failed to read history from SQLite: %1").arg(query.lastError().text());
@@ -383,60 +444,77 @@ bool HistoryManager::exportHistoryJson(const QString &jsonPath, int *exportedCou
     {
         const QString id = query.value(0).toString();
         const QString timestampIso = query.value(1).toString();
-        QString imagePath = query.value(2).toString();
-        const QString prompt = query.value(3).toString();
-        const QString markdown = query.value(4).toString();
-        const QString tagsJson = query.value(5).toString();
+        const QString prompt = query.value(4).toString();
+        const QString markdown = query.value(5).toString();
+        const QString tagsJson = query.value(6).toString();
+        const QStringList sourceImages = parseStringListJson(query.value(3).toString()).isEmpty()
+                                             ? QStringList{query.value(2).toString()}
+                                             : parseStringListJson(query.value(3).toString());
 
-        if (!QDir::isAbsolutePath(imagePath))
-            imagePath = QDir(m_basePath).filePath(imagePath);
-        QFileInfo srcImageInfo(imagePath);
-        if (!srcImageInfo.exists() || !srcImageInfo.isFile())
-            continue;
-
-        QString fileName = srcImageInfo.fileName();
-        if (fileName.isEmpty())
-            fileName = id + ".png";
-
-        QString outRelPath = "images/" + fileName;
-        QString outImagePath = outDir.filePath(outRelPath);
-        if (QFile::exists(outImagePath))
+        QStringList exportedRelPaths;
+        bool copyFailed = false;
+        for (int imageIndex = 0; imageIndex < sourceImages.size(); ++imageIndex)
         {
+            QString imagePath = sourceImages[imageIndex];
+            if (!QDir::isAbsolutePath(imagePath))
+                imagePath = QDir(m_basePath).filePath(imagePath);
+            QFileInfo srcImageInfo(imagePath);
+            if (!srcImageInfo.exists() || !srcImageInfo.isFile())
+            {
+                copyFailed = true;
+                break;
+            }
+
+            QString fileName = srcImageInfo.fileName();
+            if (fileName.isEmpty())
+                fileName = sourceImages.size() == 1 ? (id + ".png") : QString("%1_%2.png").arg(id).arg(imageIndex + 1);
+
+            QString outRelPath = "images/" + fileName;
+            QString outImagePath = outDir.filePath(outRelPath);
+            if (QFile::exists(outImagePath))
+            {
+                const QString srcNorm = QDir::cleanPath(srcImageInfo.absoluteFilePath());
+                const QString dstNorm = QDir::cleanPath(outImagePath);
+                if (srcNorm.compare(dstNorm, Qt::CaseInsensitive) != 0)
+                {
+                    const QString base = QFileInfo(fileName).completeBaseName();
+                    const QString suffix = QFileInfo(fileName).suffix();
+                    QString candidate;
+                    int n = 1;
+                    do
+                    {
+                        candidate = suffix.isEmpty()
+                                        ? QString("%1_%2").arg(base, QString::number(n))
+                                        : QString("%1_%2.%3").arg(base, QString::number(n), suffix);
+                        outRelPath = "images/" + candidate;
+                        outImagePath = outDir.filePath(outRelPath);
+                        ++n;
+                    } while (QFile::exists(outImagePath));
+                }
+            }
+
             const QString srcNorm = QDir::cleanPath(srcImageInfo.absoluteFilePath());
             const QString dstNorm = QDir::cleanPath(outImagePath);
             if (srcNorm.compare(dstNorm, Qt::CaseInsensitive) != 0)
             {
-                const QString base = QFileInfo(fileName).completeBaseName();
-                const QString suffix = QFileInfo(fileName).suffix();
-                QString candidate;
-                int n = 1;
-                do
+                if (!QFile::copy(srcImageInfo.absoluteFilePath(), outImagePath))
                 {
-                    candidate = suffix.isEmpty()
-                                    ? QString("%1_%2").arg(base, QString::number(n))
-                                    : QString("%1_%2.%3").arg(base, QString::number(n), suffix);
-                    outRelPath = "images/" + candidate;
-                    outImagePath = outDir.filePath(outRelPath);
-                    ++n;
-                } while (QFile::exists(outImagePath));
+                    qWarning() << "History export skipped image copy failure:" << srcImageInfo.absoluteFilePath();
+                    copyFailed = true;
+                    break;
+                }
             }
-        }
 
-        const QString srcNorm = QDir::cleanPath(srcImageInfo.absoluteFilePath());
-        const QString dstNorm = QDir::cleanPath(outImagePath);
-        if (srcNorm.compare(dstNorm, Qt::CaseInsensitive) != 0)
-        {
-            if (!QFile::copy(srcImageInfo.absoluteFilePath(), outImagePath))
-            {
-                qWarning() << "History export skipped image copy failure:" << srcImageInfo.absoluteFilePath();
-                continue;
-            }
+            exportedRelPaths << outRelPath;
         }
+        if (copyFailed || exportedRelPaths.isEmpty())
+            continue;
 
         QJsonObject obj;
         obj["id"] = id;
         obj["timestamp"] = timestampIso;
-        obj["image_file"] = outRelPath;
+        obj["image_file"] = exportedRelPaths.value(0);
+        obj["image_files"] = QJsonArray::fromStringList(exportedRelPaths);
         obj["prompt"] = prompt;
         obj["markdown"] = markdown;
         obj["tags"] = QJsonArray::fromStringList(parseTagsJsonString(tagsJson));

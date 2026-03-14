@@ -275,6 +275,23 @@ static QJsonValue substituteTemplateTokens(const QJsonValue &value, const QHash<
             return QJsonValue(tokens.value(trimmed.mid(2, trimmed.length() - 4)).toDouble());
         if (trimmed == "{{max_tokens}}")
             return QJsonValue(tokens.value("max_tokens").toInt());
+        if (trimmed.startsWith("{{") && trimmed.endsWith("}}"))
+        {
+            const QString tokenName = trimmed.mid(2, trimmed.length() - 4);
+            const QString tokenValue = tokens.value(tokenName);
+            if (!tokenValue.isEmpty() && (tokenValue.trimmed().startsWith('[') || tokenValue.trimmed().startsWith('{')))
+            {
+                QJsonParseError err;
+                const QJsonDocument doc = QJsonDocument::fromJson(tokenValue.toUtf8(), &err);
+                if (err.error == QJsonParseError::NoError)
+                {
+                    if (doc.isArray())
+                        return doc.array();
+                    if (doc.isObject())
+                        return doc.object();
+                }
+            }
+        }
 
         QString out = raw;
         for (auto it = tokens.constBegin(); it != tokens.constEnd(); ++it)
@@ -515,21 +532,8 @@ QString ConfigDialog::buildAdvancedTemplateFromRegular(const QString &provider) 
     QJsonObject requestBody;
     if (normalizedProvider == "gemini")
     {
-        QJsonArray parts;
-        QJsonObject imagePart;
-        QJsonObject inlineData;
-        inlineData["mime_type"] = "image/png";
-        inlineData["data"] = "{{base64_image}}";
-        imagePart["inline_data"] = inlineData;
-
-        QJsonObject textPart;
-        textPart["text"] = "{{prompt}}";
-
-        parts.append(imagePart);
-        parts.append(textPart);
-
         QJsonObject content;
-        content["parts"] = parts;
+        content["parts"] = "{{gemini_parts}}";
 
         QJsonArray contents;
         contents.append(content);
@@ -537,24 +541,9 @@ QString ConfigDialog::buildAdvancedTemplateFromRegular(const QString &provider) 
     }
     else if (normalizedProvider == "claude")
     {
-        QJsonArray content;
-        QJsonObject image;
-        image["type"] = "image";
-        QJsonObject source;
-        source["type"] = "base64";
-        source["media_type"] = "image/png";
-        source["data"] = "{{base64_image}}";
-        image["source"] = source;
-        content.append(image);
-
-        QJsonObject text;
-        text["type"] = "text";
-        text["text"] = "{{prompt}}";
-        content.append(text);
-
         QJsonObject msg;
         msg["role"] = "user";
-        msg["content"] = content;
+        msg["content"] = "{{claude_user_content}}";
         QJsonArray msgs;
         msgs.append(msg);
         requestBody["messages"] = msgs;
@@ -567,23 +556,9 @@ QString ConfigDialog::buildAdvancedTemplateFromRegular(const QString &provider) 
         systemMsg["role"] = "system";
         systemMsg["content"] = "You are a helpful assistant.";
 
-        QJsonObject imageContent;
-        imageContent["type"] = "image_url";
-        QJsonObject imageUrl;
-        imageUrl["url"] = "data:image/png;base64,{{base64_image}}";
-        imageContent["image_url"] = imageUrl;
-
-        QJsonObject textContent;
-        textContent["type"] = "text";
-        textContent["text"] = "{{prompt}}";
-
-        QJsonArray userContent;
-        userContent.append(imageContent);
-        userContent.append(textContent);
-
         QJsonObject userMsg;
         userMsg["role"] = "user";
-        userMsg["content"] = userContent;
+        userMsg["content"] = "{{openai_user_content}}";
 
         QJsonArray msgs;
         msgs.append(systemMsg);
@@ -1242,6 +1217,19 @@ void ConfigDialog::onTestAdvancedApi()
         {"top_p", QString::number(root.value("top_p").toDouble(1.0), 'g', 6)},
         {"max_tokens", QString::number(root.value("max_tokens").toInt(1024))},
         {"base64_image", loadAdvancedApiTestImageBase64()},
+        {"gemini_parts", QString::fromUtf8(QJsonDocument(QJsonArray{
+                              QJsonObject{{"inline_data", QJsonObject{{"mime_type", "image/png"}, {"data", loadAdvancedApiTestImageBase64()}}}},
+                              QJsonObject{{"text", prompt}}}).toJson(QJsonDocument::Compact))},
+        {"claude_user_content", QString::fromUtf8(QJsonDocument(QJsonArray{
+                                       QJsonObject{{"type", "image"},
+                                                   {"source", QJsonObject{{"type", "base64"},
+                                                                          {"media_type", "image/png"},
+                                                                          {"data", loadAdvancedApiTestImageBase64()}}}},
+                                       QJsonObject{{"type", "text"}, {"text", prompt}}}).toJson(QJsonDocument::Compact))},
+        {"openai_user_content", QString::fromUtf8(QJsonDocument(QJsonArray{
+                                        QJsonObject{{"type", "image_url"},
+                                                    {"image_url", QJsonObject{{"url", QString("data:image/png;base64,%1").arg(loadAdvancedApiTestImageBase64())}}}},
+                                        QJsonObject{{"type", "text"}, {"text", prompt}}}).toJson(QJsonDocument::Compact))},
     };
 
     if (provider == "openai" && !apiKey.isEmpty())

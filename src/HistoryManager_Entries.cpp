@@ -19,31 +19,57 @@
 
 namespace
 {
-QStringList parseTagsJson(const QString &tagsJson)
+QStringList parseStringListJson(const QString &json)
 {
-    if (tagsJson.trimmed().isEmpty())
-        return QStringList();
+    if (json.trimmed().isEmpty())
+        return {};
 
     QJsonParseError err;
-    const QJsonDocument doc = QJsonDocument::fromJson(tagsJson.toUtf8(), &err);
+    const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8(), &err);
     if (err.error != QJsonParseError::NoError || !doc.isArray())
-        return QStringList();
-    QStringList tags;
-    const QJsonArray arr = doc.array();
-    for (const QJsonValue &v : arr)
+        return {};
+
+    QStringList out;
+    for (const QJsonValue &v : doc.array())
     {
-        if (!v.isString())
-            continue;
-        const QString tag = v.toString();
-        if (!tags.contains(tag))
-            tags.append(tag);
+        if (v.isString())
+            out.append(v.toString());
     }
+    return out;
+}
+
+QStringList parseTagsJson(const QString &tagsJson)
+{
+    QStringList tags = parseStringListJson(tagsJson);
+    tags.removeDuplicates();
     return tags;
 }
 
-QString stringifyTags(const QStringList &tags)
+QString stringifyStringList(const QStringList &values)
 {
-    return QString::fromUtf8(QJsonDocument(QJsonArray::fromStringList(tags)).toJson(QJsonDocument::Compact));
+    return QString::fromUtf8(QJsonDocument(QJsonArray::fromStringList(values)).toJson(QJsonDocument::Compact));
+}
+
+QStringList normalizedImagePaths(const QString &basePath, const QString &firstPath, const QString &pathsJson)
+{
+    QStringList paths = parseStringListJson(pathsJson);
+    if (paths.isEmpty() && !firstPath.trimmed().isEmpty())
+        paths << firstPath.trimmed();
+
+    for (QString &path : paths)
+    {
+        if (!QDir::isAbsolutePath(path))
+            path = QDir(basePath).filePath(path);
+    }
+    return paths;
+}
+
+QStringList normalizedBase64List(const TranslationEntry &entry)
+{
+    QStringList base64List = entry.originalBase64List;
+    if (base64List.isEmpty() && !entry.originalBase64.isEmpty())
+        base64List << entry.originalBase64;
+    return base64List;
 }
 } // namespace
 
@@ -54,66 +80,96 @@ void HistoryManager::saveEntry(const TranslationEntry &entry)
     if (!ensureDatabaseReady())
         return;
 
-    QByteArray bytes = QByteArray::fromBase64(entry.originalBase64.toLatin1());
-    QImage img;
-    if (!img.loadFromData(bytes) || img.isNull())
+    const QStringList base64Images = normalizedBase64List(entry);
+    if (base64Images.isEmpty())
     {
-        qWarning() << "HistoryManager::saveEntry skipped: invalid image payload for entry" << entry.id;
+        qWarning() << "HistoryManager::saveEntry skipped: empty image payload for entry" << entry.id;
         return;
     }
 
-    QString timeStr = entry.timestamp.toString("yyyyMMdd_HHmmss_zzz");
-    QString imgFilename = timeStr + ".png";
-    QString fullImgPath = getImagesPath() + "/" + imgFilename;
-    if (QFile::exists(fullImgPath))
+    QStringList imageRelPaths;
+    QStringList fullImagePaths;
+    imageRelPaths.reserve(base64Images.size());
+    fullImagePaths.reserve(base64Images.size());
+
+    const QString timeStr = entry.timestamp.toString("yyyyMMdd_HHmmss_zzz");
+    for (int i = 0; i < base64Images.size(); ++i)
     {
-        imgFilename = timeStr + "_" + entry.id.left(4) + ".png";
-        fullImgPath = getImagesPath() + "/" + imgFilename;
+        const QByteArray bytes = QByteArray::fromBase64(base64Images[i].toLatin1());
+        QImage img;
+        if (!img.loadFromData(bytes) || img.isNull())
+        {
+            qWarning() << "HistoryManager::saveEntry skipped invalid image payload for entry" << entry.id << "index" << i;
+            for (const QString &path : fullImagePaths)
+                QFile::remove(path);
+            return;
+        }
+
+        QString imgFilename = (base64Images.size() == 1)
+                                  ? QString("%1.png").arg(timeStr)
+                                  : QString("%1_%2.png").arg(timeStr).arg(i + 1);
+        QString fullImgPath = getImagesPath() + "/" + imgFilename;
+        if (QFile::exists(fullImgPath))
+        {
+            imgFilename = QString("%1_%2_%3.png").arg(timeStr).arg(entry.id.left(4)).arg(i + 1);
+            fullImgPath = getImagesPath() + "/" + imgFilename;
+        }
+
+        if (!img.save(fullImgPath, "PNG"))
+        {
+            qWarning() << "HistoryManager::saveEntry failed to write image:" << fullImgPath;
+            for (const QString &path : fullImagePaths)
+                QFile::remove(path);
+            return;
+        }
+
+        fullImagePaths << fullImgPath;
+        imageRelPaths << ("images/" + imgFilename);
     }
 
-    if (!img.save(fullImgPath, "PNG"))
-    {
-        qWarning() << "HistoryManager::saveEntry failed to write image:" << fullImgPath;
-        return;
-    }
-
-    QString previousImageRelPath;
+    QStringList previousImageRelPaths;
     {
         QSqlQuery existing(m_db);
-        existing.prepare("SELECT image_file FROM entries WHERE id = ?");
+        existing.prepare("SELECT image_file, image_files_json FROM entries WHERE id = ?");
         existing.addBindValue(entry.id);
         if (existing.exec() && existing.next())
-            previousImageRelPath = existing.value(0).toString();
+            previousImageRelPaths = normalizedImagePaths(m_basePath, existing.value(0).toString(), existing.value(1).toString());
     }
 
-    const QString imageRelPath = "images/" + imgFilename;
     QSqlQuery upsert(m_db);
     upsert.prepare(
-        "INSERT OR REPLACE INTO entries (id, timestamp, image_file, prompt, markdown, tags_json) "
-        "VALUES (?, ?, ?, ?, ?, ?)");
+        "INSERT OR REPLACE INTO entries (id, timestamp, image_file, image_files_json, prompt, markdown, tags_json) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)");
     upsert.addBindValue(entry.id);
     upsert.addBindValue(entry.timestamp.toString(Qt::ISODate));
-    upsert.addBindValue(imageRelPath);
+    upsert.addBindValue(imageRelPaths.value(0));
+    upsert.addBindValue(stringifyStringList(imageRelPaths));
     upsert.addBindValue(entry.prompt);
     upsert.addBindValue(HistoryManager::normalizeMarkdown(entry.translatedMarkdown));
-    upsert.addBindValue(stringifyTags(entry.tags));
+    upsert.addBindValue(stringifyStringList(entry.tags));
     if (!upsert.exec())
     {
         qWarning() << "HistoryManager::saveEntry sqlite upsert failed:" << upsert.lastError().text();
-        QFile::remove(fullImgPath);
+        for (const QString &path : fullImagePaths)
+            QFile::remove(path);
         return;
     }
 
-    if (!previousImageRelPath.isEmpty() && previousImageRelPath != imageRelPath)
+    for (const QString &previousPath : previousImageRelPaths)
     {
-        QFile::remove(QDir(m_basePath).filePath(previousImageRelPath));
+        QString normalized = previousPath;
+        if (!QDir::isAbsolutePath(normalized))
+            normalized = QDir(m_basePath).filePath(normalized);
+        if (!fullImagePaths.contains(normalized))
+            QFile::remove(normalized);
     }
 
     TranslationEntry cachedEntry = entry;
     cachedEntry.translatedMarkdown = HistoryManager::normalizeMarkdown(entry.translatedMarkdown);
-    cachedEntry.localImagePath = fullImgPath;
-    // Keep cache lightweight: image bytes are loaded on-demand via getEntryById().
+    cachedEntry.localImagePath = fullImagePaths.value(0);
+    cachedEntry.localImagePaths = fullImagePaths;
     cachedEntry.originalBase64.clear();
+    cachedEntry.originalBase64List.clear();
     m_markdownCache[entry.id] = cachedEntry.translatedMarkdown;
     m_entryCache[entry.id] = cachedEntry;
     m_tagsCacheDirty = true;
@@ -129,7 +185,7 @@ QList<TranslationEntry> HistoryManager::loadEntries()
     m_markdownCache.clear();
 
     QSqlQuery query(m_db);
-    if (!query.exec("SELECT id, timestamp, image_file, prompt, markdown, tags_json FROM entries"))
+    if (!query.exec("SELECT id, timestamp, image_file, image_files_json, prompt, markdown, tags_json FROM entries"))
     {
         qWarning() << "HistoryManager::loadEntries sqlite query failed:" << query.lastError().text();
         return entries;
@@ -145,30 +201,37 @@ QList<TranslationEntry> HistoryManager::loadEntries()
         if (!entry.timestamp.isValid())
             entry.timestamp = QDateTime::currentDateTime();
 
-        QString imagePath = query.value(2).toString();
-        if (imagePath.isEmpty())
+        entry.localImagePaths = normalizedImagePaths(m_basePath, query.value(2).toString(), query.value(3).toString());
+        if (entry.localImagePaths.isEmpty())
         {
             staleIds << entry.id;
             continue;
         }
 
-        if (!QDir::isAbsolutePath(imagePath))
-            imagePath = QDir(m_basePath).filePath(imagePath);
-        if (!QFile::exists(imagePath))
+        bool missingImage = false;
+        for (const QString &imagePath : entry.localImagePaths)
+        {
+            if (!QFile::exists(imagePath))
+            {
+                missingImage = true;
+                break;
+            }
+        }
+        if (missingImage)
         {
             staleIds << entry.id;
             continue;
         }
 
-        entry.prompt = query.value(3).toString();
-        entry.translatedMarkdown = HistoryManager::normalizeMarkdown(query.value(4).toString());
-        entry.tags = parseTagsJson(query.value(5).toString());
-        entry.localImagePath = imagePath;
+        entry.localImagePath = entry.localImagePaths.value(0);
+        entry.prompt = query.value(4).toString();
+        entry.translatedMarkdown = HistoryManager::normalizeMarkdown(query.value(5).toString());
+        entry.tags = parseTagsJson(query.value(6).toString());
         for (const QString &tag : entry.tags)
             uniqueTags.insert(tag);
 
-        // Do not decode image bytes while loading the archive list.
         entry.originalBase64.clear();
+        entry.originalBase64List.clear();
 
         m_markdownCache[entry.id] = entry.translatedMarkdown;
         m_entryCache[entry.id] = entry;
@@ -271,8 +334,9 @@ QList<TranslationEntry> HistoryManager::queryEntries(const QDate &fromDate,
         }
     }
 
-    QString selectSql = "SELECT id, timestamp, image_file, prompt, markdown, tags_json FROM entries" + whereSql +
-                        " ORDER BY timestamp DESC";
+    QString selectSql =
+        "SELECT id, timestamp, image_file, image_files_json, prompt, markdown, tags_json FROM entries" + whereSql +
+        " ORDER BY timestamp DESC";
     if (limit > 0)
         selectSql += " LIMIT ? OFFSET ?";
 
@@ -297,17 +361,28 @@ QList<TranslationEntry> HistoryManager::queryEntries(const QDate &fromDate,
         if (!entry.timestamp.isValid())
             entry.timestamp = QDateTime::currentDateTime();
 
-        QString imagePath = query.value(2).toString();
-        if (!QDir::isAbsolutePath(imagePath))
-            imagePath = QDir(m_basePath).filePath(imagePath);
-        if (!QFile::exists(imagePath))
+        entry.localImagePaths = normalizedImagePaths(m_basePath, query.value(2).toString(), query.value(3).toString());
+        if (entry.localImagePaths.isEmpty())
             continue;
 
-        entry.prompt = query.value(3).toString();
-        entry.translatedMarkdown = HistoryManager::normalizeMarkdown(query.value(4).toString());
-        entry.tags = parseTagsJson(query.value(5).toString());
-        entry.localImagePath = imagePath;
+        bool missingImage = false;
+        for (const QString &imagePath : entry.localImagePaths)
+        {
+            if (!QFile::exists(imagePath))
+            {
+                missingImage = true;
+                break;
+            }
+        }
+        if (missingImage)
+            continue;
+
+        entry.localImagePath = entry.localImagePaths.value(0);
+        entry.prompt = query.value(4).toString();
+        entry.translatedMarkdown = HistoryManager::normalizeMarkdown(query.value(5).toString());
+        entry.tags = parseTagsJson(query.value(6).toString());
         entry.originalBase64.clear();
+        entry.originalBase64List.clear();
 
         m_markdownCache[entry.id] = entry.translatedMarkdown;
         m_entryCache[entry.id] = entry;
@@ -344,17 +419,15 @@ bool HistoryManager::deleteEntries(const QStringList &ids)
     bool modified = false;
     QSqlQuery select(m_db);
     QSqlQuery del(m_db);
-    select.prepare("SELECT image_file FROM entries WHERE id = ?");
+    select.prepare("SELECT image_file, image_files_json FROM entries WHERE id = ?");
     del.prepare("DELETE FROM entries WHERE id = ?");
 
     for (const QString &id : ids)
     {
-        QString imageRelPath;
+        QStringList imagePaths;
         select.bindValue(0, id);
         if (select.exec() && select.next())
-        {
-            imageRelPath = select.value(0).toString();
-        }
+            imagePaths = normalizedImagePaths(m_basePath, select.value(0).toString(), select.value(1).toString());
         select.finish();
 
         del.bindValue(0, id);
@@ -363,11 +436,8 @@ bool HistoryManager::deleteEntries(const QStringList &ids)
             modified = true;
             m_markdownCache.remove(id);
             m_entryCache.remove(id);
-            if (!imageRelPath.isEmpty())
-            {
-                const QString fullPath = QDir(m_basePath).filePath(imageRelPath);
+            for (const QString &fullPath : imagePaths)
                 QFile::remove(fullPath);
-            }
         }
         del.finish();
     }
@@ -390,9 +460,7 @@ TranslationEntry HistoryManager::getEntryById(const QString &id)
 {
     TranslationEntry entry;
     if (m_entryCache.contains(id))
-    {
         entry = m_entryCache.value(id);
-    }
 
     if (!ensureDatabaseReady())
         return TranslationEntry();
@@ -400,7 +468,7 @@ TranslationEntry HistoryManager::getEntryById(const QString &id)
     if (entry.id.isEmpty())
     {
         QSqlQuery query(m_db);
-        query.prepare("SELECT id, timestamp, image_file, prompt, markdown, tags_json FROM entries WHERE id = ?");
+        query.prepare("SELECT id, timestamp, image_file, image_files_json, prompt, markdown, tags_json FROM entries WHERE id = ?");
         query.addBindValue(id);
         if (!query.exec() || !query.next())
             return TranslationEntry();
@@ -410,37 +478,57 @@ TranslationEntry HistoryManager::getEntryById(const QString &id)
         if (!entry.timestamp.isValid())
             entry.timestamp = QDateTime::currentDateTime();
 
-        QString imagePath = query.value(2).toString();
-        if (!QDir::isAbsolutePath(imagePath))
-            imagePath = QDir(m_basePath).filePath(imagePath);
-        if (!QFile::exists(imagePath))
+        entry.localImagePaths = normalizedImagePaths(m_basePath, query.value(2).toString(), query.value(3).toString());
+        if (entry.localImagePaths.isEmpty())
             return TranslationEntry();
 
-        entry.prompt = query.value(3).toString();
-        entry.translatedMarkdown = HistoryManager::normalizeMarkdown(query.value(4).toString());
-        entry.tags = parseTagsJson(query.value(5).toString());
-        entry.localImagePath = imagePath;
+        bool missingImage = false;
+        for (const QString &imagePath : entry.localImagePaths)
+        {
+            if (!QFile::exists(imagePath))
+            {
+                missingImage = true;
+                break;
+            }
+        }
+        if (missingImage)
+            return TranslationEntry();
 
-        // Cache metadata only; image bytes remain on-demand.
+        entry.localImagePath = entry.localImagePaths.value(0);
+        entry.prompt = query.value(4).toString();
+        entry.translatedMarkdown = HistoryManager::normalizeMarkdown(query.value(5).toString());
+        entry.tags = parseTagsJson(query.value(6).toString());
+
         TranslationEntry metadataOnly = entry;
         metadataOnly.originalBase64.clear();
+        metadataOnly.originalBase64List.clear();
         m_markdownCache[entry.id] = metadataOnly.translatedMarkdown;
         m_entryCache[entry.id] = metadataOnly;
     }
 
-    if (entry.localImagePath.isEmpty())
-        return TranslationEntry();
-    if (!QFile::exists(entry.localImagePath))
+    if (entry.localImagePaths.isEmpty())
         return TranslationEntry();
 
-    QImage img(entry.localImagePath);
-    if (img.isNull())
-        return TranslationEntry();
-    QByteArray ba;
-    QBuffer buffer(&ba);
-    buffer.open(QIODevice::WriteOnly);
-    img.save(&buffer, "PNG");
-    entry.originalBase64 = ba.toBase64();
+    QStringList originalBase64List;
+    for (const QString &imagePath : entry.localImagePaths)
+    {
+        if (!QFile::exists(imagePath))
+            return TranslationEntry();
+
+        QImage img(imagePath);
+        if (img.isNull())
+            return TranslationEntry();
+
+        QByteArray ba;
+        QBuffer buffer(&ba);
+        buffer.open(QIODevice::WriteOnly);
+        img.save(&buffer, "PNG");
+        originalBase64List.append(QString::fromLatin1(ba.toBase64()));
+    }
+
+    entry.originalBase64List = originalBase64List;
+    entry.originalBase64 = originalBase64List.value(0);
+    entry.localImagePath = entry.localImagePaths.value(0);
 
     return entry;
 }

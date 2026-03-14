@@ -146,6 +146,7 @@ private:
     QPointer<QNetworkReply> m_testReply;
 
     QLineEdit *m_hotkeyEdit = nullptr;
+    QLineEdit *m_batchScreenshotToggleHotkeyEdit = nullptr;
     QLineEdit *m_summaryHotkeyEdit = nullptr;
     QLineEdit *m_settingsHotkeyEdit = nullptr;
     QLineEdit *m_editHotkeyEdit = nullptr;
@@ -185,6 +186,7 @@ private:
     QLineEdit *m_retranslateHotkeyEdit = nullptr;
 
     QLineEdit *m_cardBorderColorEdit = nullptr;
+    QLabel *m_batchScreenshotToggleHotkeyLabel = nullptr;
     QLabel *m_lblCardBorderColor = nullptr;
     QLabel *m_cardBorderColorPreview = nullptr;
     QCheckBox *m_useBorderCheck = nullptr;

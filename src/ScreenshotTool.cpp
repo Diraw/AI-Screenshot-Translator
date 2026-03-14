@@ -5,8 +5,25 @@
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QDebug>
+#include <QFont>
+#include <QFontMetrics>
+#include <QPainterPath>
 
-ScreenshotTool::ScreenshotTool(int targetScreenIndex, QWidget *parent) : QWidget(parent), m_isSelecting(false) {
+namespace
+{
+QString normalizeHotkey(QString key)
+{
+    key = key.trimmed().toLower();
+    key.replace(" ", "");
+    return key;
+}
+}
+
+ScreenshotTool::ScreenshotTool(int targetScreenIndex, bool batchModeActive, int pendingBatchCount,
+                               const QString &batchToggleHotkey, QWidget *parent)
+    : QWidget(parent), m_isSelecting(false), m_batchModeActive(batchModeActive),
+      m_pendingBatchCount(qMax(0, pendingBatchCount)),
+      m_batchToggleHotkey(normalizeHotkey(batchToggleHotkey.isEmpty() ? QStringLiteral("d") : batchToggleHotkey)) {
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::Tool);
     setAttribute(Qt::WA_DeleteOnClose);
     setCursor(Qt::CrossCursor);
@@ -90,6 +107,46 @@ void ScreenshotTool::paintEvent(QPaintEvent *event) {
         painter.setBrush(Qt::NoBrush);
         painter.drawRect(r);
     }
+
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    QFont font = painter.font();
+    font.setPointSize(12);
+    font.setBold(true);
+    painter.setFont(font);
+
+    QStringList lines;
+    lines << (m_batchModeActive ? QString::fromUtf8("批量模式") : QString::fromUtf8("单张模式"));
+    if (m_batchModeActive)
+        lines << QString::fromUtf8("已暂存 %1 张").arg(m_pendingBatchCount);
+    if (m_finalizeBatch)
+        lines << QString::fromUtf8("本张为最后一张");
+    lines << QString::fromUtf8("%1: %2  Esc: %3")
+                 .arg(batchHotkeyLabel(),
+                      m_pendingBatchCount > 0 ? QString::fromUtf8("标记最后一张") : QString::fromUtf8("切换批量模式"),
+                      (m_finalizeBatch && m_pendingBatchCount > 0) ? QString::fromUtf8("清空已暂存批量") : QString::fromUtf8("取消当前截图"));
+
+    const int padding = 12;
+    const int spacing = 6;
+    QFontMetrics fm(font);
+    int width = 0;
+    int height = padding * 2 - spacing;
+    for (const QString &line : lines)
+    {
+        width = qMax(width, fm.horizontalAdvance(line));
+        height += fm.height() + spacing;
+    }
+    QRect box(24, 24, width + padding * 2, height);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(20, 20, 20, 190));
+    painter.drawRoundedRect(box, 10, 10);
+
+    painter.setPen(Qt::white);
+    int y = box.top() + padding + fm.ascent();
+    for (const QString &line : lines)
+    {
+        painter.drawText(box.left() + padding, y, line);
+        y += fm.height() + spacing;
+    }
 }
 
 void ScreenshotTool::mousePressEvent(QMouseEvent *event) {
@@ -119,7 +176,7 @@ void ScreenshotTool::mouseReleaseEvent(QMouseEvent *event) {
             QPixmap result = getResultPixmap(r);
             if (!result.isNull()) {
                 qDebug() << "ScreenshotTool: Emitting screenshotTaken signal.";
-                emit screenshotTaken(result, r);
+                emit screenshotTaken(result, r, m_batchModeActive, m_finalizeBatch);
                 qDebug() << "ScreenshotTool: Signal emitted. Closing.";
                 close();
             } else {
@@ -152,12 +209,59 @@ QPixmap ScreenshotTool::getResultPixmap(const QRect &selectionRect) {
 }
 
 void ScreenshotTool::keyPressEvent(QKeyEvent *event) {
-    if (event->key() == Qt::Key_Escape) {
-        emit cancelled();
-        close();
+    if (matchesBatchToggleHotkey(event)) {
+        if (m_pendingBatchCount > 0 || m_batchModeActive)
+        {
+            if (m_pendingBatchCount > 0)
+                m_finalizeBatch = !m_finalizeBatch;
+            else
+                m_batchModeActive = !m_batchModeActive;
+        }
+        else
+        {
+            m_batchModeActive = !m_batchModeActive;
+        }
+        if (!m_batchModeActive)
+            m_finalizeBatch = false;
+        update();
+        event->accept();
+        return;
     }
+
+    if (event->key() == Qt::Key_Escape) {
+        emit cancelled(m_finalizeBatch && m_pendingBatchCount > 0);
+        close();
+        event->accept();
+        return;
+    }
+
+    QWidget::keyPressEvent(event);
 }
 
 QRect ScreenshotTool::getNormalizedRect() const {
     return QRect(m_startPoint, m_endPoint).normalized();
+}
+
+bool ScreenshotTool::matchesBatchToggleHotkey(QKeyEvent *event) const
+{
+    if (!event)
+        return false;
+
+    const QString normalizedConfig = normalizeHotkey(m_batchToggleHotkey);
+    if (normalizedConfig.isEmpty())
+        return false;
+
+    QString eventHotkey = normalizeHotkey(QKeySequence(event->modifiers() | event->key()).toString(QKeySequence::NativeText));
+    if (eventHotkey == normalizedConfig)
+        return true;
+
+    const QString eventText = normalizeHotkey(event->text());
+    return !eventText.isEmpty() && eventText == normalizedConfig;
+}
+
+QString ScreenshotTool::batchHotkeyLabel() const
+{
+    if (m_batchToggleHotkey.isEmpty())
+        return QStringLiteral("D");
+    return m_batchToggleHotkey.toUpper();
 }

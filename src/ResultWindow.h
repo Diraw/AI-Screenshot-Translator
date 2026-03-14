@@ -30,7 +30,8 @@ public:
     explicit ResultWindow(QWidget *parent = nullptr);
     ~ResultWindow();
 
-    void setContent(const QString &markdown, const QString &originalBase64, const QString &prompt, const QString &entryId = "");
+    void setContent(const QString &markdown, const QString &originalBase64, const QStringList &originalBase64List,
+                    const QString &prompt, const QString &entryId = "");
     void externalContentUpdate(const QString &markdown);
 
     // Locked Window Methods
@@ -58,7 +59,7 @@ public:
 
 signals:
     void closed();
-    void retranslateRequested(const QString &base64Image);  // Retranslate current image with current config
+    void retranslateRequested(const QStringList &base64Images); // Retranslate current image set with current config
     void screenshotRequested(const QString &entryId, const QString &base64);  // New signal
     void contentUpdated(const QString &newMarkdown);                          // Legacy Signal
     void contentUpdatedWithId(const QString &id, const QString &newMarkdown); // Signal for persistence with ID
@@ -115,6 +116,7 @@ private:
     int m_currentIndex = -1;
 
     QString m_originalBase64;
+    QStringList m_originalBase64List;
     QString m_originalPrompt;
     QString m_entryId;
     AppConfig m_config;

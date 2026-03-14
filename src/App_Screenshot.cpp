@@ -29,16 +29,20 @@ void App::onScreenshotRequested()
 
     // Otherwise, create new screenshot tool
     AppConfig cfg = m_configManager.getConfig();
-    ScreenshotTool *sw = new ScreenshotTool(cfg.targetScreenIndex);
+    ScreenshotTool *sw = new ScreenshotTool(cfg.targetScreenIndex,
+                                            !m_pendingBatchCaptures.isEmpty(),
+                                            m_pendingBatchCaptures.size(),
+                                            cfg.batchScreenshotToggleHotkey);
     m_activeScreenshotTool = sw;
     connect(sw, &ScreenshotTool::screenshotTaken, this, &App::onScreenshotCaptured);
-    connect(sw, &ScreenshotTool::screenshotTaken, this, [this, sw](const QPixmap &, const QRect &)
+    connect(sw, &ScreenshotTool::screenshotTaken, this, [this, sw](const QPixmap &, const QRect &, bool, bool)
             {
         if (m_activeScreenshotTool == sw)
         {
             m_activeScreenshotTool = nullptr;
         }
         sw->deleteLater(); });
+    connect(sw, &ScreenshotTool::cancelled, this, &App::onScreenshotCancelled);
     connect(sw, &ScreenshotTool::cancelled, this, [this]()
             {
         if (m_activeScreenshotTool)
@@ -52,32 +56,57 @@ void App::onScreenshotRequested()
     sw->show();
 }
 
-void App::onScreenshotCaptured(const QPixmap &pixmap, const QRect &rect)
+void App::onScreenshotCaptured(const QPixmap &pixmap, const QRect &rect, bool batchMode, bool finalizeBatch)
 {
-    Q_UNUSED(rect);
-    AppConfig cfg = m_configManager.getConfig();
-
     if (QClipboard *clipboard = QGuiApplication::clipboard())
     {
         clipboard->setPixmap(pixmap);
     }
 
-    // 0. Generate entryId early so PreviewCard and API can share it
-    QString entryId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    if (batchMode)
+    {
+        m_pendingBatchCaptures.append({pixmap, rect});
+        if (!finalizeBatch)
+            return;
 
-    // 1. Show Preview Card (If enabled)
+        const QList<PendingBatchCapture> captures = m_pendingBatchCaptures;
+        clearPendingBatchCaptures();
+        submitCapturedImages(captures);
+        return;
+    }
+
+    submitCapturedImages(QList<PendingBatchCapture>{{pixmap, rect}});
+}
+
+void App::submitCapturedImages(const QList<PendingBatchCapture> &captures)
+{
+    if (captures.isEmpty())
+        return;
+
+    AppConfig cfg = m_configManager.getConfig();
+    const QString entryId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    QList<QPixmap> previewPixmaps;
+    QList<QImage> images;
+    previewPixmaps.reserve(captures.size());
+    images.reserve(captures.size());
+    for (const PendingBatchCapture &capture : captures)
+    {
+        previewPixmaps.append(capture.pixmap);
+        images.append(capture.pixmap.toImage());
+    }
+
     if (cfg.showPreviewCard)
     {
-        PreviewCard *card = new PreviewCard(pixmap);
+        PreviewCard *card = new PreviewCard(previewPixmaps);
         card->setZoomSensitivity(cfg.zoomSensitivity);
         card->setBorderColor(cfg.cardBorderColor);
         card->setUseBorder(cfg.useCardBorder);
-        card->move(rect.topLeft());
+        card->setNavigationHotkeys(cfg.prevResultShortcut, cfg.nextResultShortcut);
+        card->move(captures.first().rect.topLeft());
         card->show();
         m_activeWindows.append(card);
         m_activePreviewCard = card;
-
-        // Track card by entryId
+        m_previewImageCache[entryId] = previewPixmaps;
         m_previewCards[entryId] = card;
 
         connect(card, &PreviewCard::closedWithGeometry, this, [this, entryId](QPoint pos, QSize size)
@@ -89,84 +118,75 @@ void App::onScreenshotCaptured(const QPixmap &pixmap, const QRect &rect)
                 { m_activeWindows.removeAll(card); });
     }
 
-    // 2. Call API (If enabled)
     if (!cfg.useAdvancedApiMode && cfg.apiKey.isEmpty())
         return;
 
-    qDebug() << "App: Starting async screenshot processing needed for API";
-
-    // Start Async Processing to prevent UI freeze
-    // We need to convert QPixmap to QImage because QPixmap is NOT thread-safe
-    QImage image = pixmap.toImage();
-
-    auto *watcher = new QFutureWatcher<QByteArray>(this);
-
-    // Connect finished signal
-    connect(watcher, &QFutureWatcher<QByteArray>::finished, this, [this, watcher, cfg, entryId]()
+    auto *watcher = new QFutureWatcher<QList<QByteArray>>(this);
+    connect(watcher, &QFutureWatcher<QList<QByteArray>>::finished, this, [this, watcher, cfg, entryId]()
             {
-        QByteArray base64Bytes = watcher->result();
-
-        qDebug() << "App: Async encoding finished. Bytes:" << base64Bytes.size();
-
-        // Clean up watcher
+        const QList<QByteArray> base64Images = watcher->result();
         watcher->deleteLater();
 
-        if (base64Bytes.isEmpty()) {
-            qWarning() << "Failed to encode image to base64";
+        if (base64Images.isEmpty()) {
+            qWarning() << "Failed to encode images to base64";
             return;
         }
 
-        // Create entry using pre-generated entryId
         TranslationEntry entry;
         entry.id = entryId;
-
         entry.timestamp = QDateTime::currentDateTime();
         entry.prompt = cfg.promptText;
         entry.translatedMarkdown = "Processing...";
-        QString base64Str = QString::fromLatin1(base64Bytes);
-        entry.originalBase64 = base64Str;
+        entry.originalBase64 = QString::fromLatin1(base64Images.first());
+        for (const QByteArray &base64Image : base64Images)
+            entry.originalBase64List.append(QString::fromLatin1(base64Image));
 
         m_historyManager.saveEntry(entry);
 
-        // Show partial result window
-        if (cfg.showResultWindow) {
+        if (cfg.showResultWindow)
             showResult(entryId);
-        }
 
-        // Convert QString apiProvider to enum
-        ApiProvider provider = ApiProvider::OpenAI;  // default
+        ApiProvider provider = ApiProvider::OpenAI;
         QString providerStr = cfg.apiProvider.trimmed().toLower();
-        if (providerStr == "gemini") provider = ApiProvider::Gemini;
-        else if (providerStr == "claude") provider = ApiProvider::Claude;
+        if (providerStr == "gemini")
+            provider = ApiProvider::Gemini;
+        else if (providerStr == "claude")
+            provider = ApiProvider::Claude;
 
         m_apiClient->configure(cfg.apiKey, cfg.baseUrl, cfg.modelName, provider, cfg.useProxy,
-                       cfg.proxyUrl, cfg.endpointPath, cfg.useAdvancedApiMode, cfg.advancedApiTemplate);
+                               cfg.proxyUrl, cfg.endpointPath, cfg.useAdvancedApiMode, cfg.advancedApiTemplate);
 
-        // Track translation started
         if (m_analytics)
             m_analytics->trackTranslationStarted(cfg.apiProvider, cfg.useAdvancedApiMode);
 
-        // Store entryId in heap to pass as context
         QByteArray *contextData = new QByteArray(entryId.toUtf8());
+        m_apiClient->processImages(base64Images, cfg.promptText, (void *)contextData);
+    });
 
-        m_apiClient->processImage(base64Bytes, cfg.promptText, (void*)contextData);
-
-        qDebug() << "Async image processing completed for entry:" << entryId; });
-
-    // Run heavy encoding in thread pool
-    QFuture<QByteArray> future = QtConcurrent::run([image]()
-                                                   {
-        QByteArray bytes;
-        QBuffer buffer(&bytes);
-        buffer.open(QIODevice::WriteOnly);
-        // Save as PNG (expensive operation)
-        image.save(&buffer, "PNG");
-        return bytes.toBase64(); });
+    QFuture<QList<QByteArray>> future = QtConcurrent::run([images]()
+                                                          {
+        QList<QByteArray> out;
+        out.reserve(images.size());
+        for (const QImage &image : images)
+        {
+            QByteArray bytes;
+            QBuffer buffer(&bytes);
+            buffer.open(QIODevice::WriteOnly);
+            image.save(&buffer, "PNG");
+            out.append(bytes.toBase64());
+        }
+        return out; });
 
     watcher->setFuture(future);
 }
 
-void App::onScreenshotCancelled()
+void App::clearPendingBatchCaptures()
 {
-    // Screenshot was cancelled, no action needed
+    m_pendingBatchCaptures.clear();
+}
+
+void App::onScreenshotCancelled(bool clearPendingBatch)
+{
+    if (clearPendingBatch)
+        clearPendingBatchCaptures();
 }

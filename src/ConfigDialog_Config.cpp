@@ -74,6 +74,8 @@ void ConfigDialog::loadFromConfig()
     }
 
     m_hotkeyEdit->setText(cfg.screenshotHotkey);
+    if (m_batchScreenshotToggleHotkeyEdit)
+        m_batchScreenshotToggleHotkeyEdit->setText(cfg.batchScreenshotToggleHotkey);
     m_summaryHotkeyEdit->setText(cfg.summaryHotkey);
     m_settingsHotkeyEdit->setText(cfg.settingsHotkey);
     m_editHotkeyEdit->setText(cfg.editHotkey);
@@ -204,6 +206,10 @@ void ConfigDialog::save()
 
     // Translation Tab
     cfg.screenshotHotkey = m_hotkeyEdit->text();
+    if (m_batchScreenshotToggleHotkeyEdit)
+        cfg.batchScreenshotToggleHotkey = m_batchScreenshotToggleHotkeyEdit->text().trimmed();
+    if (cfg.batchScreenshotToggleHotkey.isEmpty())
+        cfg.batchScreenshotToggleHotkey = "d";
     cfg.defaultResultWindowLocked = m_defaultLookCheck->isChecked();
     cfg.lockBehavior = m_lockBehaviorCombo->currentData().toInt();
     qInfo() << "[ConfigDialog] Saving config (Snapshot):";

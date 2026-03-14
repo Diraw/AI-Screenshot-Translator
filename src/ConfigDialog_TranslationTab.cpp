@@ -7,6 +7,15 @@ void ConfigDialog::setupTranslationTab()
     m_transTab = new QWidget();
     auto *transMainLayout = new QVBoxLayout(m_transTab);
 
+    auto *grpCaptureMode = new QGroupBox("Capture Mode", m_transTab);
+    grpCaptureMode->setObjectName("grpCaptureMode");
+    auto *batchLayout = new QFormLayout(grpCaptureMode);
+    m_batchScreenshotToggleHotkeyEdit = new QLineEdit(this);
+    m_batchScreenshotToggleHotkeyEdit->setPlaceholderText("d");
+    m_batchScreenshotToggleHotkeyLabel = new QLabel(this);
+    batchLayout->addRow(m_batchScreenshotToggleHotkeyLabel, m_batchScreenshotToggleHotkeyEdit);
+    transMainLayout->addWidget(grpCaptureMode);
+
     auto *grpCard = new QGroupBox("Screenshot Card Settings", m_transTab);
     grpCard->setObjectName("grpCard");
     auto *cardLayout = new QFormLayout(grpCard);

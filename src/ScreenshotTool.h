@@ -6,6 +6,7 @@
 #include <QPoint>
 #include <QRect>
 #include <QList>
+#include <QString>
 
 struct ScreenCapture {
     QPixmap pixmap;
@@ -15,11 +16,15 @@ struct ScreenCapture {
 class ScreenshotTool : public QWidget {
     Q_OBJECT
 public:
-    explicit ScreenshotTool(int targetScreenIndex = -1, QWidget *parent = nullptr);
+    explicit ScreenshotTool(int targetScreenIndex = -1,
+                            bool batchModeActive = false,
+                            int pendingBatchCount = 0,
+                            const QString &batchToggleHotkey = QStringLiteral("d"),
+                            QWidget *parent = nullptr);
 
 signals:
-    void screenshotTaken(const QPixmap &pixmap, const QRect &rect);
-    void cancelled();
+    void screenshotTaken(const QPixmap &pixmap, const QRect &rect, bool batchMode, bool finalizeBatch);
+    void cancelled(bool clearPendingBatch);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -36,6 +41,10 @@ private:
     QPoint m_startPoint;
     QPoint m_endPoint;
     bool m_isSelecting;
+    bool m_batchModeActive = false;
+    bool m_finalizeBatch = false;
+    int m_pendingBatchCount = 0;
+    QString m_batchToggleHotkey = QStringLiteral("d");
     QList<QScreen*> m_screensToCapture;  // Stores which screens to capture
     // QList<ScreenCapture> m_captures; // Removed in favor of single composite capture
     // QPixmap m_compositePixmap; // Removed
@@ -43,6 +52,8 @@ private:
     void captureScreens();
     QRect getNormalizedRect() const;
     QPixmap getResultPixmap(const QRect &selectionRect);
+    bool matchesBatchToggleHotkey(QKeyEvent *event) const;
+    QString batchHotkeyLabel() const;
 };
 
 #endif // SCREENSHOTTOOL_H

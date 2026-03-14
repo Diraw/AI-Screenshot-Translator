@@ -31,6 +31,7 @@ struct AppConfig
     // App Settings
     float zoomSensitivity = 500.0f;
     QString screenshotHotkey = "ctrl+alt+s";
+    QString batchScreenshotToggleHotkey = "d";
     QString summaryHotkey = "alt+s";
     QString settingsHotkey = "";
     int targetScreenIndex = -1; // -1 = all screens, 0+ = specific screen index
