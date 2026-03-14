@@ -138,6 +138,7 @@ void App::updateAllWindowThemes(bool isDark)
         m_activeConfigDialog->updateTheme(isDark);
     }
 
+    pruneActiveWindows();
     for (auto w : m_activeWindows)
     {
         if (!w)

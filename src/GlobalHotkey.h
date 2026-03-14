@@ -24,6 +24,7 @@ protected:
 private:
     int m_hotkeyId;
     bool m_isRegistered;
+    bool m_eventFilterInstalled = false;
 
     // Helper to parse key sequence to Windows modifiers and VK code
     bool parseKeySequence(const QString &sequence, unsigned int &modifiers, unsigned int &vk);

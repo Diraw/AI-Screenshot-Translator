@@ -43,13 +43,13 @@ void App::onScreenshotRequested()
         }
         sw->deleteLater(); });
     connect(sw, &ScreenshotTool::cancelled, this, &App::onScreenshotCancelled);
-    connect(sw, &ScreenshotTool::cancelled, this, [this]()
+    connect(sw, &ScreenshotTool::cancelled, this, [this, sw]()
             {
-        if (m_activeScreenshotTool)
+        if (m_activeScreenshotTool == sw)
         {
             m_activeScreenshotTool->deleteLater();
             m_activeScreenshotTool = nullptr;
-        } });
+        } }, Qt::QueuedConnection);
     connect(sw, &ScreenshotTool::destroyed, this, [this]()
             { m_activeScreenshotTool = nullptr; });
 
@@ -104,7 +104,7 @@ void App::submitCapturedImages(const QList<PendingBatchCapture> &captures)
         card->setNavigationHotkeys(cfg.prevResultShortcut, cfg.nextResultShortcut);
         card->move(captures.first().rect.topLeft());
         card->show();
-        m_activeWindows.append(card);
+        trackActiveWindow(card);
         m_activePreviewCard = card;
         m_previewImageCache[entryId] = previewPixmaps;
         m_previewCards[entryId] = card;
@@ -115,7 +115,10 @@ void App::submitCapturedImages(const QList<PendingBatchCapture> &captures)
             m_lastPreviewGeometry = QRect(pos, size); });
 
         connect(card, &PreviewCard::closed, [this, card, entryId]()
-                { m_activeWindows.removeAll(card); });
+                {
+                    m_activeWindows.removeAll(card);
+                    m_previewCards.remove(entryId);
+                });
     }
 
     if (!cfg.useAdvancedApiMode && cfg.apiKey.isEmpty())
@@ -159,8 +162,7 @@ void App::submitCapturedImages(const QList<PendingBatchCapture> &captures)
         if (m_analytics)
             m_analytics->trackTranslationStarted(cfg.apiProvider, cfg.useAdvancedApiMode);
 
-        QByteArray *contextData = new QByteArray(entryId.toUtf8());
-        m_apiClient->processImages(base64Images, cfg.promptText, (void *)contextData);
+        m_apiClient->processImages(base64Images, cfg.promptText, entryId);
     });
 
     QFuture<QList<QByteArray>> future = QtConcurrent::run([images]()

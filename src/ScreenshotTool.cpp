@@ -230,7 +230,6 @@ void ScreenshotTool::keyPressEvent(QKeyEvent *event) {
 
     if (event->key() == Qt::Key_Escape) {
         emit cancelled(m_finalizeBatch && m_pendingBatchCount > 0);
-        close();
         event->accept();
         return;
     }

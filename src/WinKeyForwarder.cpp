@@ -4,6 +4,7 @@
 
 #include <QApplication>
 #include <QDir>
+#include <QMutexLocker>
 #include <QMetaObject>
 #include <QtGlobal>
 #include <cstdio>
@@ -85,14 +86,39 @@ void WinKeyForwarder::registerResultWindow(ResultWindow *window)
 {
     if (!window)
         return;
-    m_windows.insert(window);
+
+    QMutexLocker locker(&m_windowsMutex);
+    for (const QPointer<ResultWindow> &existingPtr : m_windows)
+    {
+        if (existingPtr.data() == window)
+            return;
+    }
+    m_windows.append(QPointer<ResultWindow>(window));
 }
 
 void WinKeyForwarder::unregisterResultWindow(ResultWindow *window)
 {
     if (!window)
         return;
-    m_windows.remove(window);
+
+    QMutexLocker locker(&m_windowsMutex);
+    for (int i = m_windows.size() - 1; i >= 0; --i)
+    {
+        ResultWindow *existing = m_windows.at(i).data();
+        if (!existing || existing == window)
+            m_windows.removeAt(i);
+    }
+}
+
+QList<QPointer<ResultWindow>> WinKeyForwarder::snapshotWindows()
+{
+    QMutexLocker locker(&m_windowsMutex);
+    for (int i = m_windows.size() - 1; i >= 0; --i)
+    {
+        if (m_windows.at(i).isNull())
+            m_windows.removeAt(i);
+    }
+    return m_windows;
 }
 
 bool WinKeyForwarder::anyModifierDown()
@@ -148,9 +174,12 @@ LRESULT WinKeyForwarder::handleLowLevel(WPARAM wParam, KBDLLHOOKSTRUCT *ks)
         if (!fg)
             return 0;
 
+        const QList<QPointer<ResultWindow>> windows = snapshotWindows();
+
         // Exact match to foreground window
-        for (ResultWindow *rw : m_windows)
+        for (const QPointer<ResultWindow> &rwPtr : windows)
         {
+            ResultWindow *rw = rwPtr.data();
             if (!rw)
                 continue;
             HWND rwHwnd = reinterpret_cast<HWND>(rw->winId());
@@ -167,8 +196,9 @@ LRESULT WinKeyForwarder::handleLowLevel(WPARAM wParam, KBDLLHOOKSTRUCT *ks)
         HWND root = GetAncestor(fg, GA_ROOT);
         if (root)
         {
-            for (ResultWindow *rw : m_windows)
+            for (const QPointer<ResultWindow> &rwPtr : windows)
             {
+                ResultWindow *rw = rwPtr.data();
                 if (!rw)
                     continue;
                 HWND rwHwnd = reinterpret_cast<HWND>(rw->winId());
@@ -191,9 +221,12 @@ LRESULT WinKeyForwarder::handleLowLevel(WPARAM wParam, KBDLLHOOKSTRUCT *ks)
     HWND fg = GetForegroundWindow();
     if (fg && isDown && !anyModifierDown())
     {
+        const QList<QPointer<ResultWindow>> windows = snapshotWindows();
+
         // Check all registered ResultWindows
-        for (ResultWindow *rw : m_windows)
+        for (const QPointer<ResultWindow> &rwPtr : windows)
         {
+            ResultWindow *rw = rwPtr.data();
             if (!rw)
                 continue;
             HWND rwHwnd = reinterpret_cast<HWND>(rw->winId());

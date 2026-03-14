@@ -89,6 +89,7 @@ void App::showResult(const QString &entryId)
     // If there are locked ResultWindows, reuse them instead of creating a new one.
     // Multiple locked windows should stay in sync by receiving the same new entry.
     QList<ResultWindow *> lockedWindows;
+    pruneActiveWindows();
     for (auto w : m_activeWindows)
     {
         ResultWindow *rw = qobject_cast<ResultWindow *>(w.data());
@@ -156,7 +157,7 @@ void App::showResult(const QString &entryId)
     // Show result-window hints unless user opted out.
     HintPopup::maybeShow(HintPopup::Kind::ResultWindow, window, cfg);
 
-    m_activeWindows.append(window);
+    trackActiveWindow(window);
 
     connect(window, &ResultWindow::closed, this, [this, window]()
             {
@@ -415,7 +416,7 @@ void App::restorePreview(const QString &entryId)
     }
 
     card->show();
-    m_activeWindows.append(card);
+    trackActiveWindow(card);
     m_previewCards[entryId] = card;
 
     connect(card, &PreviewCard::closedWithGeometry, this, [this, entryId](QPoint pos, QSize size)
@@ -424,8 +425,8 @@ void App::restorePreview(const QString &entryId)
     connect(card, &PreviewCard::closed, [this, card, entryId]()
             {
                 m_activeWindows.removeAll(card);
+                m_previewCards.remove(entryId);
                 schedulePreviewImageRelease(entryId);
-                // m_previewCards[entryId] will become null due to QPointer
             });
 }
 
@@ -487,14 +488,12 @@ void App::onRetranslateRequested(const QStringList &base64Images)
         m_analytics->trackTranslationStarted(cfg.apiProvider, cfg.useAdvancedApiMode);
 
     // Store entryId in heap to pass as context
-    QByteArray *contextData = new QByteArray(entryId.toUtf8());
-
     QList<QByteArray> base64Bytes;
     base64Bytes.reserve(base64Images.size());
     for (const QString &base64Image : base64Images)
         base64Bytes.append(base64Image.toLatin1());
 
-    m_apiClient->processImages(base64Bytes, cfg.promptText, (void *)contextData);
+    m_apiClient->processImages(base64Bytes, cfg.promptText, entryId);
 
     qDebug() << "[App] Retranslation request sent for entry:" << entryId;
 }

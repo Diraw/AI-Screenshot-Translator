@@ -8,6 +8,7 @@
 #include <QNetworkProxy>
 #include <QNetworkRequest>
 #include <QStringList>
+#include <QTimer>
 #include <QUrl>
 
 struct JsonPathStep
@@ -255,17 +256,23 @@ void ApiClient::configure(const QString &apiKey, const QString &baseUrl, const Q
     }
 }
 
-void ApiClient::processImage(const QByteArray &base64Image, const QString &promptText, void *context)
+void ApiClient::processImage(const QByteArray &base64Image, const QString &promptText, const QString &requestId)
 {
-    processImages(QList<QByteArray>{base64Image}, promptText, context);
+    processImages(QList<QByteArray>{base64Image}, promptText, requestId);
 }
 
-void ApiClient::processImages(const QList<QByteArray> &base64Images, const QString &promptText, void *context)
+void ApiClient::processImages(const QList<QByteArray> &base64Images, const QString &promptText, const QString &requestId)
+{
+    processImagesInternal(base64Images, promptText, requestId, 0);
+}
+
+void ApiClient::processImagesInternal(const QList<QByteArray> &base64Images, const QString &promptText,
+                                      const QString &requestId, int retryCount)
 {
     const QList<QByteArray> images = normalizedImages(base64Images);
     if (images.isEmpty())
     {
-        emit error("Image payload is empty.", context);
+        emit error("Image payload is empty.", requestId);
         return;
     }
 
@@ -277,14 +284,14 @@ void ApiClient::processImages(const QList<QByteArray> &base64Images, const QStri
         QString advancedErr;
         if (!buildAdvancedRequest(images, promptText, request, data, advancedErr))
         {
-            emit error(QString("Advanced API Error: %1").arg(advancedErr), context);
+            emit error(QString("Advanced API Error: %1").arg(advancedErr), requestId);
             return;
         }
     }
 
     if ((m_apiKey.isEmpty() || m_baseUrl.isEmpty() || m_modelName.isEmpty()) && !m_useAdvancedApi)
     {
-        emit error("API Configuration invalid. Please check settings.", context);
+        emit error("API Configuration invalid. Please check settings.", requestId);
         return;
     }
 
@@ -318,7 +325,26 @@ void ApiClient::processImages(const QList<QByteArray> &base64Images, const QStri
     reply->setProperty("originalBase64", images.first());
     reply->setProperty("originalBase64List", toStringList(images));
     reply->setProperty("originalPrompt", promptText);
-    reply->setProperty("requestContext", (qulonglong)context);
+    reply->setProperty("requestId", requestId);
+    reply->setProperty("retryCount", retryCount);
+    reply->setProperty("requestTimedOut", false);
+
+    auto *timeoutTimer = new QTimer(reply);
+    timeoutTimer->setObjectName(QStringLiteral("requestTimeoutTimer"));
+    timeoutTimer->setSingleShot(true);
+    timeoutTimer->setInterval(kRequestTimeoutMs);
+    QPointer<QNetworkReply> guardedReply(reply);
+    connect(timeoutTimer, &QTimer::timeout, this, [guardedReply]()
+            {
+                if (!guardedReply || guardedReply->isFinished())
+                    return;
+
+                guardedReply->setProperty("requestTimedOut", true);
+                qWarning() << "ApiClient: Request timed out after" << ApiClient::kRequestTimeoutMs
+                           << "ms. URL:" << guardedReply->url().toString();
+                guardedReply->abort();
+            });
+    timeoutTimer->start();
 
     connect(reply, &QNetworkReply::finished, this, [this, reply]()
             {
@@ -339,40 +365,49 @@ void ApiClient::processImages(const QList<QByteArray> &base64Images, const QStri
 
 void ApiClient::onReplyFinished(QNetworkReply *reply)
 {
+    if (QTimer *timer = reply->findChild<QTimer *>(QStringLiteral("requestTimeoutTimer")))
+        timer->stop();
+
     reply->deleteLater();
 
-    void *context = (void *)reply->property("requestContext").toULongLong();
+    const QString requestId = reply->property("requestId").toString();
     const QByteArray originalBase64 = reply->property("originalBase64").toByteArray();
     const QStringList originalBase64List = reply->property("originalBase64List").toStringList();
     const QString originalPrompt = reply->property("originalPrompt").toString();
+    const int retryCount = reply->property("retryCount").toInt();
+    const bool requestTimedOut = reply->property("requestTimedOut").toBool();
 
     if (reply->error() != QNetworkReply::NoError)
     {
+        if (requestTimedOut)
+        {
+            emit error(QString("Request timed out after %1 seconds.").arg(kRequestTimeoutMs / 1000), requestId);
+            return;
+        }
+
         if (reply->error() == QNetworkReply::RemoteHostClosedError ||
             reply->error() == QNetworkReply::ConnectionRefusedError)
         {
-            if (!m_retriedContexts.contains(context))
+            if (retryCount < kMaxNetworkRetries)
             {
-                qWarning() << "Network transition error detected (" << reply->error() << "), retrying once for context:" << context;
-                m_retriedContexts.insert(context);
+                qWarning() << "Network transition error detected (" << reply->error() << "), retrying request:"
+                           << requestId << "attempt" << (retryCount + 1) << "of" << kMaxNetworkRetries;
                 QList<QByteArray> images;
                 images.reserve(originalBase64List.size());
                 for (const QString &image : originalBase64List)
                     images.append(image.toLatin1());
-                processImages(images, originalPrompt, context);
+                processImagesInternal(images, originalPrompt, requestId, retryCount + 1);
                 return;
             }
         }
 
-        m_retriedContexts.remove(context);
         const QString err = reply->errorString();
         const QByteArray response = reply->readAll();
         qWarning() << "API Error:" << err << "Response:" << response;
-        emit error(QString("Network Error: %1").arg(err), context);
+        emit error(QString("Network Error: %1").arg(err), requestId);
         return;
     }
 
-    m_retriedContexts.remove(context);
     const QByteArray response = reply->readAll();
     qDebug() << "ApiClient: Response Body:" << response;
 
@@ -380,7 +415,7 @@ void ApiClient::onReplyFinished(QNetworkReply *reply)
     if (doc.isNull())
     {
         qWarning() << "ApiClient: Failed to parse JSON response";
-        emit error("Failed to parse API response as JSON", context);
+        emit error("Failed to parse API response as JSON", requestId);
         return;
     }
 
@@ -389,7 +424,7 @@ void ApiClient::onReplyFinished(QNetworkReply *reply)
     {
         const QJsonObject errObj = root["error"].toObject();
         const QString errMsg = errObj["message"].toString();
-        emit error(QString("API Error: %1").arg(errMsg), context);
+        emit error(QString("API Error: %1").arg(errMsg), requestId);
         return;
     }
 
@@ -424,7 +459,7 @@ void ApiClient::onReplyFinished(QNetworkReply *reply)
     if (content.isEmpty())
     {
         qWarning() << "ApiClient: Parsed content is empty. Check parser logic.";
-        emit error("Failed to extract content from API response", context);
+        emit error("Failed to extract content from API response", requestId);
         return;
     }
 
@@ -435,7 +470,7 @@ void ApiClient::onReplyFinished(QNetworkReply *reply)
             content.prepend(debugHeader);
     }
 
-    emit success(content, originalBase64, originalPrompt, context);
+    emit success(content, QString::fromUtf8(originalBase64), originalPrompt, requestId);
 }
 
 bool ApiClient::buildAdvancedRequest(const QList<QByteArray> &base64Images, const QString &promptText,

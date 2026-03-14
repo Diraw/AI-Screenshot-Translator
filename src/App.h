@@ -38,8 +38,8 @@ private slots:
     void onResultWindowScreenshotRequested(const QString &entryId, const QString &base64);
     void onRetranslateRequested(const QStringList &base64Images);
 
-    void onApiSuccess(const QString &text, const QString &originalBase64, const QString &originalPrompt, void *context);
-    void onApiError(const QString &errorMsg, void *context);
+    void onApiSuccess(const QString &text, const QString &originalBase64, const QString &originalPrompt, const QString &requestId);
+    void onApiError(const QString &errorMsg, const QString &requestId);
 
     void showConfig();
     void showSummary();
@@ -98,6 +98,8 @@ private:
     QString syncLaunchAtStartup(bool enabled);
     void showResult(const QString &entryId);
     QString updateConfig(const AppConfig &cfg);
+    void trackActiveWindow(QWidget *window);
+    void pruneActiveWindows();
     void schedulePreviewImageRelease(const QString &entryId);
     void cancelPreviewImageRelease(const QString &entryId);
     void clearPendingBatchCaptures();

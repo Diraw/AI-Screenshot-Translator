@@ -11,14 +11,19 @@
 
 GlobalHotkey::GlobalHotkey(int id, QObject *parent)
     : QObject(parent), m_hotkeyId(id), m_isRegistered(false) {
-    QCoreApplication::instance()->installNativeEventFilter(this);
+    if (QCoreApplication *app = QCoreApplication::instance()) {
+        app->installNativeEventFilter(this);
+        m_eventFilterInstalled = true;
+    }
 }
 
 GlobalHotkey::~GlobalHotkey() {
     unregisterHotkey();
-    // QCoreApplication::instance()->removeNativeEventFilter(this); 
-    // Note: It's often safer to not remove it in destructor if app is closing, 
-    // but good practice if lifecycle is shorter than app.
+    if (m_eventFilterInstalled) {
+        if (QCoreApplication *app = QCoreApplication::instance())
+            app->removeNativeEventFilter(this);
+        m_eventFilterInstalled = false;
+    }
 }
 
 bool GlobalHotkey::registerHotkey(const QString &keySequence) {

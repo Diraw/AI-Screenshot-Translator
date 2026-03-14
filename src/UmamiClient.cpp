@@ -4,6 +4,8 @@
 #include <QNetworkReply>
 #include <QJsonDocument>
 #include <QDebug>
+#include <QPointer>
+#include <QTimer>
 
 static QString cleanPath(const QString &path)
 {
@@ -151,12 +153,41 @@ void UmamiClient::post(const QJsonObject &body)
     const quint64 requestConfigVersion = m_configVersion;
 
     QNetworkReply *reply = m_manager->post(req, json);
+    reply->setProperty("requestTimedOut", false);
+
+    auto *timeoutTimer = new QTimer(reply);
+    timeoutTimer->setObjectName(QStringLiteral("umamiRequestTimeoutTimer"));
+    timeoutTimer->setSingleShot(true);
+    timeoutTimer->setInterval(kRequestTimeoutMs);
+    QPointer<QNetworkReply> guardedReply(reply);
+    connect(timeoutTimer, &QTimer::timeout, this, [guardedReply]()
+            {
+                if (!guardedReply || guardedReply->isFinished())
+                    return;
+
+                guardedReply->setProperty("requestTimedOut", true);
+                qWarning() << "[Umami] request timed out after" << UmamiClient::kRequestTimeoutMs
+                           << "ms url=" << guardedReply->url();
+                guardedReply->abort();
+            });
+    timeoutTimer->start();
+
     connect(reply, &QNetworkReply::finished, this, [this, reply, requestConfigVersion]()
             {
+        if (QTimer *timer = reply->findChild<QTimer *>(QStringLiteral("umamiRequestTimeoutTimer")))
+            timer->stop();
+
         const QByteArray resp = reply->readAll();
 
         if (reply->error() != QNetworkReply::NoError)
         {
+            if (reply->property("requestTimedOut").toBool())
+            {
+                qWarning() << "[Umami] request failed: timeout resp=" << resp;
+                reply->deleteLater();
+                return;
+            }
+
             qWarning() << "[Umami] request failed:" << reply->error() << reply->errorString() << "resp=" << resp;
             reply->deleteLater();
             return;

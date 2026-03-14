@@ -9,7 +9,7 @@
 #include <QList>
 #include <QHash>
 #include <QJsonValue>
-#include <QSet>
+#include <QPointer>
 
 enum class ApiProvider
 {
@@ -31,12 +31,12 @@ public:
                    bool useAdvancedApi = false, const QString &advancedApiTemplate = QString());
 
     // Main action
-    void processImage(const QByteArray &base64Image, const QString &promptText, void *context = nullptr);
-    void processImages(const QList<QByteArray> &base64Images, const QString &promptText, void *context = nullptr);
+    void processImage(const QByteArray &base64Image, const QString &promptText, const QString &requestId = QString());
+    void processImages(const QList<QByteArray> &base64Images, const QString &promptText, const QString &requestId = QString());
 
 signals:
-    void success(const QString &text, const QString &originalBase64, const QString &originalPrompt, void *context);
-    void error(const QString &errorMessage, void *context);
+    void success(const QString &text, const QString &originalBase64, const QString &originalPrompt, const QString &requestId);
+    void error(const QString &errorMessage, const QString &requestId);
 
 private slots:
     void onReplyFinished(QNetworkReply *reply);
@@ -53,9 +53,8 @@ private:
     bool m_useAdvancedApi = false;
     QString m_advancedApiTemplate;
 
-    // Retry logic tracking (to prevent infinite loops)
-    // We store the context in a set to track if a specific request has already retried
-    QSet<void *> m_retriedContexts;
+    static constexpr int kRequestTimeoutMs = 30000;
+    static constexpr int kMaxNetworkRetries = 1;
 
     // Provider-specific request formatters
     QByteArray formatOpenAIRequest(const QByteArray &base64Image, const QString &prompt);
@@ -73,6 +72,8 @@ private:
     // Provider-specific endpoint and header helpers
     QString getEndpoint() const;
     void setProviderHeaders(QNetworkRequest &request) const;
+    void processImagesInternal(const QList<QByteArray> &base64Images, const QString &promptText,
+                               const QString &requestId, int retryCount);
     bool buildAdvancedRequest(const QList<QByteArray> &base64Images, const QString &promptText,
                               QNetworkRequest &request, QByteArray &payload,
                               QString &outError) const;

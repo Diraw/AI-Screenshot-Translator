@@ -1,13 +1,11 @@
 #include "App.h"
 
-void App::onApiSuccess(const QString &result, const QString &originalBase64, const QString &originalPrompt, void *context)
+void App::onApiSuccess(const QString &result, const QString &originalBase64, const QString &originalPrompt, const QString &requestId)
 {
     Q_UNUSED(originalBase64);
     Q_UNUSED(originalPrompt);
 
-    QByteArray *contextData = static_cast<QByteArray *>(context);
-    QString entryId = QString::fromUtf8(*contextData);
-    delete contextData; // Free the allocated memory
+    const QString entryId = requestId;
 
     // Track translation completed (success)
     AppConfig cfg = m_configManager.getConfig();
@@ -22,11 +20,9 @@ void App::onApiSuccess(const QString &result, const QString &originalBase64, con
     m_historyManager.updateEntryContent(entryId, result);
 }
 
-void App::onApiError(const QString &error, void *context)
+void App::onApiError(const QString &error, const QString &requestId)
 {
-    QByteArray *contextData = static_cast<QByteArray *>(context);
-    QString entryId = QString::fromUtf8(*contextData);
-    delete contextData; // Free the allocated memory
+    const QString entryId = requestId;
 
     // Track translation completed (failure)
     AppConfig cfg = m_configManager.getConfig();

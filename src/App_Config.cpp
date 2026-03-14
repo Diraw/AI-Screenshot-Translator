@@ -168,6 +168,8 @@ QString App::updateConfig(const AppConfig &cfg)
                                           cfg.boldHotkey, cfg.underlineHotkey, cfg.highlightHotkey);
     }
 
+    pruneActiveWindows();
+
     // Sync to active ResultWindows so changes (e.g. <mark> highlight colors) apply immediately.
     for (auto w : m_activeWindows)
     {
@@ -368,6 +370,8 @@ void App::presentConfigDialog(bool allowToggle, bool focusGlobalHotkeys, bool fo
     ConfigDialog *dlg = new ConfigDialog(&m_configManager, &m_historyManager);
     dlg->setAttribute(Qt::WA_DeleteOnClose, false); // Don't delete on close, allow toggle
     m_activeConfigDialog = dlg;
+    connect(dlg, &QObject::destroyed, this, [this]()
+            { m_activeConfigDialog = nullptr; });
 
     // If this is the first-run auto-open, temporarily force it on top so it's not hidden behind other windows.
     const bool forceOnce = m_forceConfigDialogForegroundOnce || forceForeground;
@@ -428,6 +432,7 @@ void App::onLanguageChanged(const QString &lang)
     }
     
     // Update all ResultWindows
+    pruneActiveWindows();
     for (auto w : m_activeWindows)
     {
         if (auto rw = qobject_cast<ResultWindow*>(w.data()))

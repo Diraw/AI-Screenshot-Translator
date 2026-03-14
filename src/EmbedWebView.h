@@ -44,6 +44,8 @@ private slots:
     void checkReady();
 
 private:
+    void shutdown();
+
     class Impl;
     std::unique_ptr<Impl> m_impl;
     QPointer<QWidget> m_parentWidget;
@@ -56,6 +58,7 @@ private:
     std::vector<std::function<void()>> m_pendingActions;
     bool m_isReady = false;
     bool m_hasEverSetHtml = false;
+    bool m_isShuttingDown = false;
 
     // WebView2 LostFocus 时的兜底抢回（需要节流，避免陷入 GotFocus/LostFocus 回环）
     QElapsedTimer m_lastWv2Refocus;

@@ -13,7 +13,9 @@
 #include <windows.h>
 
 #include <QAbstractNativeEventFilter>
-#include <QSet>
+#include <QList>
+#include <QMutex>
+#include <QPointer>
 
 class ResultWindow;
 
@@ -41,7 +43,8 @@ private:
     ~WinKeyForwarder() = default;
 
     // Track active windows. ResultWindow unregisters itself in its destructor.
-    QSet<ResultWindow *> m_windows;
+    QList<QPointer<ResultWindow>> m_windows;
+    mutable QMutex m_windowsMutex;
     bool m_sForwardedDown = false;
     bool m_fForwardedDown = false;
 
@@ -49,6 +52,7 @@ private:
     HHOOK m_kbHook = nullptr;
     static LRESULT CALLBACK LowLevelProc(int nCode, WPARAM wParam, LPARAM lParam);
     LRESULT handleLowLevel(WPARAM wParam, KBDLLHOOKSTRUCT *ks);
+    QList<QPointer<ResultWindow>> snapshotWindows();
 
     static bool anyModifierDown();
 };

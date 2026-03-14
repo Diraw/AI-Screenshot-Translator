@@ -98,6 +98,7 @@ App::App(QObject *parent)
 
     connect(&m_historyManager, &HistoryManager::entryMarkdownChanged, this, [this](const QString &id, const QString &content)
             {
+        pruneActiveWindows();
         if (m_summaryWindow) {
             m_summaryWindow->updateEntryContent(id, content);
         }
@@ -171,6 +172,43 @@ App::~App()
     WinKeyForwarder::trace("[WKF] uninstall forwarder");
     WinKeyForwarder::instance().uninstall();
 #endif
+    pruneActiveWindows();
+    while (!m_activeWindows.isEmpty())
+    {
+        QPointer<QWidget> window = m_activeWindows.takeLast();
+        if (window)
+            delete window.data();
+    }
+    if (m_activeConfigDialog)
+    {
+        delete m_activeConfigDialog;
+        m_activeConfigDialog = nullptr;
+    }
     if (m_summaryWindow)
         delete m_summaryWindow;
+}
+
+void App::trackActiveWindow(QWidget *window)
+{
+    if (!window)
+        return;
+
+    pruneActiveWindows();
+    if (!m_activeWindows.contains(window))
+        m_activeWindows.append(window);
+
+    connect(window, &QObject::destroyed, this, [this, window]()
+            {
+                m_activeWindows.removeAll(window);
+                pruneActiveWindows();
+            });
+}
+
+void App::pruneActiveWindows()
+{
+    for (int i = m_activeWindows.size() - 1; i >= 0; --i)
+    {
+        if (m_activeWindows.at(i).isNull())
+            m_activeWindows.removeAt(i);
+    }
 }

@@ -23,7 +23,6 @@ public:
 
 private slots:
     void startUpdateCheck(bool forceNetwork = false);
-    void onUpdateReplyFinished();
     void openReleasesPage();
     void openPrivacyPolicy();
 
@@ -32,6 +31,8 @@ protected:
     void keyPressEvent(QKeyEvent *event) override;
 
 private:
+    static constexpr int kUpdateCheckTimeoutMs = 10000;
+
     void setupWindowChrome();
     void setupDialogUi();
     void addUpdateRow(QVBoxLayout *root);
@@ -41,6 +42,7 @@ private:
     void setUpdateStatus(const QString &text);
     void updateHintColor();
     void updateUpdateHighlight(bool hasNewVersion);
+    void onUpdateReplyFinished(QNetworkReply *reply);
     QString buildUpdateNetworkErrorStatus(const QNetworkReply *reply) const;
 
     bool applyCachedUpdateStatusIfFresh();

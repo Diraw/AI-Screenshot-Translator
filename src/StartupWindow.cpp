@@ -16,6 +16,7 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSettings>
+#include <QTimer>
 #include <QUrl>
 
 #ifndef APP_NAME
@@ -388,22 +389,59 @@ void StartupWindow::startUpdateCheck(bool forceNetwork)
     req.setRawHeader("Accept", "application/vnd.github+json");
 
     m_reply = m_nam->get(req);
-    connect(m_reply, &QNetworkReply::finished, this, &StartupWindow::onUpdateReplyFinished);
+    m_reply->setProperty("requestTimedOut", false);
+
+    auto *timeoutTimer = new QTimer(m_reply);
+    timeoutTimer->setObjectName(QStringLiteral("startupUpdateTimeoutTimer"));
+    timeoutTimer->setSingleShot(true);
+    timeoutTimer->setInterval(kUpdateCheckTimeoutMs);
+    QPointer<QNetworkReply> reply = m_reply;
+    connect(timeoutTimer, &QTimer::timeout, this, [reply]()
+            {
+                if (!reply || reply->isFinished())
+                    return;
+
+                reply->setProperty("requestTimedOut", true);
+                reply->abort();
+            });
+    timeoutTimer->start();
+    connect(m_reply, &QNetworkReply::finished, this, [this, reply]()
+            { onUpdateReplyFinished(reply.data()); });
 }
 
-void StartupWindow::onUpdateReplyFinished()
+void StartupWindow::onUpdateReplyFinished(QNetworkReply *reply)
 {
-    if (!m_reply)
+    if (!reply)
         return;
 
-    QNetworkReply *reply = m_reply;
+    if (reply != m_reply)
+    {
+        reply->deleteLater();
+        return;
+    }
+
+    if (QTimer *timer = reply->findChild<QTimer *>(QStringLiteral("startupUpdateTimeoutTimer")))
+        timer->stop();
+
     const QByteArray body = reply->readAll();
     const auto err = reply->error();
-    const QString networkErrorText = (err != QNetworkReply::NoError)
-                                         ? buildUpdateNetworkErrorStatus(reply)
-                                         : QString();
+    QString networkErrorText;
+    if (err != QNetworkReply::NoError)
+    {
+        if (reply->property("requestTimedOut").toBool())
+        {
+            networkErrorText = formatText(m_updateNetworkError)
+                               + QStringLiteral("\n")
+                               + QStringLiteral("Request timed out after %1 seconds.")
+                                     .arg(kUpdateCheckTimeoutMs / 1000);
+        }
+        else
+        {
+            networkErrorText = buildUpdateNetworkErrorStatus(reply);
+        }
+    }
 
-    m_reply->deleteLater();
+    reply->deleteLater();
     m_reply = nullptr;
 
     if (m_checkUpdateBtn)

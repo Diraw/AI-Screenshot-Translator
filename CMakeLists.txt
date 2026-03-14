@@ -94,11 +94,6 @@ if(WIN32)
     add_definitions(-DNOMINMAX)
 endif()
 
-if(WIN32)
-    enable_language(RC)
-    # Add icon or other windows specific resources here if needed
-endif()
-
 add_executable(AI-Screenshot-Translator-Cpp ${PROJECT_SOURCES})
 
 target_compile_definitions(AI-Screenshot-Translator-Cpp PRIVATE

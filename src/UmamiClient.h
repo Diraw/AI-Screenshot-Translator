@@ -31,6 +31,8 @@ public:
     void identify(const QJsonObject &data);
 
 private:
+    static constexpr int kRequestTimeoutMs = 10000;
+
     void post(const QJsonObject &body);
 
     QNetworkAccessManager *m_manager = nullptr;

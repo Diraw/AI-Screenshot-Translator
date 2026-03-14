@@ -24,7 +24,6 @@
 #include <QPointer>
 #include <QSet>
 #include <QSignalBlocker>
-#include <QTcpSocket>
 #include <QTimer>
 #include <QUrl>
 #include <QVariant>
@@ -963,17 +962,6 @@ void ConfigDialog::onTestConnection()
             return;
         }
 
-        QTcpSocket sock;
-        sock.connectToHost(proxy.hostName(), proxy.port());
-        if (!sock.waitForConnected(2500))
-        {
-            if (m_testConnectionBtn)
-                m_testConnectionBtn->setEnabled(true);
-            QMessageBox::warning(this, tm.tr("test_title"), tm.tr("test_err_proxy_unreachable").arg(sock.errorString()));
-            return;
-        }
-        sock.disconnectFromHost();
-
         m_testNam->setProxy(proxy);
     }
     else
@@ -1191,16 +1179,6 @@ void ConfigDialog::onTestAdvancedApi()
                 m_advancedApiResultEdit->setPlainText(QString("代理配置无效：%1").arg(proxyErr));
             return;
         }
-
-        QTcpSocket sock;
-        sock.connectToHost(proxy.hostName(), proxy.port());
-        if (!sock.waitForConnected(2500))
-        {
-            if (m_advancedApiResultEdit)
-                m_advancedApiResultEdit->setPlainText(QString("代理不可达：%1").arg(sock.errorString()));
-            return;
-        }
-        sock.disconnectFromHost();
 
         m_testNam->setProxy(proxy);
     }

@@ -52,16 +52,7 @@ EmbedWebView::EmbedWebView(QWidget *parent) : QObject(parent)
 
         connect(parent, &QObject::destroyed, this, [this]()
                 {
-                    if (m_resizeTimer)
-                        m_resizeTimer->stop();
-                    if (m_initTimer)
-                        m_initTimer->stop();
-                    m_pendingActions.clear();
-                    m_impl.reset();
-                    m_isReady = false;
-#ifdef _WIN32
-                    m_hwnd = nullptr;
-#endif
+                    shutdown();
                 });
     }
     catch (const std::exception &e)
@@ -70,7 +61,34 @@ EmbedWebView::EmbedWebView(QWidget *parent) : QObject(parent)
     }
 }
 
-EmbedWebView::~EmbedWebView() = default;
+EmbedWebView::~EmbedWebView()
+{
+    shutdown();
+}
+
+void EmbedWebView::shutdown()
+{
+    if (m_isShuttingDown)
+        return;
+    m_isShuttingDown = true;
+
+    if (m_parentWidget)
+        m_parentWidget->removeEventFilter(this);
+
+    if (m_resizeTimer)
+        m_resizeTimer->stop();
+    if (m_initTimer)
+        m_initTimer->stop();
+
+    m_pendingActions.clear();
+    m_impl.reset();
+    m_isReady = false;
+    m_wv2RefocusPending = false;
+
+#ifdef _WIN32
+    m_hwnd = nullptr;
+#endif
+}
 
 bool EmbedWebView::eventFilter(QObject *watched, QEvent *event)
 {
