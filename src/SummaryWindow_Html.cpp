@@ -153,6 +153,7 @@ void SummaryWindow::initHtml()
         return;
 
     bool isDark = ThemeUtils::isSystemDark();
+    const bool showAdvancedDebug = m_config.useAdvancedApiMode && m_config.showAdvancedDebugInArchiveWindow;
 
     // If the HTML shell has already been loaded once, avoid calling setHtml() again (it is intentionally guarded
     // in EmbedWebView to prevent reload-induced focus issues). Instead, update entries via JS.
@@ -163,7 +164,7 @@ void SummaryWindow::initHtml()
         QString js;
         js += "(()=>{";
         js += QString("try{applyDarkMode(%1);}catch(e){};").arg(isDark ? "true" : "false");
-        js += QString("try{SHOW_ADV_DEBUG_ARCHIVE=%1;}catch(e){};").arg(m_config.showAdvancedDebugInArchiveWindow ? "true" : "false");
+        js += QString("try{SHOW_ADV_DEBUG_ARCHIVE=%1;}catch(e){};").arg(showAdvancedDebug ? "true" : "false");
         js += QString("try{SELECTION_MODE=%1;}catch(e){};").arg(m_selectionMode ? "true" : "false");
         js += "try{document.querySelectorAll('.entry').forEach(function(n){n.remove();});}catch(e){};";
         for (const auto &entry : filteredEntries)
@@ -360,7 +361,7 @@ document.addEventListener('mousedown', function() {
     html += QString("var KEY_UNDERLINE = '%1';\n").arg(m_underlineKey);
     html += QString("var KEY_HIGHLIGHT = '%1';\n").arg(m_highlightKey);
     html += QString("var RESTORE_SCROLL = %1;\n").arg(m_lastScrollY);
-    html += QString("var SHOW_ADV_DEBUG_ARCHIVE = %1;\n").arg(m_config.showAdvancedDebugInArchiveWindow ? "true" : "false");
+    html += QString("var SHOW_ADV_DEBUG_ARCHIVE = %1;\n").arg(showAdvancedDebug ? "true" : "false");
 
     QString summaryLogic = loadAsset("templates/summary_logic.js");
     if (summaryLogic.isEmpty())

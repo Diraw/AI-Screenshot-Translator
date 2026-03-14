@@ -61,7 +61,7 @@ void ResultWindow::setConfig(const AppConfig &config)
 
         const QString debugJs = QString(
                                     "(()=>{try{if(window.__setAdvancedDebugVisible){window.__setAdvancedDebugVisible(%1);}}catch(e){}})();")
-                                    .arg(m_config.showAdvancedDebugInResultWindow ? "true" : "false");
+                                    .arg((m_config.useAdvancedApiMode && m_config.showAdvancedDebugInResultWindow) ? "true" : "false");
         m_webView->eval(debugJs.toStdString());
     }
 
