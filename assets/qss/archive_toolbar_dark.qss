@@ -1,9 +1,52 @@
+QWidget#archiveFilterToolbarShell {
+  background: #1f1f1f;
+  border: none;
+  padding: 0px;
+}
+
 QToolBar#archiveFilterToolbar,
 QWidget#archiveFilterToolbar {
   background: #1f1f1f;
   border: none;
   border-bottom: 1px solid #2b2b2b; /* soften bright separator in dark mode */
   padding: 0px 2px;
+}
+
+QToolButton#archiveOverflowHandle {
+  color: #dbeafe;
+  background: #1d4ed8;
+  border: 1px solid #60a5fa;
+  border-radius: 2px;
+  padding: 0px 1px;
+  margin: 2px 1px 2px 3px;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+QToolButton#archiveOverflowHandle:hover {
+  background: #2563eb;
+  border-color: #93c5fd;
+}
+
+QToolButton#archiveOverflowHandle:pressed {
+  background: #1e40af;
+  color: #bfdbfe;
+}
+
+QToolButton#archiveOverflowHandle[overflowHintActive="true"] {
+  color: #fee2e2;
+  background: #991b1b;
+  border-color: #f87171;
+}
+
+QToolButton#archiveOverflowHandle[overflowHintActive="true"]:hover {
+  background: #b91c1c;
+  border-color: #fca5a5;
+}
+
+QToolButton#archiveOverflowHandle[overflowHintActive="true"]:pressed {
+  background: #7f1d1d;
+  color: #fecaca;
 }
 QToolBar#archiveFilterToolbar::separator {
   background: #2b2b2b;

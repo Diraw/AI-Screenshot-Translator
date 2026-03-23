@@ -16,6 +16,7 @@ extern bool g_enableLogging;
 #include <QAction>
 #include <QKeyEvent>
 #include <QResizeEvent>
+#include <QShowEvent>
 #include <QTimer>
 #include <QCoreApplication>
 #include <QDebug>
@@ -27,6 +28,7 @@ extern bool g_enableLogging;
 #include <QJsonDocument>
 #include <QColor>
 #include <QApplication>
+#include <QToolButton>
 
 #include <algorithm>
 
@@ -397,10 +399,184 @@ void SummaryWindow::resizeEvent(QResizeEvent *event)
     qDebug() << "SummaryWindow::resizeEvent - Window:" << width() << "x" << height()
              << "Container:" << (m_webContainer ? m_webContainer->size() : QSize(0, 0));
     QWidget::resizeEvent(event);
+    refreshToolbarOverflowHint();
+}
+
+void SummaryWindow::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    QTimer::singleShot(0, this, [this]()
+                       { refreshToolbarOverflowHint(); });
+    QTimer::singleShot(50, this, [this]()
+                       { refreshToolbarOverflowHint(); });
+}
+
+void SummaryWindow::setToolbarOverflowCursorActive(bool active)
+{
+    if (m_toolbarOverflowCursorActive == active)
+        return;
+
+    if (active)
+    {
+        QApplication::setOverrideCursor(Qt::SizeHorCursor);
+        m_toolbarOverflowCursorActive = true;
+        return;
+    }
+
+    if (m_toolbarOverflowCursorActive && QApplication::overrideCursor())
+        QApplication::restoreOverrideCursor();
+    m_toolbarOverflowCursorActive = false;
+}
+
+void SummaryWindow::fitWindowToToolbarContent()
+{
+    if (!m_filterToolbar || !m_filterToolbarShell || !m_toolbarOverflowButton)
+        return;
+
+    int toolbarContentWidth = 0;
+    const QList<QWidget *> groups = {m_filtersGroup, m_paginationGroup, m_actionsGroup};
+    for (QWidget *group : groups)
+    {
+        if (!group)
+            continue;
+        toolbarContentWidth += qMax(group->sizeHint().width(), group->minimumSizeHint().width());
+    }
+
+    const int breathingRoom = 8;
+    if (m_filterToolbar->layout())
+        toolbarContentWidth = qMax(toolbarContentWidth, m_filterToolbar->layout()->minimumSize().width());
+
+    const int shellExtraWidth = qMax(0, m_filterToolbarShell->width() - m_filterToolbar->width());
+    const int requiredShellWidth = toolbarContentWidth + shellExtraWidth + breathingRoom;
+    const int delta = requiredShellWidth - m_filterToolbarShell->width();
+    const int minWidth = qMax(minimumWidth(), minimumSizeHint().width());
+    const int targetWidth = qMax(minWidth, width() + delta);
+
+    if (targetWidth == width())
+        return;
+
+    resize(targetWidth, height());
+    refreshToolbarOverflowHint();
 }
 
 bool SummaryWindow::eventFilter(QObject *watched, QEvent *event)
 {
+    if (event)
+    {
+        const QEvent::Type eventType = event->type();
+        if (watched == m_internalToolbarExtensionButton)
+        {
+            if (eventType == QEvent::Show || eventType == QEvent::ShowToParent ||
+                eventType == QEvent::Resize || eventType == QEvent::LayoutRequest)
+            {
+                m_internalToolbarExtensionButton->setMinimumWidth(0);
+                m_internalToolbarExtensionButton->setMaximumWidth(0);
+                m_internalToolbarExtensionButton->hide();
+                return true;
+            }
+        }
+
+        if (m_toolbarOverflowResizeArmed || m_toolbarOverflowResizeDragging)
+        {
+            if (eventType == QEvent::MouseMove)
+            {
+                auto *me = static_cast<QMouseEvent *>(event);
+                if (!(me->buttons() & Qt::LeftButton))
+                    return false;
+
+                const int deltaX = me->globalPosition().toPoint().x() - m_toolbarOverflowResizePressPos.x();
+                if (!m_toolbarOverflowResizeDragging && qAbs(deltaX) < 4)
+                    return false;
+
+                m_toolbarOverflowResizeDragging = true;
+                setToolbarOverflowCursorActive(true);
+                const int minWidth = qMax(minimumWidth(), minimumSizeHint().width());
+                QRect nextGeometry = m_toolbarOverflowResizeStartGeometry;
+                nextGeometry.setWidth(qMax(minWidth, m_toolbarOverflowResizeStartGeometry.width() + deltaX));
+                setGeometry(nextGeometry);
+                refreshToolbarOverflowHint();
+                return true;
+            }
+
+            if (eventType == QEvent::MouseButtonRelease)
+            {
+                auto *me = static_cast<QMouseEvent *>(event);
+                if (me->button() == Qt::LeftButton)
+                {
+                    const bool wasDragging = m_toolbarOverflowResizeDragging;
+                    m_toolbarOverflowResizeArmed = false;
+                    m_toolbarOverflowResizeDragging = false;
+                    if (QWidget::mouseGrabber() == this)
+                        releaseMouse();
+                    if (wasDragging)
+                    {
+                        refreshToolbarOverflowHint();
+                        setToolbarOverflowCursorActive(false);
+                        return true;
+                    }
+
+                    setToolbarOverflowCursorActive(false);
+                    return true;
+                }
+            }
+
+            if (eventType == QEvent::UngrabMouse || eventType == QEvent::WindowDeactivate)
+            {
+                m_toolbarOverflowResizeArmed = false;
+                m_toolbarOverflowResizeDragging = false;
+                setToolbarOverflowCursorActive(false);
+            }
+        }
+    }
+
+    if (watched == m_toolbarOverflowButton && event)
+    {
+        switch (event->type())
+        {
+        case QEvent::MouseButtonDblClick:
+        {
+            auto *me = static_cast<QMouseEvent *>(event);
+            if (me->button() == Qt::LeftButton)
+            {
+                m_toolbarOverflowResizeArmed = false;
+                m_toolbarOverflowResizeDragging = false;
+                if (QWidget::mouseGrabber() == this)
+                    releaseMouse();
+                fitWindowToToolbarContent();
+                setToolbarOverflowCursorActive(false);
+                return true;
+            }
+            break;
+        }
+        case QEvent::MouseButtonPress:
+        {
+            auto *me = static_cast<QMouseEvent *>(event);
+            if (me->button() == Qt::LeftButton)
+            {
+                m_toolbarOverflowResizeArmed = true;
+                m_toolbarOverflowResizeDragging = false;
+                m_toolbarOverflowResizePressPos = me->globalPosition().toPoint();
+                m_toolbarOverflowResizeStartGeometry = geometry();
+                if (QWidget::mouseGrabber() != this)
+                    grabMouse();
+                return true;
+            }
+            break;
+        }
+        case QEvent::Hide:
+            if (!m_toolbarOverflowResizeDragging)
+            {
+                m_toolbarOverflowResizeArmed = false;
+                if (QWidget::mouseGrabber() == this)
+                    releaseMouse();
+                setToolbarOverflowCursorActive(false);
+            }
+            break;
+        default:
+            break;
+        }
+    }
+
     if (event->type() == QEvent::KeyPress)
     {
         auto *ke = static_cast<QKeyEvent *>(event);

@@ -1,7 +1,50 @@
+QWidget#archiveFilterToolbarShell {
+  background: #f6f7f9;
+  border: none;
+  padding: 0px;
+}
+
 QToolBar#archiveFilterToolbar {
   background: #f6f7f9;
   border: none;
   padding: 0px 2px;
+}
+
+QToolButton#archiveOverflowHandle {
+  color: #eff6ff;
+  background: #2563eb;
+  border: 1px solid #1d4ed8;
+  border-radius: 2px;
+  padding: 0px 1px;
+  margin: 2px 1px 2px 3px;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+QToolButton#archiveOverflowHandle:hover {
+  background: #3b82f6;
+  border-color: #1e40af;
+}
+
+QToolButton#archiveOverflowHandle:pressed {
+  background: #1d4ed8;
+  color: #dbeafe;
+}
+
+QToolButton#archiveOverflowHandle[overflowHintActive="true"] {
+  color: #fff7ed;
+  background: #dc2626;
+  border-color: #b91c1c;
+}
+
+QToolButton#archiveOverflowHandle[overflowHintActive="true"]:hover {
+  background: #ef4444;
+  border-color: #991b1b;
+}
+
+QToolButton#archiveOverflowHandle[overflowHintActive="true"]:pressed {
+  background: #b91c1c;
+  color: #fee2e2;
 }
 
 QWidget#archiveFiltersGroup,

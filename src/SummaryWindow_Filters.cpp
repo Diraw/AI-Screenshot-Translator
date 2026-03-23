@@ -11,11 +11,13 @@
 #include <QApplication>
 #include <QMouseEvent>
 #include <QFile>
+#include <QGraphicsOpacityEffect>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLayout>
 #include <QPushButton>
 #include <QToolBar>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QFontMetrics>
 #include <QTimer>
@@ -25,6 +27,14 @@
 
 namespace
 {
+    QString overflowHandleToolTipText()
+    {
+        if (TranslationManager::instance().getLanguage() == QStringLiteral("zh"))
+            return QStringLiteral("\u6a2a\u5411\u62d6\u52a8\u8c03\u6574\u7a97\u53e3\u5bbd\u5ea6\uff0c\u53cc\u51fb\u81ea\u52a8\u9002\u914d");
+
+        return QStringLiteral("Drag horizontally to resize, double-click to auto-fit");
+    }
+
     class ClickToClearFocusWidget final : public QWidget
     {
     public:
@@ -49,7 +59,13 @@ namespace
 
 void SummaryWindow::setupFilterUI()
 {
-    m_filterToolbar = new QToolBar(this);
+    m_filterToolbarShell = new QWidget(this);
+    m_filterToolbarShell->setObjectName("archiveFilterToolbarShell");
+    QHBoxLayout *toolbarShellLayout = new QHBoxLayout(m_filterToolbarShell);
+    toolbarShellLayout->setContentsMargins(0, 0, 0, 0);
+    toolbarShellLayout->setSpacing(0);
+
+    m_filterToolbar = new QToolBar(m_filterToolbarShell);
     m_filterToolbar->setObjectName("archiveFilterToolbar");
     m_filterToolbar->setAttribute(Qt::WA_StyledBackground, true);
     m_filterToolbar->setAutoFillBackground(true);
@@ -57,6 +73,7 @@ void SummaryWindow::setupFilterUI()
     m_filterToolbar->setFloatable(false);
     m_filterToolbar->setContextMenuPolicy(Qt::PreventContextMenu);
     m_filterToolbar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    toolbarShellLayout->addWidget(m_filterToolbar, 1);
 
     const auto clearToolbarFocus = [this]()
     {
@@ -258,10 +275,32 @@ void SummaryWindow::setupFilterUI()
 
     m_filterToolbar->addWidget(m_actionsGroup);
 
+    m_toolbarOverflowButton = new QToolButton(m_filterToolbarShell);
+    m_toolbarOverflowButton->setObjectName("archiveOverflowHandle");
+    m_toolbarOverflowButton->setText(QStringLiteral(">>"));
+    m_toolbarOverflowButton->setToolTip(QStringLiteral("Drag horizontally to resize / 横向拖动调整窗口宽度"));
+    m_toolbarOverflowButton->setFocusPolicy(Qt::NoFocus);
+    m_toolbarOverflowButton->setCursor(Qt::SizeHorCursor);
+    m_toolbarOverflowButton->setMouseTracking(true);
+    m_toolbarOverflowButton->setAutoRaise(false);
+    m_toolbarOverflowButton->setFixedHeight(controlHeight);
+    m_toolbarOverflowButton->setFixedWidth(12);
+    m_toolbarOverflowButton->setToolTip(overflowHandleToolTipText());
+    m_toolbarOverflowButton->setProperty("toolbarOverflowHandle", true);
+    m_toolbarOverflowButton->setProperty("overflowHintActive", false);
+    auto *overflowOpacity = new QGraphicsOpacityEffect(m_toolbarOverflowButton);
+    overflowOpacity->setOpacity(0.5);
+    m_toolbarOverflowButton->setGraphicsEffect(overflowOpacity);
+    m_toolbarOverflowButton->installEventFilter(this);
+    toolbarShellLayout->addWidget(m_toolbarOverflowButton, 0, Qt::AlignVCenter);
+
+    QTimer::singleShot(0, this, [this]()
+                       { refreshToolbarOverflowHint(); });
+
     QVBoxLayout *mainLayout = qobject_cast<QVBoxLayout *>(layout());
     if (mainLayout)
     {
-        mainLayout->insertWidget(0, m_filterToolbar);
+        mainLayout->insertWidget(0, m_filterToolbarShell);
     }
 
     // Prefer the web view as the default focus target.
@@ -326,6 +365,99 @@ void SummaryWindow::setupFilterUI()
         applyFilters(); });
 
     updatePaginationUi();
+}
+
+void SummaryWindow::refreshToolbarOverflowHint()
+{
+    if (!m_filterToolbar || !m_toolbarOverflowButton)
+        return;
+
+    if (!isVisible() || !m_filterToolbar->isVisible() ||
+        m_filterToolbar->width() <= 0 || m_filterToolbar->height() <= 0)
+    {
+        m_toolbarOverflowButton->setProperty("overflowHintActive", false);
+        m_toolbarOverflowButton->style()->unpolish(m_toolbarOverflowButton);
+        m_toolbarOverflowButton->style()->polish(m_toolbarOverflowButton);
+        m_toolbarOverflowButton->update();
+        return;
+    }
+
+    bool foundInternalExtension = false;
+    const QList<QToolButton *> buttons = m_filterToolbar->findChildren<QToolButton *>();
+    for (QToolButton *candidate : buttons)
+    {
+        if (!candidate)
+            continue;
+
+        const QString className = QString::fromLatin1(candidate->metaObject()->className());
+        if (className.contains(QStringLiteral("QToolBarExtension")))
+        {
+            foundInternalExtension = true;
+            if (candidate != m_internalToolbarExtensionButton)
+            {
+                if (m_internalToolbarExtensionButton)
+                    m_internalToolbarExtensionButton->removeEventFilter(this);
+                m_internalToolbarExtensionButton = candidate;
+                m_internalToolbarExtensionButton->installEventFilter(this);
+                m_internalToolbarExtensionButton->setFocusPolicy(Qt::NoFocus);
+                m_internalToolbarExtensionButton->setEnabled(false);
+                m_internalToolbarExtensionButton->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+                m_internalToolbarExtensionButton->setStyleSheet(QStringLiteral(
+                    "QToolButton { min-width: 0px; max-width: 0px; width: 0px; "
+                    "padding: 0px; margin: 0px; border: none; }"));
+            }
+            candidate->setMinimumWidth(0);
+            candidate->setMaximumWidth(0);
+            candidate->resize(0, candidate->height());
+            candidate->hide();
+            break;
+        }
+    }
+
+    if (!foundInternalExtension)
+    {
+        if (m_internalToolbarExtensionButton)
+            m_internalToolbarExtensionButton->removeEventFilter(this);
+        m_internalToolbarExtensionButton = nullptr;
+    }
+
+    bool overflowActive = false;
+    if (m_filterToolbar->layout())
+    {
+        overflowActive = m_filterToolbar->layout()->minimumSize().width() > m_filterToolbar->width();
+    }
+
+    const QList<QWidget *> groups = {m_filtersGroup, m_paginationGroup, m_actionsGroup};
+    for (QWidget *group : groups)
+    {
+        if (!group)
+            continue;
+
+        if (!group->isVisible())
+        {
+            overflowActive = true;
+            break;
+        }
+
+        const QRect groupRect = group->geometry();
+        if (groupRect.isEmpty() ||
+            groupRect.left() < 0 ||
+            groupRect.top() < 0 ||
+            groupRect.right() > m_filterToolbar->rect().right() ||
+            groupRect.bottom() > m_filterToolbar->rect().bottom())
+        {
+            overflowActive = true;
+            break;
+        }
+    }
+
+    if (m_internalToolbarExtensionButton)
+        m_internalToolbarExtensionButton->hide();
+
+    m_toolbarOverflowButton->setProperty("overflowHintActive", overflowActive);
+    m_toolbarOverflowButton->style()->unpolish(m_toolbarOverflowButton);
+    m_toolbarOverflowButton->style()->polish(m_toolbarOverflowButton);
+    m_toolbarOverflowButton->update();
 }
 
 void SummaryWindow::setHistoryManager(HistoryManager *historyManager)
@@ -437,6 +569,7 @@ void SummaryWindow::toggleSelectionMode()
         if (m_filterToolbar->layout())
             m_filterToolbar->layout()->invalidate();
     }
+    refreshToolbarOverflowHint();
 
     // Reset Select All state when toggling mode
     m_allSelected = false;
@@ -505,15 +638,26 @@ void SummaryWindow::updateTheme(bool isDark)
         if (f.open(QIODevice::ReadOnly | QIODevice::Text))
         {
             const QString qss = QString::fromUtf8(f.readAll());
-            m_filterToolbar->setStyleSheet(qss);
+            if (m_filterToolbarShell)
+                m_filterToolbarShell->setStyleSheet(qss);
+            else
+                m_filterToolbar->setStyleSheet(qss);
         }
         else
         {
             // Fallback: keep it readable even if resource is missing.
             const QString bg = isDark ? "#1f1f1f" : "#f6f7f9";
             const QString border = isDark ? "#343434" : "#d8dde6";
-            m_filterToolbar->setStyleSheet(QString("QToolBar#archiveFilterToolbar{background:%1;border:none;border-bottom:1px solid %2;}").arg(bg, border));
+            const QString fallbackQss = QString(
+                                            "QToolBar#archiveFilterToolbar{background:%1;border:none;border-bottom:1px solid %2;}"
+                                            "QToolButton#archiveOverflowHandle{background:#2563eb;color:#eff6ff;border:1px solid #1d4ed8;}")
+                                            .arg(bg, border);
+            if (m_filterToolbarShell)
+                m_filterToolbarShell->setStyleSheet(fallbackQss);
+            else
+                m_filterToolbar->setStyleSheet(fallbackQss);
         }
+        refreshToolbarOverflowHint();
     }
 }
 
@@ -568,6 +712,9 @@ void SummaryWindow::updateLanguage()
     // Update search placeholder
     if (m_searchEdit)
         m_searchEdit->setPlaceholderText(TranslationManager::instance().tr("filter_search_placeholder"));
+
+    if (m_toolbarOverflowButton)
+        m_toolbarOverflowButton->setToolTip(overflowHandleToolTipText());
     
     // Refresh window title
     setWindowTitle(TranslationManager::instance().tr("summary_title"));

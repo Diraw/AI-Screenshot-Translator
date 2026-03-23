@@ -12,12 +12,15 @@
 #include <QShortcut>
 #include <QLineEdit>
 #include <QLabel>
+#include <QPoint>
+#include <QRect>
 
 #include "TranslationEntry.h"
 
 class EmbedWebView;
 class HistoryManager;
 class QTimer;
+class QToolButton;
 
 class SummaryWindow : public QWidget
 {
@@ -57,6 +60,7 @@ signals:
 
 protected:
     void closeEvent(QCloseEvent *event) override;
+    void showEvent(QShowEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     bool eventFilter(QObject *watched, QEvent *event) override;
 
@@ -75,6 +79,7 @@ private:
     qreal m_lastScrollY = 0.0;
 
     // Filter UI
+    QWidget *m_filterToolbarShell = nullptr;
     QToolBar *m_filterToolbar = nullptr;
     QWidget *m_filtersGroup = nullptr;
     QWidget *m_paginationGroup = nullptr;
@@ -106,6 +111,9 @@ private:
     QList<TranslationEntry> applyPagination(const QList<TranslationEntry> &entries);
     void loadAvailableTags();
     void updatePaginationUi();
+    void refreshToolbarOverflowHint();
+    void setToolbarOverflowCursorActive(bool active);
+    void fitWindowToToolbarContent();
 
     void refreshHtml(bool preserveScroll = true);
 
@@ -138,6 +146,13 @@ private:
     QAction *m_batchRemoveTagAction = nullptr;
     bool m_selectionMode = false;
     bool m_allSelected = false;
+    QToolButton *m_toolbarOverflowButton = nullptr;
+    QToolButton *m_internalToolbarExtensionButton = nullptr;
+    bool m_toolbarOverflowResizeArmed = false;
+    bool m_toolbarOverflowResizeDragging = false;
+    bool m_toolbarOverflowCursorActive = false;
+    QPoint m_toolbarOverflowResizePressPos;
+    QRect m_toolbarOverflowResizeStartGeometry;
 
 private slots:
     void toggleSelectionMode();
