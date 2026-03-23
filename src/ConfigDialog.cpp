@@ -798,6 +798,48 @@ void ConfigDialog::ensureRegularApiInteractionHooks()
 
 bool ConfigDialog::eventFilter(QObject *watched, QEvent *event)
 {
+    if (watched == m_pickAdvancedJsonFieldsBtn && event)
+    {
+        const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+        constexpr qint64 kRepeatWindowMs = 1800;
+        if (m_advancedJsonFieldsDoubleClickArmed &&
+            nowMs - m_advancedJsonFieldsLastDblClickMs > kRepeatWindowMs)
+        {
+            m_advancedJsonFieldsDoubleClickArmed = false;
+            m_advancedJsonFieldsLastDblClickMs = 0;
+        }
+
+        if (event->type() == QEvent::MouseButtonDblClick &&
+            (!m_hasLastAdvancedApiTestJson || m_lastAdvancedApiTestJson.isNull()))
+        {
+            if (m_advancedJsonFieldsDoubleClickArmed)
+            {
+                TranslationManager &tm = TranslationManager::instance();
+                const QString title = (tm.getLanguage() == QStringLiteral("zh"))
+                                          ? QStringLiteral("提示")
+                                          : tm.tr("test_title");
+                const QString message = (tm.getLanguage() == QStringLiteral("zh"))
+                                            ? QStringLiteral("请先测试 JSON 与 API 连通性")
+                                            : QStringLiteral("Please test JSON and API connectivity first.");
+                QMessageBox::information(this, title, message);
+                m_advancedJsonFieldsDoubleClickArmed = false;
+                m_advancedJsonFieldsLastDblClickMs = 0;
+            }
+            else
+            {
+                m_advancedJsonFieldsDoubleClickArmed = true;
+                m_advancedJsonFieldsLastDblClickMs = nowMs;
+            }
+            return true;
+        }
+
+        if (event->type() == QEvent::MouseButtonPress &&
+            (!m_hasLastAdvancedApiTestJson || m_lastAdvancedApiTestJson.isNull()))
+        {
+            return false;
+        }
+    }
+
     QObject *regularRoot = nullptr;
     if (watched && watched->property("regularApiControl").toBool())
     {
@@ -863,8 +905,7 @@ void ConfigDialog::updateAdvancedApiUiState()
 
     updateRegularApiTextGrayState(advancedOn);
 
-    if (m_pickAdvancedJsonFieldsBtn)
-        m_pickAdvancedJsonFieldsBtn->setEnabled(advancedOn && m_hasLastAdvancedApiTestJson);
+    updateAdvancedJsonFieldsButtonState();
     if (m_advancedDebugDisplayLabel)
         m_advancedDebugDisplayLabel->setEnabled(advancedOn);
     if (m_showAdvancedDebugInResultCheck)
@@ -873,6 +914,23 @@ void ConfigDialog::updateAdvancedApiUiState()
         m_showAdvancedDebugInArchiveCheck->setEnabled(advancedOn);
 
     updateAdvancedTemplateStatusLabel();
+}
+
+void ConfigDialog::updateAdvancedJsonFieldsButtonState()
+{
+    if (!m_pickAdvancedJsonFieldsBtn)
+        return;
+
+    const bool advancedOn = m_enableAdvancedApiCheck && m_enableAdvancedApiCheck->isChecked();
+    const bool buttonReady = advancedOn && m_hasLastAdvancedApiTestJson;
+    if (buttonReady)
+    {
+        m_advancedJsonFieldsDoubleClickArmed = false;
+        m_advancedJsonFieldsLastDblClickMs = 0;
+    }
+
+    m_pickAdvancedJsonFieldsBtn->setEnabled(true);
+    applyRegularApiTextColor(m_pickAdvancedJsonFieldsBtn, !buttonReady);
 }
 
 void ConfigDialog::updateAdvancedTemplateStatusLabel()
@@ -885,12 +943,14 @@ void ConfigDialog::updateAdvancedTemplateStatusLabel()
     if (m_advancedTemplateDetached)
     {
         m_advancedTemplateStatusLabel->setText(tm.tr("adv_template_status_detached"));
-        m_advancedTemplateStatusLabel->setStyleSheet("color: #f1c40f;");
+        m_advancedTemplateStatusLabel->setStyleSheet(
+            QString("color: #f1c40f; font-weight: %1;").arg(m_isDarkTheme ? 400 : 600));
     }
     else
     {
         m_advancedTemplateStatusLabel->setText(tm.tr("adv_template_status_follow_regular"));
-        m_advancedTemplateStatusLabel->setStyleSheet("color: #7fd38a;");
+        m_advancedTemplateStatusLabel->setStyleSheet(
+            QString("color: #7fd38a; font-weight: %1;").arg(m_isDarkTheme ? 400 : 600));
     }
 }
 
@@ -1134,8 +1194,7 @@ void ConfigDialog::onTestAdvancedApi()
         m_advancedApiResultEdit->clear();
     m_lastAdvancedApiTestJson = QJsonDocument();
     m_hasLastAdvancedApiTestJson = false;
-    if (m_pickAdvancedJsonFieldsBtn)
-        m_pickAdvancedJsonFieldsBtn->setEnabled(false);
+    updateAdvancedJsonFieldsButtonState();
 
     QJsonObject root;
     QString parseErr;
@@ -1315,21 +1374,16 @@ void ConfigDialog::onTestAdvancedApi()
                 m_hasLastAdvancedApiTestJson = true;
             }
         }
-        if (m_pickAdvancedJsonFieldsBtn)
-            m_pickAdvancedJsonFieldsBtn->setEnabled((m_enableAdvancedApiCheck && m_enableAdvancedApiCheck->isChecked()) && m_hasLastAdvancedApiTestJson);
+        updateAdvancedJsonFieldsButtonState();
         activeReply->deleteLater(); });
 }
 
 void ConfigDialog::onPickAdvancedJsonFields()
 {
-    TranslationManager &tm = TranslationManager::instance();
-
     if (!m_hasLastAdvancedApiTestJson || m_lastAdvancedApiTestJson.isNull())
-    {
-        if (m_advancedApiResultEdit)
-            m_advancedApiResultEdit->appendPlainText(QString("\n%1").arg(tm.tr("adv_json_no_test_response")));
         return;
-    }
+
+    TranslationManager &tm = TranslationManager::instance();
 
     QJsonObject templateRoot;
     QString parseErr;

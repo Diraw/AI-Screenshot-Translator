@@ -229,6 +229,7 @@ void ConfigDialog::setupAdvancedApiTab()
         } });
 
     connect(m_testAdvancedApiBtn, &QPushButton::clicked, this, &ConfigDialog::onTestAdvancedApi);
+    m_pickAdvancedJsonFieldsBtn->installEventFilter(this);
     connect(m_pickAdvancedJsonFieldsBtn, &QPushButton::clicked, this, &ConfigDialog::onPickAdvancedJsonFields);
 
     m_tabWidget->addTab(m_advancedApiTab, tm.tr("tab_advanced_api"));

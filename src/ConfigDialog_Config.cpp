@@ -282,6 +282,8 @@ void ConfigDialog::updateTheme(bool isDark)
     if (!m_generalFormLayout)
         return;
     updateRegularApiTextGrayState(m_enableAdvancedApiCheck && m_enableAdvancedApiCheck->isChecked());
+    updateAdvancedJsonFieldsButtonState();
+    updateAdvancedTemplateStatusLabel();
 }
 
 

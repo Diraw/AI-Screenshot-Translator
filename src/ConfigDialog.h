@@ -103,6 +103,7 @@ private:
     void applyRegularApiTextColor(QWidget *widget, bool advancedOn);
     void recordRegularApiClickAndMaybeWarn(QObject *clickedObject);
     void updateAdvancedTemplateStatusLabel();
+    void updateAdvancedJsonFieldsButtonState();
     void ensureAdvancedProviderOption(bool enabled);
     void resetAdvancedApiToDefault();
     void onTestAdvancedApi();
@@ -116,6 +117,8 @@ private:
     bool m_isDarkTheme = false;
     QObject *m_lastRegularApiClickObject = nullptr;
     qint64 m_lastRegularApiClickMs = 0;
+    qint64 m_advancedJsonFieldsLastDblClickMs = 0;
+    bool m_advancedJsonFieldsDoubleClickArmed = false;
     QHash<QWidget *, QPalette> m_regularApiOriginalPalettes;
 
     // Profile UI

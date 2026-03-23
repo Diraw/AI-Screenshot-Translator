@@ -570,6 +570,8 @@ void SummaryWindow::toggleSelectionMode()
             m_filterToolbar->layout()->invalidate();
     }
     refreshToolbarOverflowHint();
+    QTimer::singleShot(0, this, [this]()
+                       { refreshToolbarOverflowHint(); });
 
     // Reset Select All state when toggling mode
     m_allSelected = false;
