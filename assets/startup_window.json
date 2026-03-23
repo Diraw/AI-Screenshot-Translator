@@ -1,28 +1,28 @@
 {
   "windowTitle": "AI Screenshot Translator",
   "version": "1.0.4",
-  "versionFormat": "版本：{version}",
-  "copyright": "Copyright © 2026 Diraw",
-  "hotkeysText": "提示：\n• 截图快捷键：{shot}\n• 打开归档窗口：{view}\n",
-  "hint": "点击空白处 或 按任意键 关闭",
+  "versionFormat": "\u7248\u672c\uff1a{version}",
+  "copyright": "Copyright 2026 Diraw",
+  "hotkeysText": "\u63d0\u793a\uff1a\n- \u622a\u56fe\u5feb\u6377\u952e\uff1a{shot}\n- \u6253\u5f00\u5f52\u6863\u7a97\u53e3\uff1a{view}\n",
+  "hint": "\u70b9\u51fb\u7a7a\u767d\u5904 \u6216 \u6309\u4efb\u610f\u952e \u5173\u95ed",
   "buttons": {
-    "check": "检查更新",
-    "open": "打开发布页",
-    "privacy": "隐私协议",
-    "close": "关闭"
+    "check": "\u68c0\u67e5\u66f4\u65b0",
+    "open": "\u6253\u5f00\u53d1\u5e03\u9875",
+    "privacy": "\u9690\u79c1\u534f\u8bae",
+    "close": "\u5173\u95ed"
   },
   "privacyDialog": {
-    "title": "隐私协议",
-    "missingFile": "未找到隐私协议文件。"
+    "title": "\u9690\u79c1\u534f\u8bae",
+    "missingFile": "\u672a\u627e\u5230\u9690\u79c1\u534f\u8bae\u6587\u4ef6\u3002"
   },
   "update": {
-    "statusNotChecked": "更新：未检查",
-    "statusChecking": "更新：检查中...",
-    "statusNetworkError": "更新：检查失败（网络错误）",
-    "statusParseError": "更新：检查失败（解析错误）",
-    "statusNoVersion": "更新：未获取到版本信息",
-    "statusLatest": "更新：已是最新（{latest}）",
-    "statusNew": "更新：发现新版本（{latest}）"
+    "statusNotChecked": "\u66f4\u65b0\uff1a\u672a\u68c0\u67e5",
+    "statusChecking": "\u66f4\u65b0\uff1a\u68c0\u67e5\u4e2d...",
+    "statusNetworkError": "\u66f4\u65b0\uff1a\u68c0\u67e5\u5931\u8d25\uff08\u7f51\u7edc\u9519\u8bef\uff09",
+    "statusParseError": "\u66f4\u65b0\uff1a\u68c0\u67e5\u5931\u8d25\uff08\u89e3\u6790\u9519\u8bef\uff09",
+    "statusNoVersion": "\u66f4\u65b0\uff1a\u672a\u83b7\u53d6\u5230\u7248\u672c\u4fe1\u606f",
+    "statusLatest": "\u66f4\u65b0\uff1a\u5df2\u662f\u6700\u65b0\uff08{latest}\uff09",
+    "statusNew": "\u66f4\u65b0\uff1a\u53d1\u73b0\u65b0\u7248\u672c\uff08{latest}\uff09"
   },
   "repoApiLatest": "https://api.github.com/repos/Diraw/AI-Screenshot-Translator/releases/latest",
   "repoUrl": "https://github.com/Diraw/AI-Screenshot-Translator/releases"

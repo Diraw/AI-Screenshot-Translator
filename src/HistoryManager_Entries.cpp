@@ -323,70 +323,122 @@ QList<TranslationEntry> HistoryManager::queryEntries(const QDate &fromDate,
     if (!whereClauses.isEmpty())
         whereSql = " WHERE " + whereClauses.join(" AND ");
 
-    QString selectSql =
-        "SELECT id, timestamp, image_file, image_files_json, prompt, markdown, tags_json FROM entries" + whereSql +
-        " ORDER BY timestamp DESC";
-
-    QSqlQuery query(m_db);
-    if (!query.prepare(selectSql))
-        return entries;
-    for (const QVariant &v : bindValues)
-        query.addBindValue(v);
-    if (!query.exec())
-        return entries;
-
     const int effectiveOffset = qMax(0, offset);
     const int effectiveLimit = (limit > 0) ? qMax(1, limit) : std::numeric_limits<int>::max();
-    int visibleCount = 0;
-
-    while (query.next())
-    {
-        TranslationEntry entry;
-        entry.id = query.value(0).toString();
-        entry.timestamp = QDateTime::fromString(query.value(1).toString(), Qt::ISODate);
-        if (!entry.timestamp.isValid())
-            entry.timestamp = QDateTime::currentDateTime();
-
-        entry.localImagePaths = normalizedImagePaths(m_basePath, query.value(2).toString(), query.value(3).toString());
-        if (entry.localImagePaths.isEmpty())
-            continue;
-
-        bool missingImage = false;
-        for (const QString &imagePath : entry.localImagePaths)
-        {
-            if (!QFile::exists(imagePath))
-            {
-                missingImage = true;
-                break;
-            }
-        }
-        if (missingImage)
-            continue;
-
-        ++visibleCount;
-        if (visibleCount <= effectiveOffset)
-            continue;
-        if (entries.size() >= effectiveLimit)
-        {
-            if (!totalCount)
-                break;
-            continue;
-        }
-
-        entry.localImagePath = entry.localImagePaths.value(0);
-        entry.prompt = query.value(4).toString();
-        entry.translatedMarkdown = HistoryManager::normalizeMarkdown(query.value(5).toString());
-        entry.tags = parseTagsJson(query.value(6).toString());
-        entry.originalBase64.clear();
-        entry.originalBase64List.clear();
-
-        m_markdownCache[entry.id] = entry.translatedMarkdown;
-        m_entryCache[entry.id] = entry;
-        entries.append(entry);
-    }
+    QStringList staleIds;
 
     if (totalCount)
-        *totalCount = visibleCount;
+    {
+        QSqlQuery countQuery(m_db);
+        if (countQuery.prepare("SELECT COUNT(*) FROM entries" + whereSql))
+        {
+            for (const QVariant &v : bindValues)
+                countQuery.addBindValue(v);
+            if (countQuery.exec() && countQuery.next())
+                *totalCount = countQuery.value(0).toInt();
+        }
+    }
+
+    int dbOffset = effectiveOffset;
+    const int batchSize = (limit > 0) ? qMax(effectiveLimit, 100) : 200;
+
+    while (entries.size() < effectiveLimit)
+    {
+        QString selectSql =
+            "SELECT id, timestamp, image_file, image_files_json, prompt, markdown, tags_json FROM entries" + whereSql +
+            " ORDER BY timestamp DESC";
+        if (limit > 0)
+            selectSql += " LIMIT ? OFFSET ?";
+
+        QSqlQuery query(m_db);
+        if (!query.prepare(selectSql))
+            break;
+        for (const QVariant &v : bindValues)
+            query.addBindValue(v);
+        if (limit > 0)
+        {
+            query.addBindValue(batchSize);
+            query.addBindValue(dbOffset);
+        }
+        if (!query.exec())
+            break;
+
+        bool sawRows = false;
+        while (query.next())
+        {
+            sawRows = true;
+
+            TranslationEntry entry;
+            entry.id = query.value(0).toString();
+            entry.timestamp = QDateTime::fromString(query.value(1).toString(), Qt::ISODate);
+            if (!entry.timestamp.isValid())
+                entry.timestamp = QDateTime::currentDateTime();
+
+            entry.localImagePaths = normalizedImagePaths(m_basePath, query.value(2).toString(), query.value(3).toString());
+            if (entry.localImagePaths.isEmpty())
+            {
+                staleIds.append(entry.id);
+                continue;
+            }
+
+            bool missingImage = false;
+            for (const QString &imagePath : entry.localImagePaths)
+            {
+                if (!QFile::exists(imagePath))
+                {
+                    missingImage = true;
+                    break;
+                }
+            }
+            if (missingImage)
+            {
+                staleIds.append(entry.id);
+                continue;
+            }
+
+            entry.localImagePath = entry.localImagePaths.value(0);
+            entry.prompt = query.value(4).toString();
+            entry.translatedMarkdown = HistoryManager::normalizeMarkdown(query.value(5).toString());
+            entry.tags = parseTagsJson(query.value(6).toString());
+            entry.originalBase64.clear();
+            entry.originalBase64List.clear();
+
+            m_markdownCache[entry.id] = entry.translatedMarkdown;
+            m_entryCache[entry.id] = entry;
+            entries.append(entry);
+            if (entries.size() >= effectiveLimit)
+                break;
+        }
+
+        if (limit <= 0 || !sawRows)
+            break;
+        dbOffset += batchSize;
+    }
+
+    staleIds.removeDuplicates();
+    if (!staleIds.isEmpty())
+    {
+        QScopedValueRollback<bool> guard(m_ignoreNextChange, true);
+        QSqlQuery tx(m_db);
+        if (tx.exec("BEGIN IMMEDIATE TRANSACTION"))
+        {
+            QSqlQuery del(m_db);
+            del.prepare("DELETE FROM entries WHERE id = ?");
+            for (const QString &id : staleIds)
+            {
+                del.bindValue(0, id);
+                del.exec();
+                del.finish();
+            }
+            QSqlQuery commit(m_db);
+            if (!commit.exec("COMMIT"))
+            {
+                QSqlQuery rollback(m_db);
+                rollback.exec("ROLLBACK");
+            }
+        }
+    }
+
     return entries;
 }
 

@@ -99,7 +99,7 @@ add_executable(AI-Screenshot-Translator-Cpp ${PROJECT_SOURCES})
 target_compile_definitions(AI-Screenshot-Translator-Cpp PRIVATE
     APP_NAME="AI Screenshot Translator"
     APP_VERSION="${PROJECT_VERSION}"
-    APP_COPYRIGHT="Copyright © 2026 Diraw"
+    APP_COPYRIGHT="Copyright 2026 Diraw"
     APP_REPO_URL="https://github.com/Diraw/AI-Screenshot-Translator"
 )
 
@@ -129,7 +129,7 @@ endif()
 # Handle Windows subsystem (GUI vs Console)
 if(WIN32)
     set_target_properties(AI-Screenshot-Translator-Cpp PROPERTIES WIN32_EXECUTABLE ON)
-    
+
     # Copy WebView2Loader.dll to output directory
     add_custom_command(TARGET AI-Screenshot-Translator-Cpp POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different

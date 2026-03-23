@@ -211,7 +211,6 @@ static bool advancedTemplateContainsMultiImageTokens(const QJsonObject &root)
 ApiClient::ApiClient(QObject *parent)
     : QObject(parent)
 {
-    m_manager = new QNetworkAccessManager(this);
 }
 
 ApiClient::~ApiClient()
@@ -233,6 +232,30 @@ ApiClient::RequestSettings ApiClient::currentRequestSettings() const
     return settings;
 }
 
+QNetworkAccessManager *ApiClient::createRequestManager(const RequestSettings &settings) const
+{
+    auto *manager = new QNetworkAccessManager(const_cast<ApiClient *>(this));
+    if (settings.useProxy && !settings.proxyUrl.isEmpty())
+    {
+        const QUrl url = QUrl::fromUserInput(settings.proxyUrl);
+        QNetworkProxy proxy;
+        const QString scheme = url.scheme().toLower();
+        proxy.setType((scheme == "socks5" || scheme == "socks") ? QNetworkProxy::Socks5Proxy : QNetworkProxy::HttpProxy);
+        proxy.setHostName(url.host());
+        proxy.setPort(url.port(8080));
+        if (!url.userName().isEmpty())
+            proxy.setUser(url.userName());
+        if (!url.password().isEmpty())
+            proxy.setPassword(url.password());
+        manager->setProxy(proxy);
+    }
+    else
+    {
+        manager->setProxy(QNetworkProxy::DefaultProxy);
+    }
+    return manager;
+}
+
 void ApiClient::configure(const QString &apiKey, const QString &baseUrl, const QString &modelName,
                           ApiProvider provider, bool useProxy, const QString &proxyUrl, const QString &endpointPath,
                           bool useAdvancedApi, const QString &advancedApiTemplate)
@@ -248,27 +271,9 @@ void ApiClient::configure(const QString &apiKey, const QString &baseUrl, const Q
     m_advancedApiTemplate = advancedApiTemplate;
 
     if (m_useProxy && !m_proxyUrl.isEmpty())
-    {
-        QUrl url(proxyUrl);
-        QNetworkProxy proxy;
-        const QString scheme = url.scheme().toLower();
-        proxy.setType((scheme == "socks5" || scheme == "socks") ? QNetworkProxy::Socks5Proxy : QNetworkProxy::HttpProxy);
-        proxy.setHostName(url.host());
-        proxy.setPort(url.port(8080));
-        if (!url.userName().isEmpty())
-            proxy.setUser(url.userName());
-        if (!url.password().isEmpty())
-            proxy.setPassword(url.password());
-
-        m_manager->setProxy(proxy);
-        qDebug() << "Proxy set to:" << proxyUrl
-                 << "Type:" << (proxy.type() == QNetworkProxy::Socks5Proxy ? "Socks5" : "Http");
-    }
+        qDebug() << "Proxy configured for future requests:" << proxyUrl;
     else
-    {
-        m_manager->setProxy(QNetworkProxy::DefaultProxy);
-        qDebug() << "Proxy set to Default (System settings)";
-    }
+        qDebug() << "Requests will use the system proxy/default network settings";
 }
 
 void ApiClient::processImage(const QByteArray &base64Image, const QString &promptText, const QString &requestId)
@@ -336,7 +341,8 @@ void ApiClient::processImagesInternal(const QList<QByteArray> &base64Images, con
 
     qDebug() << "ApiClient: Sending POST request to" << request.url().toString();
 
-    QNetworkReply *reply = m_manager->post(request, data);
+    QNetworkAccessManager *manager = createRequestManager(settings);
+    QNetworkReply *reply = manager->post(request, data);
     reply->setProperty("originalBase64", images.first());
     reply->setProperty("originalBase64List", toStringList(images));
     reply->setProperty("originalPrompt", promptText);
@@ -382,8 +388,12 @@ void ApiClient::onReplyFinished(QNetworkReply *reply, const RequestSettings &set
 {
     if (QTimer *timer = reply->findChild<QTimer *>(QStringLiteral("requestTimeoutTimer")))
         timer->stop();
-
-    reply->deleteLater();
+    const auto cleanupReply = [reply]()
+    {
+        if (QNetworkAccessManager *manager = reply->manager())
+            manager->deleteLater();
+        reply->deleteLater();
+    };
 
     const QString requestId = reply->property("requestId").toString();
     const QByteArray originalBase64 = reply->property("originalBase64").toByteArray();
@@ -397,6 +407,7 @@ void ApiClient::onReplyFinished(QNetworkReply *reply, const RequestSettings &set
         if (requestTimedOut)
         {
             emit error(QString("Request timed out after %1 seconds.").arg(kRequestTimeoutMs / 1000), requestId);
+            cleanupReply();
             return;
         }
 
@@ -412,6 +423,7 @@ void ApiClient::onReplyFinished(QNetworkReply *reply, const RequestSettings &set
                 for (const QString &image : originalBase64List)
                     images.append(image.toLatin1());
                 processImagesInternal(images, originalPrompt, requestId, retryCount + 1, settings);
+                cleanupReply();
                 return;
             }
         }
@@ -420,6 +432,7 @@ void ApiClient::onReplyFinished(QNetworkReply *reply, const RequestSettings &set
         const QByteArray response = reply->readAll();
         qWarning() << "API Error:" << err << "Response:" << response;
         emit error(QString("Network Error: %1").arg(err), requestId);
+        cleanupReply();
         return;
     }
 
@@ -431,6 +444,7 @@ void ApiClient::onReplyFinished(QNetworkReply *reply, const RequestSettings &set
     {
         qWarning() << "ApiClient: Failed to parse JSON response";
         emit error("Failed to parse API response as JSON", requestId);
+        cleanupReply();
         return;
     }
 
@@ -440,6 +454,7 @@ void ApiClient::onReplyFinished(QNetworkReply *reply, const RequestSettings &set
         const QJsonObject errObj = root["error"].toObject();
         const QString errMsg = errObj["message"].toString();
         emit error(QString("API Error: %1").arg(errMsg), requestId);
+        cleanupReply();
         return;
     }
 
@@ -475,6 +490,7 @@ void ApiClient::onReplyFinished(QNetworkReply *reply, const RequestSettings &set
     {
         qWarning() << "ApiClient: Parsed content is empty. Check parser logic.";
         emit error("Failed to extract content from API response", requestId);
+        cleanupReply();
         return;
     }
 
@@ -486,6 +502,7 @@ void ApiClient::onReplyFinished(QNetworkReply *reply, const RequestSettings &set
     }
 
     emit success(content, QString::fromUtf8(originalBase64), originalPrompt, requestId);
+    cleanupReply();
 }
 
 bool ApiClient::buildAdvancedRequest(const RequestSettings &settings, const QList<QByteArray> &base64Images, const QString &promptText,

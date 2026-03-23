@@ -52,7 +52,6 @@ private:
         QString advancedApiTemplate;
     };
 
-    QNetworkAccessManager *m_manager;
     QString m_apiKey;
     QString m_baseUrl;
     QString m_endpointPath;
@@ -67,6 +66,7 @@ private:
     static constexpr int kMaxNetworkRetries = 1;
 
     RequestSettings currentRequestSettings() const;
+    QNetworkAccessManager *createRequestManager(const RequestSettings &settings) const;
 
     // Provider-specific request formatters
     QByteArray formatOpenAIRequest(const RequestSettings &settings, const QList<QByteArray> &base64Images,
