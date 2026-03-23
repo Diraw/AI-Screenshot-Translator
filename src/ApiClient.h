@@ -38,10 +38,20 @@ signals:
     void success(const QString &text, const QString &originalBase64, const QString &originalPrompt, const QString &requestId);
     void error(const QString &errorMessage, const QString &requestId);
 
-private slots:
-    void onReplyFinished(QNetworkReply *reply);
-
 private:
+    struct RequestSettings
+    {
+        QString apiKey;
+        QString baseUrl;
+        QString endpointPath;
+        QString modelName;
+        ApiProvider provider = ApiProvider::OpenAI;
+        bool useProxy = false;
+        QString proxyUrl;
+        bool useAdvancedApi = false;
+        QString advancedApiTemplate;
+    };
+
     QNetworkAccessManager *m_manager;
     QString m_apiKey;
     QString m_baseUrl;
@@ -56,13 +66,15 @@ private:
     static constexpr int kRequestTimeoutMs = 30000;
     static constexpr int kMaxNetworkRetries = 1;
 
+    RequestSettings currentRequestSettings() const;
+
     // Provider-specific request formatters
-    QByteArray formatOpenAIRequest(const QByteArray &base64Image, const QString &prompt);
-    QByteArray formatOpenAIRequest(const QList<QByteArray> &base64Images, const QString &prompt);
+    QByteArray formatOpenAIRequest(const RequestSettings &settings, const QList<QByteArray> &base64Images,
+                                   const QString &prompt);
     QByteArray formatGeminiRequest(const QByteArray &base64Image, const QString &prompt);
     QByteArray formatGeminiRequest(const QList<QByteArray> &base64Images, const QString &prompt);
-    QByteArray formatClaudeRequest(const QByteArray &base64Image, const QString &prompt);
-    QByteArray formatClaudeRequest(const QList<QByteArray> &base64Images, const QString &prompt);
+    QByteArray formatClaudeRequest(const RequestSettings &settings, const QList<QByteArray> &base64Images,
+                                   const QString &prompt);
 
     // Provider-specific response parsers
     QString parseOpenAIResponse(const QJsonObject &root);
@@ -70,13 +82,15 @@ private:
     QString parseClaudeResponse(const QJsonObject &root);
 
     // Provider-specific endpoint and header helpers
-    QString getEndpoint() const;
-    void setProviderHeaders(QNetworkRequest &request) const;
+    QString getEndpoint(const RequestSettings &settings) const;
+    void setProviderHeaders(QNetworkRequest &request, const RequestSettings &settings) const;
     void processImagesInternal(const QList<QByteArray> &base64Images, const QString &promptText,
-                               const QString &requestId, int retryCount);
-    bool buildAdvancedRequest(const QList<QByteArray> &base64Images, const QString &promptText,
+                               const QString &requestId, int retryCount, const RequestSettings &settings);
+    bool buildAdvancedRequest(const RequestSettings &settings, const QList<QByteArray> &base64Images,
+                              const QString &promptText,
                               QNetworkRequest &request, QByteArray &payload,
                               QString &outError) const;
+    void onReplyFinished(QNetworkReply *reply, const RequestSettings &settings);
     QJsonValue applyTemplateTokens(const QJsonValue &value, const QHash<QString, QString> &tokens) const;
     QString extractGenericText(const QJsonObject &root) const;
 };

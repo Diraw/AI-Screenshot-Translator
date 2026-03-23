@@ -218,6 +218,21 @@ ApiClient::~ApiClient()
 {
 }
 
+ApiClient::RequestSettings ApiClient::currentRequestSettings() const
+{
+    RequestSettings settings;
+    settings.apiKey = m_apiKey;
+    settings.baseUrl = m_baseUrl;
+    settings.endpointPath = m_endpointPath;
+    settings.modelName = m_modelName;
+    settings.provider = m_provider;
+    settings.useProxy = m_useProxy;
+    settings.proxyUrl = m_proxyUrl;
+    settings.useAdvancedApi = m_useAdvancedApi;
+    settings.advancedApiTemplate = m_advancedApiTemplate;
+    return settings;
+}
+
 void ApiClient::configure(const QString &apiKey, const QString &baseUrl, const QString &modelName,
                           ApiProvider provider, bool useProxy, const QString &proxyUrl, const QString &endpointPath,
                           bool useAdvancedApi, const QString &advancedApiTemplate)
@@ -263,11 +278,11 @@ void ApiClient::processImage(const QByteArray &base64Image, const QString &promp
 
 void ApiClient::processImages(const QList<QByteArray> &base64Images, const QString &promptText, const QString &requestId)
 {
-    processImagesInternal(base64Images, promptText, requestId, 0);
+    processImagesInternal(base64Images, promptText, requestId, 0, currentRequestSettings());
 }
 
 void ApiClient::processImagesInternal(const QList<QByteArray> &base64Images, const QString &promptText,
-                                      const QString &requestId, int retryCount)
+                                      const QString &requestId, int retryCount, const RequestSettings &settings)
 {
     const QList<QByteArray> images = normalizedImages(base64Images);
     if (images.isEmpty())
@@ -279,42 +294,42 @@ void ApiClient::processImagesInternal(const QList<QByteArray> &base64Images, con
     QNetworkRequest request((QUrl()));
     QByteArray data;
 
-    if (m_useAdvancedApi)
+    if (settings.useAdvancedApi)
     {
         QString advancedErr;
-        if (!buildAdvancedRequest(images, promptText, request, data, advancedErr))
+        if (!buildAdvancedRequest(settings, images, promptText, request, data, advancedErr))
         {
             emit error(QString("Advanced API Error: %1").arg(advancedErr), requestId);
             return;
         }
     }
 
-    if ((m_apiKey.isEmpty() || m_baseUrl.isEmpty() || m_modelName.isEmpty()) && !m_useAdvancedApi)
+    if ((settings.apiKey.isEmpty() || settings.baseUrl.isEmpty() || settings.modelName.isEmpty()) && !settings.useAdvancedApi)
     {
         emit error("API Configuration invalid. Please check settings.", requestId);
         return;
     }
 
-    if (!m_useAdvancedApi)
+    if (!settings.useAdvancedApi)
     {
-        QString endpoint = getEndpoint();
-        QUrl url = joinBaseAndEndpoint(m_baseUrl, endpoint);
-        if (m_provider == ApiProvider::Gemini)
-            url.setQuery(QString("key=%1").arg(m_apiKey));
+        const QString endpoint = getEndpoint(settings);
+        QUrl url = joinBaseAndEndpoint(settings.baseUrl, endpoint);
+        if (settings.provider == ApiProvider::Gemini)
+            url.setQuery(QString("key=%1").arg(settings.apiKey));
 
         request = QNetworkRequest(url);
-        setProviderHeaders(request);
+        setProviderHeaders(request, settings);
 
-        switch (m_provider)
+        switch (settings.provider)
         {
         case ApiProvider::OpenAI:
-            data = formatOpenAIRequest(images, promptText);
+            data = formatOpenAIRequest(settings, images, promptText);
             break;
         case ApiProvider::Gemini:
             data = formatGeminiRequest(images, promptText);
             break;
         case ApiProvider::Claude:
-            data = formatClaudeRequest(images, promptText);
+            data = formatClaudeRequest(settings, images, promptText);
             break;
         }
     }
@@ -346,10 +361,10 @@ void ApiClient::processImagesInternal(const QList<QByteArray> &base64Images, con
             });
     timeoutTimer->start();
 
-    connect(reply, &QNetworkReply::finished, this, [this, reply]()
+    connect(reply, &QNetworkReply::finished, this, [this, reply, settings]()
             {
                 qDebug() << "ApiClient: Reply finished. Error:" << reply->error();
-                onReplyFinished(reply);
+                onReplyFinished(reply, settings);
             });
 
     connect(reply, &QNetworkReply::errorOccurred, this, [reply](QNetworkReply::NetworkError code)
@@ -363,7 +378,7 @@ void ApiClient::processImagesInternal(const QList<QByteArray> &base64Images, con
             });
 }
 
-void ApiClient::onReplyFinished(QNetworkReply *reply)
+void ApiClient::onReplyFinished(QNetworkReply *reply, const RequestSettings &settings)
 {
     if (QTimer *timer = reply->findChild<QTimer *>(QStringLiteral("requestTimeoutTimer")))
         timer->stop();
@@ -396,7 +411,7 @@ void ApiClient::onReplyFinished(QNetworkReply *reply)
                 images.reserve(originalBase64List.size());
                 for (const QString &image : originalBase64List)
                     images.append(image.toLatin1());
-                processImagesInternal(images, originalPrompt, requestId, retryCount + 1);
+                processImagesInternal(images, originalPrompt, requestId, retryCount + 1, settings);
                 return;
             }
         }
@@ -429,7 +444,7 @@ void ApiClient::onReplyFinished(QNetworkReply *reply)
     }
 
     QString content;
-    if (m_useAdvancedApi)
+    if (settings.useAdvancedApi)
     {
         content = parseOpenAIResponse(root);
         if (content.isEmpty())
@@ -441,7 +456,7 @@ void ApiClient::onReplyFinished(QNetworkReply *reply)
     }
     else
     {
-        switch (m_provider)
+        switch (settings.provider)
         {
         case ApiProvider::OpenAI:
             content = parseOpenAIResponse(root);
@@ -463,9 +478,9 @@ void ApiClient::onReplyFinished(QNetworkReply *reply)
         return;
     }
 
-    if (m_useAdvancedApi)
+    if (settings.useAdvancedApi)
     {
-        const QString debugHeader = buildAdvancedDebugHeader(root, m_advancedApiTemplate);
+        const QString debugHeader = buildAdvancedDebugHeader(root, settings.advancedApiTemplate);
         if (!debugHeader.isEmpty())
             content.prepend(debugHeader);
     }
@@ -473,13 +488,13 @@ void ApiClient::onReplyFinished(QNetworkReply *reply)
     emit success(content, QString::fromUtf8(originalBase64), originalPrompt, requestId);
 }
 
-bool ApiClient::buildAdvancedRequest(const QList<QByteArray> &base64Images, const QString &promptText,
+bool ApiClient::buildAdvancedRequest(const RequestSettings &settings, const QList<QByteArray> &base64Images, const QString &promptText,
                                      QNetworkRequest &request, QByteArray &payload, QString &outError) const
 {
     outError.clear();
 
     QJsonParseError err;
-    const QJsonDocument doc = QJsonDocument::fromJson(m_advancedApiTemplate.toUtf8(), &err);
+    const QJsonDocument doc = QJsonDocument::fromJson(settings.advancedApiTemplate.toUtf8(), &err);
     if (doc.isNull() || !doc.isObject() || err.error != QJsonParseError::NoError)
     {
         outError = QString("Template JSON parse failed: %1").arg(err.errorString());
@@ -487,11 +502,24 @@ bool ApiClient::buildAdvancedRequest(const QList<QByteArray> &base64Images, cons
     }
 
     const QJsonObject root = doc.object();
-    const QString apiKey = root.value("api_key").toString(m_apiKey).trimmed();
-    const QString baseUrl = root.value("base_url").toString(m_baseUrl).trimmed();
-    const QString endpoint = root.value("endpoint").toString(m_endpointPath).trimmed();
-    const QString model = root.value("model").toString(m_modelName).trimmed();
-    const QString provider = root.value("provider").toString("openai").trimmed().toLower();
+    const QString apiKey = root.value("api_key").toString(settings.apiKey).trimmed();
+    const QString baseUrl = root.value("base_url").toString(settings.baseUrl).trimmed();
+    const QString endpoint = root.value("endpoint").toString(settings.endpointPath).trimmed();
+    QString provider;
+    switch (settings.provider)
+    {
+    case ApiProvider::OpenAI:
+        provider = "openai";
+        break;
+    case ApiProvider::Gemini:
+        provider = "gemini";
+        break;
+    case ApiProvider::Claude:
+        provider = "claude";
+        break;
+    }
+    provider = root.value("provider").toString(provider).trimmed().toLower();
+    const QString model = root.value("model").toString(settings.modelName).trimmed();
     const QString prompt = root.value("prompt").toString(promptText);
     const double temperature = root.value("temperature").toDouble(0.2);
     const double topP = root.value("top_p").toDouble(1.0);
@@ -735,12 +763,8 @@ QString ApiClient::extractGenericText(const QJsonObject &root) const
     return QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact));
 }
 
-QByteArray ApiClient::formatOpenAIRequest(const QByteArray &base64Image, const QString &prompt)
-{
-    return formatOpenAIRequest(QList<QByteArray>{base64Image}, prompt);
-}
-
-QByteArray ApiClient::formatOpenAIRequest(const QList<QByteArray> &base64Images, const QString &prompt)
+QByteArray ApiClient::formatOpenAIRequest(const RequestSettings &settings, const QList<QByteArray> &base64Images,
+                                          const QString &prompt)
 {
     QJsonObject systemMessage;
     systemMessage["role"] = "system";
@@ -771,7 +795,7 @@ QByteArray ApiClient::formatOpenAIRequest(const QList<QByteArray> &base64Images,
     messages.append(userMessage);
 
     QJsonObject payload;
-    payload["model"] = m_modelName;
+    payload["model"] = settings.modelName;
     payload["messages"] = messages;
     return QJsonDocument(payload).toJson();
 }
@@ -807,12 +831,8 @@ QByteArray ApiClient::formatGeminiRequest(const QList<QByteArray> &base64Images,
     return QJsonDocument(payload).toJson();
 }
 
-QByteArray ApiClient::formatClaudeRequest(const QByteArray &base64Image, const QString &prompt)
-{
-    return formatClaudeRequest(QList<QByteArray>{base64Image}, prompt);
-}
-
-QByteArray ApiClient::formatClaudeRequest(const QList<QByteArray> &base64Images, const QString &prompt)
+QByteArray ApiClient::formatClaudeRequest(const RequestSettings &settings, const QList<QByteArray> &base64Images,
+                                          const QString &prompt)
 {
     QJsonArray content;
     for (const QByteArray &image : base64Images)
@@ -838,7 +858,7 @@ QByteArray ApiClient::formatClaudeRequest(const QList<QByteArray> &base64Images,
     userMessage["content"] = content;
 
     QJsonObject payload;
-    payload["model"] = m_modelName;
+    payload["model"] = settings.modelName;
     payload["max_tokens"] = 1024;
     payload["messages"] = QJsonArray{userMessage};
     return QJsonDocument(payload).toJson();
@@ -918,36 +938,36 @@ QString ApiClient::parseClaudeResponse(const QJsonObject &root)
     return {};
 }
 
-QString ApiClient::getEndpoint() const
+QString ApiClient::getEndpoint(const RequestSettings &settings) const
 {
-    if (!m_endpointPath.trimmed().isEmpty())
-        return m_endpointPath;
+    if (!settings.endpointPath.trimmed().isEmpty())
+        return settings.endpointPath;
 
-    switch (m_provider)
+    switch (settings.provider)
     {
     case ApiProvider::OpenAI:
         return "/v1/chat/completions";
     case ApiProvider::Gemini:
-        return QString("/v1beta/models/%1:generateContent").arg(m_modelName);
+        return QString("/v1beta/models/%1:generateContent").arg(settings.modelName);
     case ApiProvider::Claude:
         return "/v1/messages";
     }
     return "/v1/chat/completions";
 }
 
-void ApiClient::setProviderHeaders(QNetworkRequest &request) const
+void ApiClient::setProviderHeaders(QNetworkRequest &request, const RequestSettings &settings) const
 {
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setRawHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
-    switch (m_provider)
+    switch (settings.provider)
     {
     case ApiProvider::OpenAI:
-        if (!m_apiKey.isEmpty())
-            request.setRawHeader("Authorization", "Bearer " + m_apiKey.toUtf8());
+        if (!settings.apiKey.isEmpty())
+            request.setRawHeader("Authorization", "Bearer " + settings.apiKey.toUtf8());
         break;
     case ApiProvider::Claude:
-        request.setRawHeader("x-api-key", m_apiKey.toUtf8());
+        request.setRawHeader("x-api-key", settings.apiKey.toUtf8());
         request.setRawHeader("anthropic-version", "2023-06-01");
         break;
     case ApiProvider::Gemini:

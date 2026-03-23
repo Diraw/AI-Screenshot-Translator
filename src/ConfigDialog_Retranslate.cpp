@@ -174,13 +174,17 @@ void ConfigDialog::retranslateUi()
         m_tabWidget->setTabText(m_tabWidget->indexOf(m_otherTab), tm.tr("tab_other"));
 
     if (m_advancedApiTab)
-        m_tabWidget->setTabText(m_tabWidget->indexOf(m_advancedApiTab), QStringLiteral("高级 API"));
+        m_tabWidget->setTabText(m_tabWidget->indexOf(m_advancedApiTab), tm.tr("tab_advanced_api"));
     if (m_enableAdvancedApiCheck)
-        m_enableAdvancedApiCheck->setText(QStringLiteral("开启高级 API 模式"));
+        m_enableAdvancedApiCheck->setText(tm.tr("chk_enable_advanced_api"));
     if (m_deleteAdvancedApiConfigBtn)
-        m_deleteAdvancedApiConfigBtn->setText(QStringLiteral("删除高级 API 配置"));
+        m_deleteAdvancedApiConfigBtn->setText(tm.tr("btn_delete_advanced_api_config"));
     if (m_testAdvancedApiBtn)
-        m_testAdvancedApiBtn->setText(QStringLiteral("测试 JSON 与 API 连通性"));
+        m_testAdvancedApiBtn->setText(tm.tr("btn_test_advanced_api"));
+    if (m_advancedApiTemplateEdit)
+        m_advancedApiTemplateEdit->setPlaceholderText(tm.tr("ph_advanced_api_template"));
+    if (m_advancedApiResultEdit)
+        m_advancedApiResultEdit->setPlaceholderText(tm.tr("ph_advanced_api_result"));
     if (m_pickAdvancedJsonFieldsBtn)
         m_pickAdvancedJsonFieldsBtn->setText(tm.tr("btn_select_json_fields"));
     if (m_advancedDebugDisplayLabel)
@@ -250,3 +254,4 @@ void ConfigDialog::retranslateUi()
 
     applyGlobalHotkeyConflictIndicators(false);
 }
+

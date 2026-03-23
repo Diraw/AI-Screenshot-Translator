@@ -4,7 +4,7 @@
 [Setup]
 ; 程序基本信息
 AppName={#MyAppName}
-AppVersion=1.0.3
+AppVersion=1.0.4
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 SetupIconFile={#SourcePath}\assets\icon.ico

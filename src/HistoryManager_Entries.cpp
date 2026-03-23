@@ -16,6 +16,7 @@
 #include <QTime>
 #include <QVariant>
 #include <algorithm>
+#include <limits>
 
 namespace
 {
@@ -322,36 +323,21 @@ QList<TranslationEntry> HistoryManager::queryEntries(const QDate &fromDate,
     if (!whereClauses.isEmpty())
         whereSql = " WHERE " + whereClauses.join(" AND ");
 
-    if (totalCount)
-    {
-        QSqlQuery countQuery(m_db);
-        if (countQuery.prepare("SELECT COUNT(*) FROM entries" + whereSql))
-        {
-            for (const QVariant &v : bindValues)
-                countQuery.addBindValue(v);
-            if (countQuery.exec() && countQuery.next())
-                *totalCount = countQuery.value(0).toInt();
-        }
-    }
-
     QString selectSql =
         "SELECT id, timestamp, image_file, image_files_json, prompt, markdown, tags_json FROM entries" + whereSql +
         " ORDER BY timestamp DESC";
-    if (limit > 0)
-        selectSql += " LIMIT ? OFFSET ?";
 
     QSqlQuery query(m_db);
     if (!query.prepare(selectSql))
         return entries;
     for (const QVariant &v : bindValues)
         query.addBindValue(v);
-    if (limit > 0)
-    {
-        query.addBindValue(qMax(1, limit));
-        query.addBindValue(qMax(0, offset));
-    }
     if (!query.exec())
         return entries;
+
+    const int effectiveOffset = qMax(0, offset);
+    const int effectiveLimit = (limit > 0) ? qMax(1, limit) : std::numeric_limits<int>::max();
+    int visibleCount = 0;
 
     while (query.next())
     {
@@ -377,6 +363,16 @@ QList<TranslationEntry> HistoryManager::queryEntries(const QDate &fromDate,
         if (missingImage)
             continue;
 
+        ++visibleCount;
+        if (visibleCount <= effectiveOffset)
+            continue;
+        if (entries.size() >= effectiveLimit)
+        {
+            if (!totalCount)
+                break;
+            continue;
+        }
+
         entry.localImagePath = entry.localImagePaths.value(0);
         entry.prompt = query.value(4).toString();
         entry.translatedMarkdown = HistoryManager::normalizeMarkdown(query.value(5).toString());
@@ -389,8 +385,8 @@ QList<TranslationEntry> HistoryManager::queryEntries(const QDate &fromDate,
         entries.append(entry);
     }
 
-    if (totalCount && *totalCount == 0 && limit <= 0)
-        *totalCount = entries.size();
+    if (totalCount)
+        *totalCount = visibleCount;
     return entries;
 }
 

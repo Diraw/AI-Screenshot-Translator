@@ -880,14 +880,16 @@ void ConfigDialog::updateAdvancedTemplateStatusLabel()
     if (!m_advancedTemplateStatusLabel)
         return;
 
+    TranslationManager &tm = TranslationManager::instance();
+
     if (m_advancedTemplateDetached)
     {
-        m_advancedTemplateStatusLabel->setText("已独立");
+        m_advancedTemplateStatusLabel->setText(tm.tr("adv_template_status_detached"));
         m_advancedTemplateStatusLabel->setStyleSheet("color: #f1c40f;");
     }
     else
     {
-        m_advancedTemplateStatusLabel->setText("跟随常规");
+        m_advancedTemplateStatusLabel->setText(tm.tr("adv_template_status_follow_regular"));
         m_advancedTemplateStatusLabel->setStyleSheet("color: #7fd38a;");
     }
 }
@@ -1586,3 +1588,6 @@ void ConfigDialog::applyGlobalHotkeyConflictIndicators(bool focusConflicts)
         targetEdit->setFocus(Qt::OtherFocusReason);
         targetEdit->selectAll(); });
 }
+
+
+

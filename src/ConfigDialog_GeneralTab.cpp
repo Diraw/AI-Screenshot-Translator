@@ -158,12 +158,13 @@ void ConfigDialog::setupGeneralTab()
 
 void ConfigDialog::setupAdvancedApiTab()
 {
+    TranslationManager &tm = TranslationManager::instance();
     m_advancedApiTab = new QWidget();
     auto *rootLayout = new QVBoxLayout(m_advancedApiTab);
 
     auto *topRow = new QHBoxLayout();
-    m_enableAdvancedApiCheck = new QCheckBox("开启高级 API 模式", this);
-    m_deleteAdvancedApiConfigBtn = new QPushButton("删除高级 API 配置", this);
+    m_enableAdvancedApiCheck = new QCheckBox(tm.tr("chk_enable_advanced_api"), this);
+    m_deleteAdvancedApiConfigBtn = new QPushButton(tm.tr("btn_delete_advanced_api_config"), this);
     m_advancedTemplateStatusLabel = new QLabel(this);
     topRow->addWidget(m_enableAdvancedApiCheck, 0);
     topRow->addWidget(m_deleteAdvancedApiConfigBtn, 0);
@@ -173,14 +174,13 @@ void ConfigDialog::setupAdvancedApiTab()
     rootLayout->addLayout(topRow);
 
     m_advancedApiTemplateEdit = new QPlainTextEdit(this);
-    m_advancedApiTemplateEdit->setPlaceholderText("完整请求体模板（JSON）");
+    m_advancedApiTemplateEdit->setPlaceholderText(tm.tr("ph_advanced_api_template"));
     m_advancedApiTemplateEdit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_advancedApiTemplateEdit->setMinimumHeight(100);
     rootLayout->addWidget(m_advancedApiTemplateEdit, 1);
 
     auto *testRow = new QHBoxLayout();
-    TranslationManager &tm = TranslationManager::instance();
-    m_testAdvancedApiBtn = new QPushButton("测试 JSON 与 API 连通性", this);
+    m_testAdvancedApiBtn = new QPushButton(tm.tr("btn_test_advanced_api"), this);
     m_pickAdvancedJsonFieldsBtn = new QPushButton(tm.tr("btn_select_json_fields"), this);
     m_showAdvancedDebugInResultCheck = new QCheckBox(tm.tr("chk_adv_debug_result_short"), this);
     m_showAdvancedDebugInArchiveCheck = new QCheckBox(tm.tr("chk_adv_debug_archive_short"), this);
@@ -200,7 +200,7 @@ void ConfigDialog::setupAdvancedApiTab()
 
     m_advancedApiResultEdit = new QPlainTextEdit(this);
     m_advancedApiResultEdit->setReadOnly(true);
-    m_advancedApiResultEdit->setPlaceholderText("测试结果输出区域");
+    m_advancedApiResultEdit->setPlaceholderText(tm.tr("ph_advanced_api_result"));
     m_advancedApiResultEdit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_advancedApiResultEdit->setMinimumHeight(110);
     rootLayout->addWidget(m_advancedApiResultEdit, 1);
@@ -231,5 +231,9 @@ void ConfigDialog::setupAdvancedApiTab()
     connect(m_testAdvancedApiBtn, &QPushButton::clicked, this, &ConfigDialog::onTestAdvancedApi);
     connect(m_pickAdvancedJsonFieldsBtn, &QPushButton::clicked, this, &ConfigDialog::onPickAdvancedJsonFields);
 
-    m_tabWidget->addTab(m_advancedApiTab, "高级 API");
+    m_tabWidget->addTab(m_advancedApiTab, tm.tr("tab_advanced_api"));
 }
+
+
+
+

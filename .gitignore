@@ -18,7 +18,9 @@
 *.idb
 *.tmp
 *.env
+自定义术语表。
 
+比如“Liouville”固定不翻、“spin chain”优先译成某个术语。这样会直接提升稳定性。
 # webview2_pkg
 webview2_pkg/**
 !webview2_pkg/build/

@@ -116,8 +116,11 @@ void App::submitCapturedImages(const QList<PendingBatchCapture> &captures)
 
         connect(card, &PreviewCard::closed, [this, card, entryId]()
                 {
+                    if (m_activePreviewCard == card)
+                        m_activePreviewCard = nullptr;
                     m_activeWindows.removeAll(card);
                     m_previewCards.remove(entryId);
+                    schedulePreviewImageRelease(entryId);
                 });
     }
 

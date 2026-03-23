@@ -1,4 +1,5 @@
 #include "ConfigDialog.h"
+#include "TranslationManager.h"
 #include "ThemeUtils.h"
 
 #include <QDir>
@@ -193,7 +194,8 @@ void ConfigDialog::save()
         QString parseErr;
         if (!parseAdvancedTemplateJson(parsedRoot, parseErr))
         {
-            QMessageBox::warning(this, "高级 API", QString("高级模板 JSON 无效，无法保存。\n%1").arg(parseErr));
+            TranslationManager &tm = TranslationManager::instance();
+            QMessageBox::warning(this, tm.tr("adv_invalid_title"), tm.tr("adv_invalid_save").arg(parseErr));
             return;
         }
     }
@@ -281,3 +283,5 @@ void ConfigDialog::updateTheme(bool isDark)
         return;
     updateRegularApiTextGrayState(m_enableAdvancedApiCheck && m_enableAdvancedApiCheck->isChecked());
 }
+
+

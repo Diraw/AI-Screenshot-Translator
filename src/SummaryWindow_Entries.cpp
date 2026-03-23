@@ -2,7 +2,23 @@
 
 #include "EmbedWebView.h"
 
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <string>
+
+namespace
+{
+QString makeHtmlSafeJson(const QJsonDocument &doc)
+{
+    QString json = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+    json.replace("<", "\\u003C");
+    json.replace(">", "\\u003E");
+    json.replace("&", "\\u0026");
+    json.replace(QChar(0x2028), "\\u2028");
+    json.replace(QChar(0x2029), "\\u2029");
+    return json;
+}
+}
 
 void SummaryWindow::setInitialHistory(const QList<TranslationEntry> &history)
 {
@@ -76,10 +92,12 @@ void SummaryWindow::updateEntryContent(const QString &id, const QString &markdow
     }
     if (m_webView)
     {
-        // Simple unescape for JS injection
-        QString safeMd = markdown;
-        safeMd.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
-        QString js = QString("updateEntryInDom('%1', '%2')").arg(id, safeMd);
+        QJsonObject payload;
+        payload["id"] = id;
+        payload["raw_md"] = markdown;
+        const QString safeJson = makeHtmlSafeJson(QJsonDocument(payload));
+        const QString js = QString("(()=>{const payload=%1; updateEntryInDom(payload.id, payload.raw_md);})();")
+                               .arg(safeJson);
         m_webView->eval(js.toStdString());
     }
 }
