@@ -103,6 +103,7 @@ public:
     static QString resolveWritableStoragePath(const QString &path, bool *usedFallback = nullptr,
                                               QString *errorMessage = nullptr);
     static bool ensureWritableDirectory(const QString &path, QString *errorMessage = nullptr);
+    static QString validateProfileName(const QString &name);
 
     ConfigManager();
     ~ConfigManager() = default;
@@ -131,6 +132,7 @@ private:
     QString m_currentProfileName;
     AppConfig m_config;
 
+    bool tryGetProfileFilePath(const QString &name, QString *outPath) const;
     void parseJson(const QJsonObject &root);
     QJsonObject toJson() const;
 

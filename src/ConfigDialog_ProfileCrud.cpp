@@ -11,8 +11,8 @@ void ConfigDialog::onProfileChanged(const QString &name)
     if (name.isEmpty())
         return;
 
-    m_configManager->loadProfile(name);
-    loadFromConfig();
+    if (m_configManager->loadProfile(name))
+        loadFromConfig();
 }
 
 void ConfigDialog::newProfile()
@@ -22,17 +22,25 @@ void ConfigDialog::newProfile()
     const QString text = QInputDialog::getText(this, tm.tr("new_profile_title"),
                                                tm.tr("new_profile_label"), QLineEdit::Normal,
                                                QString(), &ok);
-    if (!ok || text.isEmpty())
+    const QString profileName = text.trimmed();
+    if (!ok || profileName.isEmpty())
         return;
 
-    if (m_configManager->createProfile(text))
+    const QString validationError = ConfigManager::validateProfileName(profileName);
+    if (!validationError.isEmpty())
+    {
+        QMessageBox::warning(this, tm.tr("new_profile_title"), tm.tr(validationError));
+        return;
+    }
+
+    if (m_configManager->createProfile(profileName))
     {
         updateProfileList();
-        const QList<QListWidgetItem *> items = m_profileList->findItems(text, Qt::MatchExactly);
+        const QList<QListWidgetItem *> items = m_profileList->findItems(profileName, Qt::MatchExactly);
         if (!items.isEmpty())
             m_profileList->setCurrentItem(items.first());
 
-        onProfileChanged(text);
+        onProfileChanged(profileName);
         return;
     }
 
@@ -82,13 +90,21 @@ void ConfigDialog::renameProfile()
     const QString newName = QInputDialog::getText(this, tm.tr("rename_profile_title"),
                                                   tm.tr("rename_profile_label"), QLineEdit::Normal,
                                                   current, &ok);
-    if (!ok || newName.isEmpty() || newName == current)
+    const QString trimmedNewName = newName.trimmed();
+    if (!ok || trimmedNewName.isEmpty() || trimmedNewName == current)
         return;
 
-    if (m_configManager->renameProfile(current, newName))
+    const QString validationError = ConfigManager::validateProfileName(trimmedNewName);
+    if (!validationError.isEmpty())
+    {
+        QMessageBox::warning(this, tm.tr("rename_profile_title"), tm.tr(validationError));
+        return;
+    }
+
+    if (m_configManager->renameProfile(current, trimmedNewName))
     {
         updateProfileList();
-        const QList<QListWidgetItem *> items = m_profileList->findItems(newName, Qt::MatchExactly);
+        const QList<QListWidgetItem *> items = m_profileList->findItems(trimmedNewName, Qt::MatchExactly);
         if (!items.isEmpty())
             m_profileList->setCurrentItem(items.first());
 
@@ -115,13 +131,21 @@ void ConfigDialog::copyProfile()
                                                   tm.tr("new_profile_label"),
                                                   QLineEdit::Normal,
                                                   current + "_Copy", &ok);
-    if (!ok || newName.isEmpty())
+    const QString trimmedNewName = newName.trimmed();
+    if (!ok || trimmedNewName.isEmpty())
         return;
 
-    if (m_configManager->copyProfile(current, newName))
+    const QString validationError = ConfigManager::validateProfileName(trimmedNewName);
+    if (!validationError.isEmpty())
+    {
+        QMessageBox::warning(this, tm.tr("new_profile_title"), tm.tr(validationError));
+        return;
+    }
+
+    if (m_configManager->copyProfile(current, trimmedNewName))
     {
         updateProfileList();
-        const QList<QListWidgetItem *> items = m_profileList->findItems(newName, Qt::MatchExactly);
+        const QList<QListWidgetItem *> items = m_profileList->findItems(trimmedNewName, Qt::MatchExactly);
         if (!items.isEmpty())
             m_profileList->setCurrentItem(items.first());
         return;

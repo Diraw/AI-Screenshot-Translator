@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 
 #include <QJsonParseError>
+#include <QFileInfo>
 #include <QUuid>
 
 static QString findDefaultProfileTemplatePath()
@@ -58,6 +59,47 @@ static bool tryLoadDefaultProfileTemplate(QJsonObject &outRoot)
 }
 
 static const QString kAppDataFolderName = QStringLiteral("AI-Screenshot-Translator");
+
+static QString normalizedAbsolutePath(const QString &path)
+{
+    return QDir::cleanPath(QDir::fromNativeSeparators(QFileInfo(path).absoluteFilePath()));
+}
+
+static bool isReservedWindowsBaseName(const QString &name)
+{
+    static const QStringList kReserved = {
+        QStringLiteral("CON"),  QStringLiteral("PRN"),  QStringLiteral("AUX"),  QStringLiteral("NUL"),
+        QStringLiteral("COM1"), QStringLiteral("COM2"), QStringLiteral("COM3"), QStringLiteral("COM4"),
+        QStringLiteral("COM5"), QStringLiteral("COM6"), QStringLiteral("COM7"), QStringLiteral("COM8"),
+        QStringLiteral("COM9"), QStringLiteral("LPT1"), QStringLiteral("LPT2"), QStringLiteral("LPT3"),
+        QStringLiteral("LPT4"), QStringLiteral("LPT5"), QStringLiteral("LPT6"), QStringLiteral("LPT7"),
+        QStringLiteral("LPT8"), QStringLiteral("LPT9"),
+    };
+    return kReserved.contains(name.toUpper());
+}
+
+QString ConfigManager::validateProfileName(const QString &name)
+{
+    const QString trimmed = name.trimmed();
+    if (trimmed.isEmpty())
+        return QStringLiteral("msg_profile_name_empty");
+    if (trimmed == "." || trimmed == "..")
+        return QStringLiteral("msg_profile_name_invalid");
+    if (trimmed.endsWith('.'))
+        return QStringLiteral("msg_profile_name_trailing_dot");
+
+    static const QString kIllegalChars = QStringLiteral("<>:\"/\\|?*");
+    for (const QChar ch : trimmed)
+    {
+        if (ch.unicode() < 0x20 || kIllegalChars.contains(ch))
+            return QStringLiteral("msg_profile_name_unsupported_chars");
+    }
+
+    if (isReservedWindowsBaseName(trimmed))
+        return QStringLiteral("msg_profile_name_reserved");
+
+    return QString();
+}
 
 QString ConfigManager::appDataDirPath()
 {
@@ -201,6 +243,26 @@ bool ConfigManager::ensureWritableDirectory(const QString &path, QString *errorM
     return true;
 }
 
+bool ConfigManager::tryGetProfileFilePath(const QString &name, QString *outPath) const
+{
+    if (outPath)
+        outPath->clear();
+
+    const QString trimmed = name.trimmed();
+    if (!validateProfileName(trimmed).isEmpty())
+        return false;
+
+    const QString profilesRoot = normalizedAbsolutePath(m_profilesDir);
+    const QString candidate = normalizedAbsolutePath(QDir(m_profilesDir).absoluteFilePath(trimmed + ".json"));
+    const QString prefix = profilesRoot.endsWith('/') ? profilesRoot : (profilesRoot + '/');
+    if (!candidate.startsWith(prefix, Qt::CaseInsensitive))
+        return false;
+
+    if (outPath)
+        *outPath = candidate;
+    return true;
+}
+
 ConfigManager::ConfigManager()
 {
     // AppData storage
@@ -272,14 +334,17 @@ QStringList ConfigManager::listProfiles() const
 
 bool ConfigManager::createProfile(const QString &name)
 {
-    if (name.isEmpty())
+    const QString trimmedName = name.trimmed();
+    if (!validateProfileName(trimmedName).isEmpty())
         return false;
-    QString path = m_profilesDir + "/" + name + ".json";
+    QString path;
+    if (!tryGetProfileFilePath(trimmedName, &path))
+        return false;
     if (QFile::exists(path))
         return false; // Already exists
 
     // Create with current/default settings
-    if (name == "Default")
+    if (trimmedName == "Default")
     {
         QJsonObject root;
         if (tryLoadDefaultProfileTemplate(root))
@@ -297,7 +362,7 @@ bool ConfigManager::createProfile(const QString &name)
         AppConfig defaultCfg;
         m_config = defaultCfg;
     }
-    m_currentProfileName = name;
+    m_currentProfileName = trimmedName;
     saveConfig();
     saveMeta();
     return true;
@@ -305,7 +370,9 @@ bool ConfigManager::createProfile(const QString &name)
 
 bool ConfigManager::loadProfile(const QString &name)
 {
-    QString path = m_profilesDir + "/" + name + ".json";
+    QString path;
+    if (!tryGetProfileFilePath(name, &path))
+        return false;
     QFile file(path);
     if (!file.exists())
         return false;
@@ -320,19 +387,22 @@ bool ConfigManager::loadProfile(const QString &name)
         return false;
 
     parseJson(doc.object());
-    m_currentProfileName = name;
+    m_currentProfileName = name.trimmed();
     saveMeta();
     return true;
 }
 
 bool ConfigManager::deleteProfile(const QString &name)
 {
-    if (name == "Default")
+    const QString trimmedName = name.trimmed();
+    if (trimmedName == "Default")
         return false;
-    QString path = m_profilesDir + "/" + name + ".json";
+    QString path;
+    if (!tryGetProfileFilePath(trimmedName, &path))
+        return false;
     if (QFile::remove(path))
     {
-        if (m_currentProfileName == name)
+        if (m_currentProfileName == trimmedName)
         {
             loadProfile("Default");
         }
@@ -343,11 +413,15 @@ bool ConfigManager::deleteProfile(const QString &name)
 
 bool ConfigManager::renameProfile(const QString &oldName, const QString &newName)
 {
-    if (oldName.isEmpty() || newName.isEmpty() || oldName == "Default")
+    const QString trimmedOldName = oldName.trimmed();
+    const QString trimmedNewName = newName.trimmed();
+    if (trimmedOldName.isEmpty() || trimmedNewName.isEmpty() || trimmedOldName == "Default")
         return false;
 
-    QString oldPath = m_profilesDir + "/" + oldName + ".json";
-    QString newPath = m_profilesDir + "/" + newName + ".json";
+    QString oldPath;
+    QString newPath;
+    if (!tryGetProfileFilePath(trimmedOldName, &oldPath) || !tryGetProfileFilePath(trimmedNewName, &newPath))
+        return false;
 
     if (!QFile::exists(oldPath))
         return false;
@@ -356,9 +430,9 @@ bool ConfigManager::renameProfile(const QString &oldName, const QString &newName
 
     if (QFile::rename(oldPath, newPath))
     {
-        if (m_currentProfileName == oldName)
+        if (m_currentProfileName == trimmedOldName)
         {
-            m_currentProfileName = newName;
+            m_currentProfileName = trimmedNewName;
             saveMeta();
         }
         return true;
@@ -368,11 +442,15 @@ bool ConfigManager::renameProfile(const QString &oldName, const QString &newName
 
 bool ConfigManager::copyProfile(const QString &sourceName, const QString &newName)
 {
-    if (sourceName.isEmpty() || newName.isEmpty())
+    const QString trimmedSourceName = sourceName.trimmed();
+    const QString trimmedNewName = newName.trimmed();
+    if (trimmedSourceName.isEmpty() || trimmedNewName.isEmpty())
         return false;
 
-    QString srcPath = m_profilesDir + "/" + sourceName + ".json";
-    QString destPath = m_profilesDir + "/" + newName + ".json";
+    QString srcPath;
+    QString destPath;
+    if (!tryGetProfileFilePath(trimmedSourceName, &srcPath) || !tryGetProfileFilePath(trimmedNewName, &destPath))
+        return false;
 
     if (!QFile::exists(srcPath))
         return false;
@@ -417,7 +495,9 @@ bool ConfigManager::importProfile(const QString &path)
 
 bool ConfigManager::exportProfile(const QString &name, const QString &destPath)
 {
-    QString srcPath = m_profilesDir + "/" + name + ".json";
+    QString srcPath;
+    if (!tryGetProfileFilePath(name, &srcPath))
+        return false;
     return QFile::copy(srcPath, destPath);
 }
 
@@ -442,7 +522,12 @@ void ConfigManager::setConfig(const AppConfig &config)
 
 void ConfigManager::saveConfig()
 {
-    QString path = m_profilesDir + "/" + m_currentProfileName + ".json";
+    QString path;
+    if (!tryGetProfileFilePath(m_currentProfileName, &path))
+    {
+        qWarning() << "Failed to save config profile: invalid profile name" << m_currentProfileName;
+        return;
+    }
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly))
     {
@@ -456,7 +541,8 @@ void ConfigManager::saveConfig()
 
 QString ConfigManager::configFilePath() const
 {
-    return m_profilesDir + "/" + m_currentProfileName + ".json";
+    QString path;
+    return tryGetProfileFilePath(m_currentProfileName, &path) ? path : QString();
 }
 
 QString ConfigManager::profilesDirPath() const
@@ -487,6 +573,8 @@ void ConfigManager::saveMeta()
 
 void ConfigManager::parseJson(const QJsonObject &root)
 {
+    m_config = AppConfig();
+
     if (root.contains("api") && root["api"].isObject())
     {
         QJsonObject api = root["api"].toObject();

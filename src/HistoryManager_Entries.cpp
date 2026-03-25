@@ -176,11 +176,77 @@ void HistoryManager::saveEntry(const TranslationEntry &entry)
     m_tagsCacheDirty = true;
 }
 
+void HistoryManager::pruneMissingImageEntries()
+{
+    QStringList staleIds;
+
+    QSqlQuery query(m_db);
+    if (!query.exec("SELECT id, image_file, image_files_json FROM entries"))
+        return;
+
+    while (query.next())
+    {
+        const QString id = query.value(0).toString();
+        const QStringList imagePaths = normalizedImagePaths(m_basePath, query.value(1).toString(), query.value(2).toString());
+        if (imagePaths.isEmpty())
+        {
+            staleIds << id;
+            continue;
+        }
+
+        bool missingImage = false;
+        for (const QString &imagePath : imagePaths)
+        {
+            if (!QFile::exists(imagePath))
+            {
+                missingImage = true;
+                break;
+            }
+        }
+
+        if (missingImage)
+            staleIds << id;
+    }
+
+    query.finish();
+    staleIds.removeDuplicates();
+    if (staleIds.isEmpty())
+        return;
+
+    QScopedValueRollback<bool> guard(m_ignoreNextChange, true);
+    QSqlQuery tx(m_db);
+    if (!tx.exec("BEGIN IMMEDIATE TRANSACTION"))
+        return;
+
+    QSqlQuery del(m_db);
+    del.prepare("DELETE FROM entries WHERE id = ?");
+    for (const QString &id : staleIds)
+    {
+        del.bindValue(0, id);
+        del.exec();
+        del.finish();
+        m_markdownCache.remove(id);
+        m_entryCache.remove(id);
+    }
+
+    QSqlQuery commit(m_db);
+    if (!commit.exec("COMMIT"))
+    {
+        QSqlQuery rollback(m_db);
+        rollback.exec("ROLLBACK");
+        return;
+    }
+
+    m_tagsCacheDirty = true;
+}
+
 QList<TranslationEntry> HistoryManager::loadEntries()
 {
     QList<TranslationEntry> entries;
     if (!ensureDatabaseReady())
         return entries;
+
+    pruneMissingImageEntries();
 
     m_entryCache.clear();
     m_markdownCache.clear();
@@ -275,6 +341,8 @@ QList<TranslationEntry> HistoryManager::queryEntries(const QDate &fromDate,
         *totalCount = 0;
     if (!ensureDatabaseReady())
         return entries;
+
+    pruneMissingImageEntries();
 
     auto escapeLike = [](QString s)
     {

@@ -37,6 +37,8 @@ set(PROJECT_SOURCES
     src/ScreenshotTool.h
     src/PreviewCard.cpp
     src/PreviewCard.h
+    src/HotkeyEdit.cpp
+    src/HotkeyEdit.h
     src/ResultWindow.cpp
     src/ResultWindow_Html.cpp
     src/ResultWindow_StateHotkeys.cpp

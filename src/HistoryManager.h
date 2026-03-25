@@ -82,6 +82,7 @@ private:
     QString getDbPath() const;
     void ensureDirectories() const;
     bool ensureDatabaseReady();
+    void pruneMissingImageEntries();
     void closeDatabase();
     bool maybeAutoImportLegacyJson();
     bool importLegacyJsonInternal(const QString &jsonPath, int *importedCount, QString *errorMessage);

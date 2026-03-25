@@ -1,4 +1,5 @@
 #include "ConfigDialog.h"
+#include "HotkeyEdit.h"
 
 #include <QFormLayout>
 
@@ -11,13 +12,13 @@ void ConfigDialog::setupOtherTab()
     grpShortcuts->setObjectName("grpShortcuts");
     auto *shortcutsLayout = new QFormLayout(grpShortcuts);
 
-    m_hotkeyEdit = new QLineEdit(this);
+    m_hotkeyEdit = new HotkeyEdit(this);
     shortcutsLayout->addRow("Screenshot Hotkey:", m_hotkeyEdit);
 
-    m_summaryHotkeyEdit = new QLineEdit(this);
+    m_summaryHotkeyEdit = new HotkeyEdit(this);
     shortcutsLayout->addRow("Summary Hotkey:", m_summaryHotkeyEdit);
 
-    m_settingsHotkeyEdit = new QLineEdit(this);
+    m_settingsHotkeyEdit = new HotkeyEdit(this);
     shortcutsLayout->addRow("Settings Hotkey:", m_settingsHotkeyEdit);
 
     otherMainLayout->addWidget(grpShortcuts);
@@ -40,7 +41,7 @@ void ConfigDialog::setupOtherTab()
     quitRowLayout->setContentsMargins(0, 0, 0, 0);
     quitRowLayout->setSpacing(8);
     m_quitHotkeyLabel = new QLabel("Quit Hotkey:", this);
-    m_quitHotkeyEdit = new QLineEdit(this);
+    m_quitHotkeyEdit = new HotkeyEdit(this);
     m_quitHotkeyEdit->setPlaceholderText("alt+q");
     m_enableQuitHotkeyCheck = new QCheckBox("Enable", this);
     quitRowLayout->addWidget(m_quitHotkeyLabel);

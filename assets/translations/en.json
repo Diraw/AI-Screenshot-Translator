@@ -26,6 +26,11 @@
     "msg_rename_success": "Profile renamed successfully.",
     "msg_rename_error": "Failed to rename profile. Name might exist or is invalid.",
     "msg_profile_exists": "Failed to create profile. Name might exist.",
+    "msg_profile_name_empty": "Profile name cannot be empty.",
+    "msg_profile_name_invalid": "Profile name is invalid.",
+    "msg_profile_name_trailing_dot": "Profile name cannot end with a dot.",
+    "msg_profile_name_unsupported_chars": "Profile name contains unsupported characters.",
+    "msg_profile_name_reserved": "Profile name uses a reserved Windows device name.",
     "msg_cannot_delete_default": "Cannot delete Default profile.",
     "msg_cannot_rename_default": "Cannot rename Default profile.",
     "import_profile_title": "Import Profile",
@@ -167,3 +172,4 @@
     "msg_saved": "Settings saved!"
   }
 }
+
