@@ -1,71 +1,14 @@
 #include "ConfigManager.h"
-#include <QDebug>
-#include <QCoreApplication>
 
-#include <QJsonParseError>
+#include <QCoreApplication>
 #include <QFileInfo>
 #include <QUuid>
 
-static QString findDefaultProfileTemplatePath()
+namespace
 {
-    const QString baseDir = QCoreApplication::applicationDirPath();
-    const QStringList candidates = {
-        QDir::cleanPath(baseDir + "/assets/default_profile.json"),
-        QDir::cleanPath(baseDir + "/../assets/default_profile.json"),
-        QDir::cleanPath(baseDir + "/../../assets/default_profile.json"),
-    };
-    for (const auto &p : candidates)
-    {
-        if (QFile::exists(p))
-            return p;
-    }
+const QString kAppDataFolderName = QStringLiteral("AI-Screenshot-Translator");
 
-    // Resource fallback (embedded via assets.qrc)
-    if (QFile::exists(QStringLiteral(":/assets/default_profile.json")))
-        return QStringLiteral(":/assets/default_profile.json");
-
-    return QString();
-}
-
-static bool tryLoadDefaultProfileTemplate(QJsonObject &outRoot)
-{
-    const QString path = findDefaultProfileTemplatePath();
-    if (path.isEmpty())
-    {
-        qWarning() << "[ConfigManager] default_profile.json not found. Looked in:"
-                   << "<exe>/assets, <exe>/../assets, <exe>/../../assets, :/assets/default_profile.json";
-        return false;
-    }
-
-    QFile f(path);
-    if (!f.open(QIODevice::ReadOnly))
-        return false;
-    const QByteArray data = f.readAll();
-    f.close();
-
-    QJsonParseError err;
-    const QJsonDocument doc = QJsonDocument::fromJson(data, &err);
-    if (doc.isNull() || !doc.isObject() || err.error != QJsonParseError::NoError)
-    {
-        qWarning() << "[ConfigManager] default_profile.json parse failed:" << path
-                   << "error=" << err.errorString() << "offset=" << err.offset;
-        return false;
-    }
-
-    qInfo() << "[ConfigManager] Loaded default profile template:" << path
-            << "source=" << (path.startsWith(":/") ? "resource" : "disk");
-    outRoot = doc.object();
-    return true;
-}
-
-static const QString kAppDataFolderName = QStringLiteral("AI-Screenshot-Translator");
-
-static QString normalizedAbsolutePath(const QString &path)
-{
-    return QDir::cleanPath(QDir::fromNativeSeparators(QFileInfo(path).absoluteFilePath()));
-}
-
-static bool isReservedWindowsBaseName(const QString &name)
+bool isReservedWindowsBaseName(const QString &name)
 {
     static const QStringList kReserved = {
         QStringLiteral("CON"),  QStringLiteral("PRN"),  QStringLiteral("AUX"),  QStringLiteral("NUL"),
@@ -77,6 +20,7 @@ static bool isReservedWindowsBaseName(const QString &name)
     };
     return kReserved.contains(name.toUpper());
 }
+} // namespace
 
 QString ConfigManager::validateProfileName(const QString &name)
 {
@@ -103,7 +47,6 @@ QString ConfigManager::validateProfileName(const QString &name)
 
 QString ConfigManager::appDataDirPath()
 {
-    // Force Roaming on Windows: %APPDATA% (C:\Users\<u>\AppData\Roaming)
     QString base;
 #ifdef _WIN32
     base = qEnvironmentVariable("APPDATA");
@@ -145,7 +88,7 @@ QString ConfigManager::resolveStoragePath(const QString &path)
     if (trimmedPath.isEmpty())
         return QDir::cleanPath(defaultStoragePath());
 
-    QFileInfo info(trimmedPath);
+    const QFileInfo info(trimmedPath);
     if (info.isRelative())
         return QDir::cleanPath(QDir(QCoreApplication::applicationDirPath()).filePath(trimmedPath));
 
@@ -180,8 +123,7 @@ QString ConfigManager::resolveWritableStoragePath(const QString &path, bool *use
     const QString tempBase = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
     if (!tempBase.isEmpty())
     {
-        const QString emergencyPath =
-            QDir(tempBase).filePath(QString("%1/storage").arg(kAppDataFolderName));
+        const QString emergencyPath = QDir(tempBase).filePath(QString("%1/storage").arg(kAppDataFolderName));
         if (emergencyPath != resolvedPath && emergencyPath != fallbackPath)
         {
             if (ensureWritableDirectory(emergencyPath))
@@ -213,7 +155,7 @@ bool ConfigManager::ensureWritableDirectory(const QString &path, QString *errorM
         return false;
     }
 
-    QFileInfo info(cleanPath);
+    const QFileInfo info(cleanPath);
     if (info.exists() && !info.isDir())
     {
         if (errorMessage)
@@ -243,351 +185,22 @@ bool ConfigManager::ensureWritableDirectory(const QString &path, QString *errorM
     return true;
 }
 
-bool ConfigManager::tryGetProfileFilePath(const QString &name, QString *outPath) const
-{
-    if (outPath)
-        outPath->clear();
-
-    const QString trimmed = name.trimmed();
-    if (!validateProfileName(trimmed).isEmpty())
-        return false;
-
-    const QString profilesRoot = normalizedAbsolutePath(m_profilesDir);
-    const QString candidate = normalizedAbsolutePath(QDir(m_profilesDir).absoluteFilePath(trimmed + ".json"));
-    const QString prefix = profilesRoot.endsWith('/') ? profilesRoot : (profilesRoot + '/');
-    if (!candidate.startsWith(prefix, Qt::CaseInsensitive))
-        return false;
-
-    if (outPath)
-        *outPath = candidate;
-    return true;
-}
-
-ConfigManager::ConfigManager()
-{
-    // AppData storage
-    m_appDataDir = appDataDirPath();
-    m_profilesDir = m_appDataDir + "/profiles";
-
-    QDir dir(m_profilesDir);
-    if (!dir.exists())
-    {
-        dir.mkpath(".");
-    }
-
-    loadMeta(); // Load last used profile name
-
-    if (m_currentProfileName.isEmpty() || !listProfiles().contains(m_currentProfileName))
-    {
-        // First run or missing profile
-        if (listProfiles().isEmpty())
-        {
-            // No profiles at all, don't create yet? Or create default?
-            // "Internal storage" implies we create one if none.
-            // But requirement says "First open... auto jump to config".
-            // Let's create a "Default" profile if none exists, to have something to load.
-            // Or leave it empty and let Dialog handle it?
-            // "loadConfig" usually needs *something*.
-            // Let's safe-fall back to "Default".
-            m_currentProfileName = "Default";
-            if (!loadProfile("Default"))
-            {
-                // Create Default using the template (if provided in assets/)
-                QJsonObject root;
-                if (tryLoadDefaultProfileTemplate(root))
-                {
-                    m_config = AppConfig();
-                    parseJson(root);
-
-                    qInfo() << "[ConfigManager] default_profile.json prompt_prefix="
-                            << m_config.promptText.left(80).replace("\n", "\\n");
-                }
-                saveConfig(); // Creates Default
-            }
-        }
-        else
-        {
-            // Pick first available
-            m_currentProfileName = listProfiles().first();
-            loadProfile(m_currentProfileName);
-        }
-    }
-    else
-    {
-        loadProfile(m_currentProfileName);
-    }
-}
-
-QStringList ConfigManager::listProfiles() const
-{
-    QDir dir(m_profilesDir);
-    QStringList filters;
-    filters << "*.json";
-    QStringList files = dir.entryList(filters, QDir::Files);
-    QStringList profiles;
-    for (const QString &f : files)
-    {
-        profiles << f.section(".json", 0, 0);
-    }
-    return profiles;
-}
-
-bool ConfigManager::createProfile(const QString &name)
-{
-    const QString trimmedName = name.trimmed();
-    if (!validateProfileName(trimmedName).isEmpty())
-        return false;
-    QString path;
-    if (!tryGetProfileFilePath(trimmedName, &path))
-        return false;
-    if (QFile::exists(path))
-        return false; // Already exists
-
-    // Create with current/default settings
-    if (trimmedName == "Default")
-    {
-        QJsonObject root;
-        if (tryLoadDefaultProfileTemplate(root))
-        {
-            m_config = AppConfig();
-            parseJson(root);
-        }
-        else
-        {
-            m_config = AppConfig();
-        }
-    }
-    else
-    {
-        AppConfig defaultCfg;
-        m_config = defaultCfg;
-    }
-    m_currentProfileName = trimmedName;
-    saveConfig();
-    saveMeta();
-    return true;
-}
-
-bool ConfigManager::loadProfile(const QString &name)
-{
-    QString path;
-    if (!tryGetProfileFilePath(name, &path))
-        return false;
-    QFile file(path);
-    if (!file.exists())
-        return false;
-
-    if (!file.open(QIODevice::ReadOnly))
-        return false;
-    QByteArray data = file.readAll();
-    file.close();
-
-    QJsonDocument doc = QJsonDocument::fromJson(data);
-    if (doc.isNull())
-        return false;
-
-    parseJson(doc.object());
-    m_currentProfileName = name.trimmed();
-    saveMeta();
-    return true;
-}
-
-bool ConfigManager::deleteProfile(const QString &name)
-{
-    const QString trimmedName = name.trimmed();
-    if (trimmedName == "Default")
-        return false;
-    QString path;
-    if (!tryGetProfileFilePath(trimmedName, &path))
-        return false;
-    if (QFile::remove(path))
-    {
-        if (m_currentProfileName == trimmedName)
-        {
-            loadProfile("Default");
-        }
-        return true;
-    }
-    return false;
-}
-
-bool ConfigManager::renameProfile(const QString &oldName, const QString &newName)
-{
-    const QString trimmedOldName = oldName.trimmed();
-    const QString trimmedNewName = newName.trimmed();
-    if (trimmedOldName.isEmpty() || trimmedNewName.isEmpty() || trimmedOldName == "Default")
-        return false;
-
-    QString oldPath;
-    QString newPath;
-    if (!tryGetProfileFilePath(trimmedOldName, &oldPath) || !tryGetProfileFilePath(trimmedNewName, &newPath))
-        return false;
-
-    if (!QFile::exists(oldPath))
-        return false;
-    if (QFile::exists(newPath))
-        return false;
-
-    if (QFile::rename(oldPath, newPath))
-    {
-        if (m_currentProfileName == trimmedOldName)
-        {
-            m_currentProfileName = trimmedNewName;
-            saveMeta();
-        }
-        return true;
-    }
-    return false;
-}
-
-bool ConfigManager::copyProfile(const QString &sourceName, const QString &newName)
-{
-    const QString trimmedSourceName = sourceName.trimmed();
-    const QString trimmedNewName = newName.trimmed();
-    if (trimmedSourceName.isEmpty() || trimmedNewName.isEmpty())
-        return false;
-
-    QString srcPath;
-    QString destPath;
-    if (!tryGetProfileFilePath(trimmedSourceName, &srcPath) || !tryGetProfileFilePath(trimmedNewName, &destPath))
-        return false;
-
-    if (!QFile::exists(srcPath))
-        return false;
-    if (QFile::exists(destPath))
-        return false;
-
-    return QFile::copy(srcPath, destPath);
-}
-
-bool ConfigManager::importProfile(const QString &path)
-{
-    QFile src(path);
-    if (!src.open(QIODevice::ReadOnly))
-        return false;
-    QByteArray data = src.readAll();
-    src.close();
-
-    // Validate JSON
-    QJsonDocument doc = QJsonDocument::fromJson(data);
-    if (doc.isNull() || !doc.isObject())
-        return false;
-
-    // Determine name from filename
-    QString name = QFileInfo(path).baseName();
-    QString dest = m_profilesDir + "/" + name + ".json";
-
-    // Avoid overwrite? Or auto-rename?
-    int counter = 1;
-    while (QFile::exists(dest))
-    {
-        dest = m_profilesDir + "/" + name + QString("_%1").arg(counter++) + ".json";
-    }
-
-    QFile destFile(dest);
-    if (!destFile.open(QIODevice::WriteOnly))
-        return false;
-    destFile.write(data);
-    destFile.close();
-
-    return true;
-}
-
-bool ConfigManager::exportProfile(const QString &name, const QString &destPath)
-{
-    QString srcPath;
-    if (!tryGetProfileFilePath(name, &srcPath))
-        return false;
-    return QFile::copy(srcPath, destPath);
-}
-
-QString ConfigManager::currentProfileName() const
-{
-    return m_currentProfileName;
-}
-
-AppConfig ConfigManager::getConfig() const
-{
-    return m_config;
-}
-
-void ConfigManager::setConfig(const AppConfig &config)
-{
-    m_config = config;
-    qInfo() << "[ConfigManager] setConfig received:";
-    qInfo() << "  Prev Shortcut:" << m_config.prevResultShortcut;
-    qInfo() << "  Next Shortcut:" << m_config.nextResultShortcut;
-    saveConfig();
-}
-
-void ConfigManager::saveConfig()
-{
-    QString path;
-    if (!tryGetProfileFilePath(m_currentProfileName, &path))
-    {
-        qWarning() << "Failed to save config profile: invalid profile name" << m_currentProfileName;
-        return;
-    }
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly))
-    {
-        qWarning() << "Failed to save config profile:" << path;
-        return;
-    }
-    QJsonDocument doc(toJson());
-    file.write(doc.toJson());
-    file.close();
-}
-
-QString ConfigManager::configFilePath() const
-{
-    QString path;
-    return tryGetProfileFilePath(m_currentProfileName, &path) ? path : QString();
-}
-
-QString ConfigManager::profilesDirPath() const
-{
-    return QDir::cleanPath(m_profilesDir);
-}
-
-void ConfigManager::loadMeta()
-{
-    QFile file(settingsJsonPath());
-    if (file.open(QIODevice::ReadOnly))
-    {
-        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-        m_currentProfileName = doc.object()["last_profile"].toString();
-    }
-}
-
-void ConfigManager::saveMeta()
-{
-    QFile file(settingsJsonPath());
-    if (file.open(QIODevice::WriteOnly))
-    {
-        QJsonObject root;
-        root["last_profile"] = m_currentProfileName;
-        file.write(QJsonDocument(root).toJson());
-    }
-}
-
 void ConfigManager::parseJson(const QJsonObject &root)
 {
     m_config = AppConfig();
 
     if (root.contains("api") && root["api"].isObject())
     {
-        QJsonObject api = root["api"].toObject();
+        const QJsonObject api = root["api"].toObject();
         m_config.apiKey = api["api_key"].toString();
         m_config.baseUrl = api["base_url"].toString();
         m_config.endpointPath = api["endpoint"].toString();
         m_config.modelName = api["model"].toString();
 
-        // Use default prompt if empty or not present
-        QString promptFromConfig = api["prompt_text"].toString();
+        const QString promptFromConfig = api["prompt_text"].toString();
         if (promptFromConfig.isEmpty())
         {
-            m_config.promptText = "# Role\n你是一个专业的学术翻译专家，擅长中英文互译，并能精确处理数学、物理等领域的 LaTeX 公式。\n\n# Task\n请将图片中的英文内容翻译为中文。\n\n# Requirements\n1. **仅返回翻译后的中文文本**。严禁包含任何开场白、解释语（如\"好的\"、\"这是翻译内容\"）或结束语。\n2. **数学公式处理**：原文中所有的数学变量、常数、公式和方程必须使用 LaTeX 格式输出（例如使用 $x$ 或 $$E=mc^2$$）。\n3. **术语准确**：保持专业领域的术语翻译严谨、自然。\n4. **格式对齐**：保持原有的段落结构。\n\n# Content";
+            m_config.promptText = "# Role\nä½ æ˜¯ä¸€ä¸ªä¸“ä¸šçš„å­¦æœ¯ç¿»è¯‘ä¸“å®¶ï¼Œæ“…é•¿ä¸­è‹±æ–‡äº’è¯‘ï¼Œå¹¶èƒ½ç²¾ç¡®å¤„ç†æ•°å­¦ã€ç‰©ç†ç­‰é¢†åŸŸçš„ LaTeX å…¬å¼ã€‚\n\n# Task\nè¯·å°†å›¾ç‰‡ä¸­çš„è‹±æ–‡å†…å®¹ç¿»è¯‘ä¸ºä¸­æ–‡ã€‚\n\n# Requirements\n1. **ä»…è¿”å›žç¿»è¯‘åŽçš„ä¸­æ–‡æ–‡æœ¬**ã€‚ä¸¥ç¦åŒ…å«ä»»ä½•å¼€åœºç™½ã€è§£é‡Šè¯­ï¼ˆå¦‚\"å¥½çš„\"ã€\"è¿™æ˜¯ç¿»è¯‘å†…å®¹\"ï¼‰æˆ–ç»“æŸè¯­ã€‚\n2. **æ•°å­¦å…¬å¼å¤„ç†**ï¼šåŽŸæ–‡ä¸­æ‰€æœ‰çš„æ•°å­¦å˜é‡ã€å¸¸æ•°ã€å…¬å¼å’Œæ–¹ç¨‹å¿…é¡»ä½¿ç”¨ LaTeX æ ¼å¼è¾“å‡ºï¼ˆä¾‹å¦‚ä½¿ç”¨ $x$ æˆ– $$E=mc^2$$ï¼‰ã€‚\n3. **æœ¯è¯­å‡†ç¡®**ï¼šä¿æŒä¸“ä¸šé¢†åŸŸçš„æœ¯è¯­ç¿»è¯‘ä¸¥è°¨ã€è‡ªç„¶ã€‚\n4. **æ ¼å¼å¯¹é½**ï¼šä¿æŒåŽŸæœ‰çš„æ®µè½ç»“æž„ã€‚\n\n# Content";
         }
         else
         {
@@ -601,13 +214,11 @@ void ConfigManager::parseJson(const QJsonObject &root)
         m_config.advancedApiTemplate = api["advanced_template"].toString();
         m_config.advancedApiCustomized = api["advanced_customized"].toBool(false);
 
-        // Backward compatibility: support legacy top-level advanced_api object.
         if (m_config.advancedApiTemplate.trimmed().isEmpty() && root.contains("advanced_api") && root["advanced_api"].isObject())
         {
             m_config.advancedApiTemplate = QString::fromUtf8(QJsonDocument(root["advanced_api"].toObject()).toJson(QJsonDocument::Indented));
         }
 
-        // Backward-compatible default endpoint (avoid duplicating /v1)
         if (m_config.endpointPath.trimmed().isEmpty())
         {
             const QString b = m_config.baseUrl.trimmed().toLower();
@@ -620,8 +231,8 @@ void ConfigManager::parseJson(const QJsonObject &root)
 
     if (root.contains("app_settings") && root["app_settings"].isObject())
     {
-        QJsonObject app = root["app_settings"].toObject();
-        m_config.language = app["language"].toString("zh"); // Default Chinese
+        const QJsonObject app = root["app_settings"].toObject();
+        m_config.language = app["language"].toString("zh");
         m_config.zoomSensitivity = app["zoom_sensitivity"].toDouble(500.0);
         m_config.screenshotHotkey = app["screenshot_hotkey"].toString("ctrl+alt+s");
         m_config.batchScreenshotToggleHotkey = app["batch_screenshot_toggle_hotkey"].toString("d");
@@ -659,30 +270,17 @@ void ConfigManager::parseJson(const QJsonObject &root)
         m_config.enableUmamiAnalytics = app["enable_umami_analytics"].toBool(true);
         m_config.showPreviewCard = app["show_preview_card"].toBool(true);
         if (app.contains("show_result_window"))
-        {
             m_config.showResultWindow = app["show_result_window"].toBool(true);
-        }
         if (app.contains("use_card_border"))
-        {
             m_config.useCardBorder = app["use_card_border"].toBool(true);
-        }
         if (app.contains("summary_geometry"))
-        {
             m_config.summaryWindowGeometry = QByteArray::fromBase64(app["summary_geometry"].toString().toLatin1());
-        }
         if (app.contains("summary_zoom"))
-        {
             m_config.summaryWindowZoom = app["summary_zoom"].toDouble(1.0);
-        }
         if (app.contains("config_geometry"))
-        {
             m_config.configWindowGeometry = QByteArray::fromBase64(app["config_geometry"].toString().toLatin1());
-        }
 
         m_config.storagePath = app["storage_path"].toString("");
-
-        // Lock Settings
-        // Default should be UNLOCKED unless explicitly set by user.
         m_config.defaultResultWindowLocked = app["default_result_window_locked"].toBool(false);
         m_config.lockBehavior = app["lock_behavior"].toInt(0);
         m_config.prevResultShortcut = app["prev_result_shortcut"].toString("z");
@@ -749,14 +347,10 @@ QJsonObject ConfigManager::toJson() const
     app["use_card_border"] = m_config.useCardBorder;
 
     if (!m_config.summaryWindowGeometry.isEmpty())
-    {
         app["summary_geometry"] = QString::fromLatin1(m_config.summaryWindowGeometry.toBase64());
-    }
     app["summary_zoom"] = m_config.summaryWindowZoom;
     if (!m_config.configWindowGeometry.isEmpty())
-    {
         app["config_geometry"] = QString::fromLatin1(m_config.configWindowGeometry.toBase64());
-    }
     app["storage_path"] = m_config.storagePath;
 
     app["default_result_window_locked"] = m_config.defaultResultWindowLocked;
@@ -767,6 +361,5 @@ QJsonObject ConfigManager::toJson() const
     app["retranslate_hotkey"] = m_config.retranslateHotkey;
 
     root["app_settings"] = app;
-
     return root;
 }

@@ -30,6 +30,7 @@ set(PROJECT_SOURCES
     src/WinKeyForwarder.cpp
     src/WinKeyForwarder.h
     src/ConfigManager.cpp
+    src/ConfigManager_Profiles.cpp
     src/ConfigManager.h
     src/GlobalHotkey.cpp
     src/GlobalHotkey.h
@@ -52,6 +53,10 @@ set(PROJECT_SOURCES
     src/ConfigDialog_TranslationTab.cpp
     src/ConfigDialog_ArchiveTab.cpp
     src/ConfigDialog_OtherTab.cpp
+    src/ConfigDialog_AdvancedApi.cpp
+    src/ConfigDialog_AdvancedJsonFields.cpp
+    src/ConfigDialog_NetworkTest.cpp
+    src/ConfigDialog_NetworkTestUtils.cpp
     src/ConfigDialog_Retranslate.cpp
     src/ConfigDialog_ProfileWatcher.cpp
     src/ConfigDialog_ProfileCrud.cpp
@@ -59,8 +64,11 @@ set(PROJECT_SOURCES
     src/ConfigDialog.h
     src/TranslationManager.cpp
     src/ApiClient.cpp
+    src/ApiClient_Advanced.cpp
+    src/ApiClient_Providers.cpp
     src/ApiClient.h
     src/SummaryWindow.cpp
+    src/SummaryWindow_FilterUi.cpp
     src/SummaryWindow_Entries.cpp
     src/SummaryWindow_StateHotkeys.cpp
     src/SummaryWindow_Html.cpp
@@ -97,6 +105,10 @@ if(WIN32)
 endif()
 
 add_executable(AI-Screenshot-Translator-Cpp ${PROJECT_SOURCES})
+
+target_include_directories(AI-Screenshot-Translator-Cpp PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/webview"
+)
 
 target_compile_definitions(AI-Screenshot-Translator-Cpp PRIVATE
     APP_NAME="AI Screenshot Translator"
