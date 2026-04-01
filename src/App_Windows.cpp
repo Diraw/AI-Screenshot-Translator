@@ -17,6 +17,36 @@
 #include "WinKeyForwarder.h"
 #endif
 
+namespace
+{
+
+void bringWindowToFront(QWidget *window)
+{
+    if (!window)
+        return;
+
+    window->show();
+    window->setWindowState((window->windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
+    window->raise();
+    window->activateWindow();
+
+    // Some Windows setups ignore the first activation attempt.
+    QTimer::singleShot(0, window, [window]()
+                       {
+        if (!window)
+            return;
+        window->raise();
+        window->activateWindow(); });
+    QTimer::singleShot(150, window, [window]()
+                       {
+        if (!window)
+            return;
+        window->raise();
+        window->activateWindow(); });
+}
+
+} // namespace
+
 void App::showSummary()
 {
     // Track summary window open
@@ -101,6 +131,7 @@ void App::showResult(const QString &entryId)
 
     if (!lockedWindows.isEmpty())
     {
+        ResultWindow *windowToActivate = nullptr;
         for (ResultWindow *rw : lockedWindows)
         {
             if (!rw)
@@ -125,6 +156,17 @@ void App::showResult(const QString &entryId)
                                  cfg.tagHotkey, cfg.retranslateHotkey);
             rw->setHistoryManager(&m_historyManager);
             rw->addEntry(entry);
+
+            if (rw->windowState() & Qt::WindowMinimized)
+                rw->setWindowState(rw->windowState() & ~Qt::WindowMinimized);
+            rw->show();
+            rw->raise();
+            windowToActivate = rw;
+        }
+
+        if (windowToActivate)
+        {
+            bringWindowToFront(windowToActivate);
         }
         return;
     }
@@ -152,7 +194,7 @@ void App::showResult(const QString &entryId)
             Qt::UniqueConnection);
 
     window->setContent(entry.translatedMarkdown, entry.originalBase64, entry.originalBase64List, entry.prompt, entry.id);
-    window->show();
+    bringWindowToFront(window);
 
     // Show result-window hints unless user opted out.
     HintPopup::maybeShow(HintPopup::Kind::ResultWindow, window, cfg);
