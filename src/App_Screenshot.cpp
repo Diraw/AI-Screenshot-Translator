@@ -29,9 +29,22 @@ void App::onScreenshotRequested()
 
     // Otherwise, create new screenshot tool
     AppConfig cfg = m_configManager.getConfig();
+    QList<QPixmap> previousCaptures;
+    if (!m_pendingBatchCaptures.isEmpty())
+    {
+        previousCaptures.reserve(m_pendingBatchCaptures.size());
+        for (const PendingBatchCapture &capture : m_pendingBatchCaptures)
+            previousCaptures.append(capture.pixmap);
+    }
+    else
+    {
+        previousCaptures = m_lastSubmittedCapturePixmaps;
+    }
+
     ScreenshotTool *sw = new ScreenshotTool(cfg.targetScreenIndex,
                                             !m_pendingBatchCaptures.isEmpty(),
                                             m_pendingBatchCaptures.size(),
+                                            previousCaptures,
                                             cfg.batchScreenshotToggleHotkey);
     m_activeScreenshotTool = sw;
     connect(sw, &ScreenshotTool::screenshotTaken, this, &App::onScreenshotCaptured);
@@ -100,6 +113,11 @@ void App::submitCapturedImages(const QList<PendingBatchCapture> &captures)
 {
     if (captures.isEmpty())
         return;
+
+    m_lastSubmittedCapturePixmaps.clear();
+    m_lastSubmittedCapturePixmaps.reserve(captures.size());
+    for (const PendingBatchCapture &capture : captures)
+        m_lastSubmittedCapturePixmaps.append(capture.pixmap);
 
     AppConfig cfg = m_configManager.getConfig();
     const QString entryId = QUuid::createUuid().toString(QUuid::WithoutBraces);

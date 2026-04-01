@@ -91,6 +91,7 @@ private:
         QRect rect;
     };
     QList<PendingBatchCapture> m_pendingBatchCaptures;
+    QList<QPixmap> m_lastSubmittedCapturePixmaps;
 
     void setupTray();
     void notifyHotkeyConflicts(const QString &message, bool interactive);

@@ -19,6 +19,7 @@ public:
     explicit ScreenshotTool(int targetScreenIndex = -1,
                             bool batchModeActive = false,
                             int pendingBatchCount = 0,
+                            const QList<QPixmap> &previousCaptures = {},
                             const QString &batchToggleHotkey = QStringLiteral("d"),
                             QWidget *parent = nullptr);
 
@@ -34,14 +35,17 @@ protected:
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    void keyReleaseEvent(QKeyEvent *event) override;
 
 private:
     QPixmap m_fullCapture;
+    QList<QPixmap> m_previousCaptures;
     QPoint m_globalOrigin; // To offset global coordinates to local widgets coordinates
     
     QPoint m_startPoint;
     QPoint m_endPoint;
     bool m_isSelecting;
+    bool m_showPreviousCapture = false;
     bool m_batchModeActive = false;
     bool m_finalizeBatch = false;
     int m_pendingBatchCount = 0;
@@ -53,6 +57,8 @@ private:
     void captureScreens();
     QRect getNormalizedRect() const;
     QPixmap getResultPixmap(const QRect &selectionRect);
+    QPixmap previousCapturePixmap() const;
+    bool matchesPreviousCaptureHotkey(QKeyEvent *event) const;
     bool matchesBatchToggleHotkey(QKeyEvent *event) const;
     QString batchHotkeyLabel() const;
 };
