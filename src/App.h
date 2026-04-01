@@ -33,6 +33,7 @@ public:
 private slots:
     void onScreenshotRequested();
     void onScreenshotCaptured(const QPixmap &pixmap, const QRect &rect, bool batchMode, bool finalizeBatch);
+    void onBatchFinalizeRequested();
     void onScreenshotCancelled(bool clearPendingBatch);
 
     void onResultWindowScreenshotRequested(const QString &entryId, const QString &base64);

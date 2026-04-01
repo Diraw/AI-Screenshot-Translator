@@ -24,6 +24,7 @@ public:
 
 signals:
     void screenshotTaken(const QPixmap &pixmap, const QRect &rect, bool batchMode, bool finalizeBatch);
+    void batchFinalizeRequested();
     void cancelled(bool clearPendingBatch);
 
 protected:

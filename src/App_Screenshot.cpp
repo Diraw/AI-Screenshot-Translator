@@ -50,6 +50,14 @@ void App::onScreenshotRequested()
             m_activeScreenshotTool->deleteLater();
             m_activeScreenshotTool = nullptr;
         } }, Qt::QueuedConnection);
+    connect(sw, &ScreenshotTool::batchFinalizeRequested, this, &App::onBatchFinalizeRequested);
+    connect(sw, &ScreenshotTool::batchFinalizeRequested, this, [this, sw]()
+            {
+        if (m_activeScreenshotTool == sw)
+        {
+            m_activeScreenshotTool = nullptr;
+        }
+        sw->deleteLater(); });
     connect(sw, &ScreenshotTool::destroyed, this, [this]()
             { m_activeScreenshotTool = nullptr; });
 
@@ -76,6 +84,16 @@ void App::onScreenshotCaptured(const QPixmap &pixmap, const QRect &rect, bool ba
     }
 
     submitCapturedImages(QList<PendingBatchCapture>{{pixmap, rect}});
+}
+
+void App::onBatchFinalizeRequested()
+{
+    if (m_pendingBatchCaptures.isEmpty())
+        return;
+
+    const QList<PendingBatchCapture> captures = m_pendingBatchCaptures;
+    clearPendingBatchCaptures();
+    submitCapturedImages(captures);
 }
 
 void App::submitCapturedImages(const QList<PendingBatchCapture> &captures)

@@ -125,6 +125,9 @@ void ScreenshotTool::paintEvent(QPaintEvent *event) {
                       m_pendingBatchCount > 0 ? QString::fromUtf8("标记最后一张") : QString::fromUtf8("切换批量模式"),
                       (m_finalizeBatch && m_pendingBatchCount > 0) ? QString::fromUtf8("清空已暂存批量") : QString::fromUtf8("取消当前截图"));
 
+    if (m_finalizeBatch && m_pendingBatchCount > 0)
+        lines << QStringLiteral("Enter: \u76F4\u63A5\u53D1\u8D77\u7FFB\u8BD1");
+
     const int padding = 12;
     const int spacing = 6;
     QFontMetrics fm(font);
@@ -230,6 +233,14 @@ void ScreenshotTool::keyPressEvent(QKeyEvent *event) {
 
     if (event->key() == Qt::Key_Escape) {
         emit cancelled(m_finalizeBatch && m_pendingBatchCount > 0);
+        event->accept();
+        return;
+    }
+
+    if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) &&
+        m_finalizeBatch && m_pendingBatchCount > 0) {
+        emit batchFinalizeRequested();
+        close();
         event->accept();
         return;
     }
