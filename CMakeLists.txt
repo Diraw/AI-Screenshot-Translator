@@ -4,6 +4,7 @@ project(AI-Screenshot-Translator-Cpp VERSION 1.0.5 LANGUAGES CXX)
 
 set(PROJECT_VERSION_PRERELEASE "beta")
 set(PROJECT_VERSION_STRING "${PROJECT_VERSION}-${PROJECT_VERSION_PRERELEASE}")
+#set(PROJECT_VERSION_STRING "${PROJECT_VERSION}")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -115,7 +116,7 @@ target_include_directories(AI-Screenshot-Translator-Cpp PRIVATE
 
 target_compile_definitions(AI-Screenshot-Translator-Cpp PRIVATE
     APP_NAME="AI Screenshot Translator"
-    APP_VERSION="${PROJECT_VERSION}"
+    APP_VERSION="${PROJECT_VERSION_STRING}"
     APP_COPYRIGHT="Copyright 2026 Diraw"
     APP_REPO_URL="https://github.com/Diraw/AI-Screenshot-Translator"
 )
