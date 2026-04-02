@@ -60,7 +60,8 @@ QToolBar#archiveFilterToolbar QLabel[role="caption"] {
 }
 
 QWidget#archiveFiltersGroup QDateEdit,
-QWidget#archiveFiltersGroup QComboBox {
+QWidget#archiveFiltersGroup QComboBox,
+QWidget#archiveFiltersGroup QLineEdit {
   color: #0f172a;
   background: transparent;
   border: 1px solid transparent;
@@ -70,15 +71,36 @@ QWidget#archiveFiltersGroup QComboBox {
 }
 
 QWidget#archiveFiltersGroup QDateEdit:hover,
-QWidget#archiveFiltersGroup QComboBox:hover {
+QWidget#archiveFiltersGroup QComboBox:hover,
+QWidget#archiveFiltersGroup QLineEdit:hover {
   background: #eef2f7;
   border-color: #94a3b8;
 }
 
 QWidget#archiveFiltersGroup QDateEdit:focus,
-QWidget#archiveFiltersGroup QComboBox:focus {
+QWidget#archiveFiltersGroup QComboBox:focus,
+QWidget#archiveFiltersGroup QLineEdit:focus {
   background: #e2e8f0;
   border: 1px solid #2563eb;
+}
+
+QWidget#archiveFiltersGroup QLineEdit {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  selection-background-color: #dbeafe;
+  selection-color: #0f172a;
+  placeholder-text-color: #94a3b8;
+}
+
+QWidget#archiveFiltersGroup QLineEdit:disabled {
+  color: #9aa4b2;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+QWidget#archiveFiltersGroup QLineEdit[readOnly="true"] {
+  color: #475569;
+  background: #f8fafc;
 }
 
 QWidget#archiveFiltersGroup QComboBox::drop-down,
