@@ -104,6 +104,9 @@ void ResultWindow::setContent(const QString &markdown, const QString &originalBa
     initData["key_highlight"] = m_highlightKey;
     initData["is_dark"] = ThemeUtils::isSystemDark();
     initData["show_adv_debug"] = m_config.useAdvancedApiMode && m_config.showAdvancedDebugInResultWindow;
+    initData["btn_copied"] = TranslationManager::instance().tr("btn_copied");
+    initData["toast_raw_copied"] = TranslationManager::instance().tr("toast_raw_copied");
+    initData["toast_raw_selection_copied"] = TranslationManager::instance().tr("toast_raw_selection_copied");
     initData["win_id"] = QString::number(reinterpret_cast<quintptr>(this), 16);
     initData["mark_bg"] = ColorUtils::normalizeCssColor(m_config.highlightMarkColor, "#ffeb3b");
     initData["mark_bg_dark"] = ColorUtils::normalizeCssColor(m_config.highlightMarkColorDark, "#d4af37");

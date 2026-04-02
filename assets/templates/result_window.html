@@ -78,6 +78,10 @@ pre {
   color: #111111;
 }
 
+#raw_view {
+  margin-top: 0;
+}
+
 #edit_view {
   width: 100%;
   min-height: 250px;
@@ -204,6 +208,35 @@ body.dark-mode #debug_bar {
 body.dark-mode #debug_lines {
   color: #cfcfcf;
 }
+
+#copy_toast {
+  position: fixed;
+  right: 18px;
+  top: 16px;
+  z-index: 30;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 160ms ease, transform 160ms ease;
+  padding: 7px 12px;
+  border-radius: 4px;
+  background: rgba(24, 24, 24, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+#copy_toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+body.dark-mode #copy_toast {
+  background: rgba(52, 52, 52, 0.92);
+  border-color: rgba(255, 255, 255, 0.14);
+}
 </style>
 <script src='__JS_MARKED__'></script>
 <script src='__JS_HL__'></script>
@@ -212,6 +245,7 @@ body.dark-mode #debug_lines {
 </head>
 <body>
 <div id='keytrap' tabindex='0' style='position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;'></div>
+<div id='copy_toast'>已复制全文</div>
 <div id='main_shell'>
   <div id='scroll_area'>
     <div id='content'><h3>Loading...</h3></div>

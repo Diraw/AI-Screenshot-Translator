@@ -158,6 +158,10 @@ QString TranslationManager::builtinTranslation(const QString &lang, const QStrin
         {QStringLiteral("shottool_cancel_current"), QStringLiteral("\u53d6\u6d88\u5f53\u524d\u622a\u56fe")},
         {QStringLiteral("shottool_hold_preview_last"), QStringLiteral("\u6309\u4f4f\u663e\u793a\u4e0a\u4e00\u5f20\u622a\u56fe")},
         {QStringLiteral("shottool_enter_translate"), QStringLiteral("\u76f4\u63a5\u53d1\u8d77\u7ffb\u8bd1")},
+        {QStringLiteral("btn_copy_all"), QStringLiteral("\u590d\u5236\u5168\u6587")},
+        {QStringLiteral("btn_copied"), QStringLiteral("\u5df2\u590d\u5236")},
+        {QStringLiteral("toast_raw_copied"), QStringLiteral("\u5df2\u81ea\u52a8\u590d\u5236\u5168\u6587")},
+        {QStringLiteral("toast_raw_selection_copied"), QStringLiteral("\u5df2\u590d\u5236\u9009\u4e2d\u6587\u6bb5")},
     };
 
     static const QHash<QString, QString> enTranslations = {
@@ -177,6 +181,10 @@ QString TranslationManager::builtinTranslation(const QString &lang, const QStrin
         {QStringLiteral("shottool_cancel_current"), QStringLiteral("Cancel current screenshot")},
         {QStringLiteral("shottool_hold_preview_last"), QStringLiteral("Hold to preview last shot")},
         {QStringLiteral("shottool_enter_translate"), QStringLiteral("Translate immediately")},
+        {QStringLiteral("btn_copy_all"), QStringLiteral("Copy All")},
+        {QStringLiteral("btn_copied"), QStringLiteral("Copied")},
+        {QStringLiteral("toast_raw_copied"), QStringLiteral("Full text copied")},
+        {QStringLiteral("toast_raw_selection_copied"), QStringLiteral("Selection copied")},
     };
 
     const QHash<QString, QString> *translations = nullptr;
