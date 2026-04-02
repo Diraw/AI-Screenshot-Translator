@@ -12,6 +12,7 @@ void ConfigDialog::loadFromConfig()
     m_isLoadingConfig = true;
     m_lastAdvancedApiTestJson = QJsonDocument();
     m_hasLastAdvancedApiTestJson = false;
+    m_lastAdvancedApiTestElapsedMs = 0;
     if (m_pickAdvancedJsonFieldsBtn)
         m_pickAdvancedJsonFieldsBtn->setEnabled(false);
 

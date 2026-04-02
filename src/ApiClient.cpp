@@ -10,6 +10,9 @@
 #include <QStringList>
 #include <QTimer>
 #include <QUrl>
+#include <QDateTime>
+
+#include <limits>
 
 struct JsonPathStep
 {
@@ -47,11 +50,61 @@ static QStringList parseAdvancedDebugFields(const QString &advancedTemplate)
     for (const QJsonValue &v : arr)
     {
         const QString path = v.toString().trimmed();
-        if (!path.isEmpty())
+        if (!path.isEmpty() &&
+            path != QStringLiteral("_meta.total_elapsed_seconds") &&
+            path != QStringLiteral("_meta.total_elapsed_text"))
             fields.append(path);
     }
     fields.removeDuplicates();
     return fields;
+}
+
+static int parseAdvancedRequestTimeoutMs(const QString &advancedTemplate, int fallbackMs)
+{
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(advancedTemplate.toUtf8(), &err);
+    if (doc.isNull() || !doc.isObject() || err.error != QJsonParseError::NoError)
+        return fallbackMs;
+
+    const QJsonObject root = doc.object();
+
+    bool ok = false;
+    qint64 timeoutMs = -1;
+    const QJsonValue timeoutMsValue = root.value("timeout_ms");
+    if (timeoutMsValue.isDouble())
+    {
+        timeoutMs = static_cast<qint64>(timeoutMsValue.toDouble());
+        ok = true;
+    }
+    else if (timeoutMsValue.isString())
+    {
+        timeoutMs = timeoutMsValue.toString().trimmed().toLongLong(&ok);
+    }
+
+    if (!ok || timeoutMs <= 0)
+    {
+        ok = false;
+        qint64 timeoutSeconds = -1;
+        const QJsonValue timeoutSecondsValue = root.value("timeout_seconds");
+        if (timeoutSecondsValue.isDouble())
+        {
+            timeoutSeconds = static_cast<qint64>(timeoutSecondsValue.toDouble());
+            ok = true;
+        }
+        else if (timeoutSecondsValue.isString())
+        {
+            timeoutSeconds = timeoutSecondsValue.toString().trimmed().toLongLong(&ok);
+        }
+
+        if (ok && timeoutSeconds > 0)
+            timeoutMs = timeoutSeconds * 1000;
+    }
+
+    if (timeoutMs <= 0)
+        return fallbackMs;
+    if (timeoutMs > std::numeric_limits<int>::max())
+        return std::numeric_limits<int>::max();
+    return static_cast<int>(timeoutMs);
 }
 
 static bool parseJsonPathSteps(const QString &path, QList<JsonPathStep> &outSteps)
@@ -178,6 +231,19 @@ static QString buildAdvancedDebugHeader(const QJsonObject &responseRoot, const Q
     return QString("```text\n%1\n```\n\n").arg(lines.join('\n'));
 }
 
+static QJsonObject buildAdvancedMetaObject(qint64 elapsedMs)
+{
+    QJsonObject meta;
+    const qint64 normalizedElapsedMs = qMax<qint64>(0, elapsedMs);
+    meta["total_elapsed_ms"] = static_cast<double>(normalizedElapsedMs);
+    return meta;
+}
+
+static QString timeoutSecondsText(int timeoutMs)
+{
+    return QString::number(timeoutMs / 1000.0, 'g', 6);
+}
+
 static QStringList toStringList(const QList<QByteArray> &images)
 {
     QStringList out;
@@ -229,6 +295,8 @@ ApiClient::RequestSettings ApiClient::currentRequestSettings() const
     settings.proxyUrl = m_proxyUrl;
     settings.useAdvancedApi = m_useAdvancedApi;
     settings.advancedApiTemplate = m_advancedApiTemplate;
+    if (settings.useAdvancedApi)
+        settings.requestTimeoutMs = parseAdvancedRequestTimeoutMs(settings.advancedApiTemplate, kDefaultRequestTimeoutMs);
     return settings;
 }
 
@@ -283,16 +351,18 @@ void ApiClient::processImage(const QByteArray &base64Image, const QString &promp
 
 void ApiClient::processImages(const QList<QByteArray> &base64Images, const QString &promptText, const QString &requestId)
 {
-    processImagesInternal(base64Images, promptText, requestId, 0, currentRequestSettings());
+    processImagesInternal(base64Images, promptText, requestId, 0, currentRequestSettings(),
+                          QDateTime::currentMSecsSinceEpoch());
 }
 
 void ApiClient::processImagesInternal(const QList<QByteArray> &base64Images, const QString &promptText,
-                                      const QString &requestId, int retryCount, const RequestSettings &settings)
+                                      const QString &requestId, int retryCount, const RequestSettings &settings,
+                                      qint64 requestStartMs)
 {
     const QList<QByteArray> images = normalizedImages(base64Images);
     if (images.isEmpty())
     {
-        emit error("Image payload is empty.", requestId);
+        emit error("Image payload is empty.", requestId, 0);
         return;
     }
 
@@ -304,14 +374,14 @@ void ApiClient::processImagesInternal(const QList<QByteArray> &base64Images, con
         QString advancedErr;
         if (!buildAdvancedRequest(settings, images, promptText, request, data, advancedErr))
         {
-            emit error(QString("Advanced API Error: %1").arg(advancedErr), requestId);
+            emit error(QString("Advanced API Error: %1").arg(advancedErr), requestId, 0);
             return;
         }
     }
 
     if ((settings.apiKey.isEmpty() || settings.baseUrl.isEmpty() || settings.modelName.isEmpty()) && !settings.useAdvancedApi)
     {
-        emit error("API Configuration invalid. Please check settings.", requestId);
+        emit error("API Configuration invalid. Please check settings.", requestId, 0);
         return;
     }
 
@@ -349,19 +419,20 @@ void ApiClient::processImagesInternal(const QList<QByteArray> &base64Images, con
     reply->setProperty("requestId", requestId);
     reply->setProperty("retryCount", retryCount);
     reply->setProperty("requestTimedOut", false);
+    reply->setProperty("requestStartMs", requestStartMs);
 
     auto *timeoutTimer = new QTimer(reply);
     timeoutTimer->setObjectName(QStringLiteral("requestTimeoutTimer"));
     timeoutTimer->setSingleShot(true);
-    timeoutTimer->setInterval(kRequestTimeoutMs);
+    timeoutTimer->setInterval(settings.requestTimeoutMs);
     QPointer<QNetworkReply> guardedReply(reply);
-    connect(timeoutTimer, &QTimer::timeout, this, [guardedReply]()
+    connect(timeoutTimer, &QTimer::timeout, this, [guardedReply, requestTimeoutMs = settings.requestTimeoutMs]()
             {
                 if (!guardedReply || guardedReply->isFinished())
                     return;
 
                 guardedReply->setProperty("requestTimedOut", true);
-                qWarning() << "ApiClient: Request timed out after" << ApiClient::kRequestTimeoutMs
+                qWarning() << "ApiClient: Request timed out after" << requestTimeoutMs
                            << "ms. URL:" << guardedReply->url().toString();
                 guardedReply->abort();
             });
@@ -401,12 +472,18 @@ void ApiClient::onReplyFinished(QNetworkReply *reply, const RequestSettings &set
     const QString originalPrompt = reply->property("originalPrompt").toString();
     const int retryCount = reply->property("retryCount").toInt();
     const bool requestTimedOut = reply->property("requestTimedOut").toBool();
+    const qint64 requestStartMs = reply->property("requestStartMs").toLongLong();
+    const qint64 elapsedMs = requestStartMs > 0
+                                 ? qMax<qint64>(0, QDateTime::currentMSecsSinceEpoch() - requestStartMs)
+                                 : 0;
 
     if (reply->error() != QNetworkReply::NoError)
     {
         if (requestTimedOut)
         {
-            emit error(QString("Request timed out after %1 seconds.").arg(kRequestTimeoutMs / 1000), requestId);
+            emit error(QString("Request timed out after %1 seconds.")
+                           .arg(timeoutSecondsText(settings.requestTimeoutMs)),
+                       requestId, elapsedMs);
             cleanupReply();
             return;
         }
@@ -422,7 +499,7 @@ void ApiClient::onReplyFinished(QNetworkReply *reply, const RequestSettings &set
                 images.reserve(originalBase64List.size());
                 for (const QString &image : originalBase64List)
                     images.append(image.toLatin1());
-                processImagesInternal(images, originalPrompt, requestId, retryCount + 1, settings);
+                processImagesInternal(images, originalPrompt, requestId, retryCount + 1, settings, requestStartMs);
                 cleanupReply();
                 return;
             }
@@ -431,7 +508,7 @@ void ApiClient::onReplyFinished(QNetworkReply *reply, const RequestSettings &set
         const QString err = reply->errorString();
         const QByteArray response = reply->readAll();
         qWarning() << "API Error:" << err << "Response:" << response;
-        emit error(QString("Network Error: %1").arg(err), requestId);
+        emit error(QString("Network Error: %1").arg(err), requestId, elapsedMs);
         cleanupReply();
         return;
     }
@@ -443,7 +520,7 @@ void ApiClient::onReplyFinished(QNetworkReply *reply, const RequestSettings &set
     if (doc.isNull())
     {
         qWarning() << "ApiClient: Failed to parse JSON response";
-        emit error("Failed to parse API response as JSON", requestId);
+        emit error("Failed to parse API response as JSON", requestId, elapsedMs);
         cleanupReply();
         return;
     }
@@ -453,7 +530,7 @@ void ApiClient::onReplyFinished(QNetworkReply *reply, const RequestSettings &set
     {
         const QJsonObject errObj = root["error"].toObject();
         const QString errMsg = errObj["message"].toString();
-        emit error(QString("API Error: %1").arg(errMsg), requestId);
+        emit error(QString("API Error: %1").arg(errMsg), requestId, elapsedMs);
         cleanupReply();
         return;
     }
@@ -489,19 +566,21 @@ void ApiClient::onReplyFinished(QNetworkReply *reply, const RequestSettings &set
     if (content.isEmpty())
     {
         qWarning() << "ApiClient: Parsed content is empty. Check parser logic.";
-        emit error("Failed to extract content from API response", requestId);
+        emit error("Failed to extract content from API response", requestId, elapsedMs);
         cleanupReply();
         return;
     }
 
     if (settings.useAdvancedApi)
     {
-        const QString debugHeader = buildAdvancedDebugHeader(root, settings.advancedApiTemplate);
+        QJsonObject rootWithMeta = root;
+        rootWithMeta.insert("_meta", buildAdvancedMetaObject(elapsedMs));
+        const QString debugHeader = buildAdvancedDebugHeader(rootWithMeta, settings.advancedApiTemplate);
         if (!debugHeader.isEmpty())
             content.prepend(debugHeader);
     }
 
-    emit success(content, QString::fromUtf8(originalBase64), originalPrompt, requestId);
+    emit success(content, QString::fromUtf8(originalBase64), originalPrompt, requestId, elapsedMs);
     cleanupReply();
 }
 

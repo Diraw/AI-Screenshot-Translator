@@ -39,8 +39,9 @@ private slots:
     void onResultWindowScreenshotRequested(const QString &entryId, const QString &base64);
     void onRetranslateRequested(const QStringList &base64Images);
 
-    void onApiSuccess(const QString &text, const QString &originalBase64, const QString &originalPrompt, const QString &requestId);
-    void onApiError(const QString &errorMsg, const QString &requestId);
+    void onApiSuccess(const QString &text, const QString &originalBase64, const QString &originalPrompt,
+                      const QString &requestId, qint64 elapsedMs);
+    void onApiError(const QString &errorMsg, const QString &requestId, qint64 elapsedMs);
 
     void showConfig();
     void showSummary();

@@ -1,16 +1,20 @@
 #include "App.h"
 
-void App::onApiSuccess(const QString &result, const QString &originalBase64, const QString &originalPrompt, const QString &requestId)
+#include <QtGlobal>
+
+void App::onApiSuccess(const QString &result, const QString &originalBase64, const QString &originalPrompt,
+                       const QString &requestId, qint64 elapsedMs)
 {
     Q_UNUSED(originalBase64);
     Q_UNUSED(originalPrompt);
 
     const QString entryId = requestId;
+    const int durationMs = static_cast<int>(qBound<qint64>(0, elapsedMs, 2147483647LL));
 
     // Track translation completed (success)
     AppConfig cfg = m_configManager.getConfig();
     if (m_analytics)
-        m_analytics->trackTranslationCompleted(cfg.apiProvider, true, 0);
+        m_analytics->trackTranslationCompleted(cfg.apiProvider, true, durationMs);
 
     if (m_summaryWindow)
     {
@@ -20,14 +24,15 @@ void App::onApiSuccess(const QString &result, const QString &originalBase64, con
     m_historyManager.updateEntryContent(entryId, result);
 }
 
-void App::onApiError(const QString &error, const QString &requestId)
+void App::onApiError(const QString &error, const QString &requestId, qint64 elapsedMs)
 {
     const QString entryId = requestId;
+    const int durationMs = static_cast<int>(qBound<qint64>(0, elapsedMs, 2147483647LL));
 
     // Track translation completed (failure)
     AppConfig cfg = m_configManager.getConfig();
     if (m_analytics)
-        m_analytics->trackTranslationCompleted(cfg.apiProvider, false, 0);
+        m_analytics->trackTranslationCompleted(cfg.apiProvider, false, durationMs);
 
     const QString errorText = "Error: " + error;
     if (m_summaryWindow)

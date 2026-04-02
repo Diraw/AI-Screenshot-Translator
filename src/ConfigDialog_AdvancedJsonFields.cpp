@@ -16,6 +16,7 @@
 #include <QSignalBlocker>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QtGlobal>
 
 namespace
 {
@@ -114,6 +115,13 @@ QStringList readDebugFieldsFromTemplateRoot(const QJsonObject &root)
     fields.removeDuplicates();
     return fields;
 }
+
+void appendSyntheticAdvancedFields(QStringList &candidatePaths, QHash<QString, QString> &previews, qint64 elapsedMs)
+{
+    const qint64 normalizedElapsedMs = qMax<qint64>(0, elapsedMs);
+    candidatePaths << "_meta.total_elapsed_ms";
+    previews.insert("_meta.total_elapsed_ms", QString::number(normalizedElapsedMs));
+}
 } // namespace
 
 void ConfigDialog::onPickAdvancedJsonFields()
@@ -139,6 +147,7 @@ void ConfigDialog::onPickAdvancedJsonFields()
         collectJsonLeafPaths(m_lastAdvancedApiTestJson.object(), QString(), candidatePaths, previews);
     else if (m_lastAdvancedApiTestJson.isArray())
         collectJsonLeafPaths(m_lastAdvancedApiTestJson.array(), QString(), candidatePaths, previews);
+    appendSyntheticAdvancedFields(candidatePaths, previews, m_lastAdvancedApiTestElapsedMs);
 
     candidatePaths.removeDuplicates();
     if (candidatePaths.isEmpty())

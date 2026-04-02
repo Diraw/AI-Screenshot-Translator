@@ -88,6 +88,7 @@ QString ConfigDialog::buildAdvancedTemplateFromRegular(const QString &provider) 
     root["temperature"] = 0.2;
     root["top_p"] = 1.0;
     root["max_tokens"] = 1024;
+    root["timeout_ms"] = 30000;
 
     QJsonObject headers;
     headers["Content-Type"] = "application/json";

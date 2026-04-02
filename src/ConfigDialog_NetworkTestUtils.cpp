@@ -45,180 +45,212 @@ QString buildDetailedNetworkError(QNetworkReply::NetworkError error, const QStri
     switch (error)
     {
     case QNetworkReply::ConnectionRefusedError:
-        diagnosis = QStringLiteral("âŒ è¿žæŽ¥è¢«æ‹’ç»\n\n"
-                                   "å¯èƒ½åŽŸå› ï¼š\n"
-                                   "â€¢ æœåŠ¡å™¨æœªå¯åŠ¨æˆ–æœªç›‘å¬è¯¥ç«¯å£\n"
-                                   "â€¢ é˜²ç«å¢™é˜»æ­¢äº†è¿žæŽ¥\n"
-                                   "â€¢ IP åœ°å€æˆ–ç«¯å£å·é”™è¯¯\n\n"
-                                   "å»ºè®®æ£€æŸ¥ï¼šæœåŠ¡å™¨æ˜¯å¦è¿è¡Œï¼Œåœ°å€å’Œç«¯å£æ˜¯å¦æ­£ç¡®");
+        diagnosis = QStringLiteral(
+            "连接被拒绝\n\n"
+            "可能原因：\n"
+            "- 服务未启动，或没有监听该端口\n"
+            "- 防火墙拦截了连接\n"
+            "- IP 地址或端口填写错误\n\n"
+            "建议检查：\n"
+            "- 确认目标服务正在运行\n"
+            "- 确认 Base URL 和端口正确");
         break;
 
     case QNetworkReply::RemoteHostClosedError:
-        diagnosis = QStringLiteral("âŒ æœåŠ¡å™¨ä¸»åŠ¨æ–­å¼€è¿žæŽ¥\n\n"
-                                   "å¯èƒ½åŽŸå› ï¼š\n"
-                                   "â€¢ æœåŠ¡å™¨æ‹’ç»äº†è¯·æ±‚ï¼ˆå¯èƒ½æ˜¯ TLS/SSL ç‰ˆæœ¬ä¸å…¼å®¹ï¼‰\n"
-                                   "â€¢ è¯·æ±‚è¢«é˜²ç«å¢™æˆ–å®‰å…¨è½¯ä»¶æ‹¦æˆª\n"
-                                   "â€¢ ä»£ç†æœåŠ¡å™¨é…ç½®é”™è¯¯\n\n"
-                                   "å»ºè®®æ£€æŸ¥ï¼šå¦‚æžœä½¿ç”¨ä»£ç†ï¼Œè¯·æ£€æŸ¥ä»£ç†è®¾ç½®ï¼›å°è¯•å…³é—­é˜²ç«å¢™æµ‹è¯•");
+        diagnosis = QStringLiteral(
+            "远端主机主动断开连接\n\n"
+            "可能原因：\n"
+            "- 服务端拒绝了当前请求\n"
+            "- TLS/SSL 配置不兼容\n"
+            "- 代理或安全软件中断了连接\n\n"
+            "建议检查：\n"
+            "- 确认请求地址和协议正确\n"
+            "- 如使用代理，确认代理配置可用");
         break;
 
     case QNetworkReply::HostNotFoundError:
-        diagnosis = QStringLiteral("âŒ æ— æ³•è§£æžæœåŠ¡å™¨åœ°å€\n\n"
-                                   "å¯èƒ½åŽŸå› ï¼š\n"
-                                   "â€¢ DNS è§£æžå¤±è´¥\n"
-                                   "â€¢ åŸŸåæ‹¼å†™é”™è¯¯\n"
-                                   "â€¢ ç½‘ç»œè¿žæŽ¥æ–­å¼€\n\n"
-                                   "å»ºè®®æ£€æŸ¥ï¼š\n"
-                                   "â€¢ æ£€æŸ¥åŸŸåæ‹¼å†™æ˜¯å¦æ­£ç¡®\n"
-                                   "â€¢ å°è¯•åœ¨æµè§ˆå™¨ä¸­è®¿é—®è¯¥åœ°å€\n"
-                                   "â€¢ æ£€æŸ¥ç½‘ç»œè¿žæŽ¥");
+        diagnosis = QStringLiteral(
+            "无法解析主机地址\n\n"
+            "可能原因：\n"
+            "- 域名填写错误\n"
+            "- DNS 解析失败\n"
+            "- 网络连接异常\n\n"
+            "建议检查：\n"
+            "- 确认 Base URL 中的主机名正确\n"
+            "- 尝试在浏览器中访问同一地址");
         break;
 
     case QNetworkReply::TimeoutError:
-        diagnosis = QStringLiteral("âŒ è¿žæŽ¥è¶…æ—¶ï¼ˆè¶…è¿‡ 8 ç§’ï¼‰\n\n"
-                                   "å¯èƒ½åŽŸå› ï¼š\n"
-                                   "â€¢ ç½‘ç»œå»¶è¿Ÿè¿‡é«˜\n"
-                                   "â€¢ æœåŠ¡å™¨å“åº”ç¼“æ…¢\n"
-                                   "â€¢ é˜²ç«å¢™æˆ–ä»£ç†å¯¼è‡´è¿žæŽ¥é˜»å¡ž\n\n"
-                                   "å»ºè®®æ£€æŸ¥ï¼š\n"
-                                   "â€¢ ç½‘ç»œè¿žæŽ¥æ˜¯å¦æ­£å¸¸\n"
-                                   "â€¢ å¦‚æžœä½¿ç”¨ä»£ç†ï¼Œæ£€æŸ¥ä»£ç†æ˜¯å¦å¯ç”¨\n"
-                                   "â€¢ å°è¯•åœ¨æµè§ˆå™¨ä¸­è®¿é—®è¯¥åœ°å€ç¡®è®¤å“åº”é€Ÿåº¦");
+        diagnosis = QStringLiteral(
+            "请求超时\n\n"
+            "可能原因：\n"
+            "- 网络延迟过高\n"
+            "- 服务端响应较慢\n"
+            "- 代理或安全软件阻塞了连接\n\n"
+            "建议检查：\n"
+            "- 确认网络连接正常\n"
+            "- 如使用代理，确认代理可用\n"
+            "- 尝试适当增大超时时间");
         break;
 
     case QNetworkReply::OperationCanceledError:
         if (httpStatus == 0)
         {
-            diagnosis = QStringLiteral("âŒ è¯·æ±‚è¢«ä¸­æ–­ï¼ˆHTTP 0ï¼‰\n\n"
-                                       "å¯èƒ½åŽŸå› ï¼š\n"
-                                       "â€¢ è¯·æ±‚è¶…æ—¶ï¼ˆè¶…è¿‡ 8 ç§’æ— å“åº”ï¼‰\n"
-                                       "â€¢ ç½‘ç»œè¿žæŽ¥ä¸­æ–­\n"
-                                       "â€¢ è¯·æ±‚è¢«é˜²ç«å¢™/æ€æ¯’è½¯ä»¶æ‹¦æˆª\n"
-                                       "â€¢ æœåŠ¡å™¨æ— å“åº”\n\n"
-                                       "å»ºè®®æ£€æŸ¥ï¼š\n"
-                                       "â€¢ æ£€æŸ¥ç½‘ç»œè¿žæŽ¥\n"
-                                       "â€¢ å¦‚æžœä½¿ç”¨ä»£ç†ï¼Œç¡®è®¤ä»£ç†å¯ç”¨\n"
-                                       "â€¢ æš‚æ—¶å…³é—­é˜²ç«å¢™/æ€æ¯’è½¯ä»¶æµ‹è¯•\n"
-                                       "â€¢ åœ¨æµè§ˆå™¨ä¸­è®¿é—®ç›¸åŒåœ°å€æµ‹è¯•");
+            diagnosis = QStringLiteral(
+                "请求被中断（HTTP 0）\n\n"
+                "可能原因：\n"
+                "- 请求超时\n"
+                "- 网络连接中断\n"
+                "- 请求被防火墙或安全软件拦截\n"
+                "- 服务端没有响应\n\n"
+                "建议检查：\n"
+                "- 检查网络连接\n"
+                "- 如使用代理，确认代理可用\n"
+                "- 暂时关闭防火墙或安全软件后重试\n"
+                "- 在浏览器中访问相同地址进行测试");
         }
         else
         {
-            diagnosis = QStringLiteral("âŒ è¯·æ±‚è¢«å–æ¶ˆ");
+            diagnosis = QStringLiteral("请求被取消");
         }
         break;
 
     case QNetworkReply::SslHandshakeFailedError:
-        diagnosis = QStringLiteral("âŒ SSL/TLS æ¡æ‰‹å¤±è´¥\n\n"
-                                   "å¯èƒ½åŽŸå› ï¼š\n"
-                                   "â€¢ æœåŠ¡å™¨è¯ä¹¦è¿‡æœŸæˆ–ä¸å—ä¿¡ä»»\n"
-                                   "â€¢ ç³»ç»Ÿæ—¶é—´ä¸æ­£ç¡®å¯¼è‡´è¯ä¹¦éªŒè¯å¤±è´¥\n"
-                                   "â€¢ TLS ç‰ˆæœ¬ä¸å…¼å®¹\n\n"
-                                   "å»ºè®®æ£€æŸ¥ï¼š\n"
-                                   "â€¢ æ£€æŸ¥ç³»ç»Ÿæ—¶é—´æ˜¯å¦æ­£ç¡®\n"
-                                   "â€¢ å°è¯•åœ¨æµè§ˆå™¨ä¸­è®¿é—®ï¼ŒæŸ¥çœ‹è¯ä¹¦è­¦å‘Š\n"
-                                   "â€¢ å¦‚æžœæ˜¯è‡ªç­¾åè¯ä¹¦ï¼Œéœ€è¦æ·»åŠ åˆ°ä¿¡ä»»åˆ—è¡¨");
+        diagnosis = QStringLiteral(
+            "SSL/TLS 握手失败\n\n"
+            "可能原因：\n"
+            "- 证书无效或不受信任\n"
+            "- 系统时间不正确\n"
+            "- TLS 版本不兼容\n\n"
+            "建议检查：\n"
+            "- 确认系统时间正确\n"
+            "- 在浏览器中访问同一地址查看证书情况");
         break;
 
     case QNetworkReply::TemporaryNetworkFailureError:
     case QNetworkReply::NetworkSessionFailedError:
-        diagnosis = QStringLiteral("âŒ ç½‘ç»œä¼šè¯å¤±è´¥\n\n"
-                                   "å¯èƒ½åŽŸå› ï¼š\n"
-                                   "â€¢ ç½‘ç»œè¿žæŽ¥å·²æ–­å¼€\n"
-                                   "â€¢ WiFi è¿žæŽ¥ä¸ç¨³å®š\n\n"
-                                   "å»ºè®®æ£€æŸ¥ï¼šç½‘ç»œè¿žæŽ¥çŠ¶æ€");
+        diagnosis = QStringLiteral(
+            "网络会话失败\n\n"
+            "可能原因：\n"
+            "- 当前网络连接已断开\n"
+            "- Wi-Fi 或代理连接不稳定\n\n"
+            "建议检查：\n"
+            "- 确认网络状态正常后重试");
         break;
 
     case QNetworkReply::ProxyConnectionRefusedError:
-        diagnosis = QStringLiteral("âŒ ä»£ç†æœåŠ¡å™¨æ‹’ç»è¿žæŽ¥\n\n"
-                                   "å¯èƒ½åŽŸå› ï¼š\n"
-                                   "â€¢ ä»£ç†æœåŠ¡å™¨æœªè¿è¡Œ\n"
-                                   "â€¢ ä»£ç†åœ°å€æˆ–ç«¯å£é”™è¯¯\n\n"
-                                   "å»ºè®®æ£€æŸ¥ï¼šä»£ç†è®¾ç½®æ˜¯å¦æ­£ç¡®");
+        diagnosis = QStringLiteral(
+            "代理连接被拒绝\n\n"
+            "可能原因：\n"
+            "- 代理服务未启动\n"
+            "- 代理地址或端口错误\n\n"
+            "建议检查：\n"
+            "- 确认代理配置正确");
         break;
 
     case QNetworkReply::ProxyNotFoundError:
-        diagnosis = QStringLiteral("âŒ æ— æ³•è¿žæŽ¥åˆ°ä»£ç†æœåŠ¡å™¨\n\n"
-                                   "å¯èƒ½åŽŸå› ï¼š\n"
-                                   "â€¢ ä»£ç†æœåŠ¡å™¨åœ°å€é”™è¯¯\n"
-                                   "â€¢ ä»£ç†æœåŠ¡å™¨ä¸å¯è¾¾\n\n"
-                                   "å»ºè®®æ£€æŸ¥ï¼šä»£ç†åœ°å€å’Œç«¯å£é…ç½®");
+        diagnosis = QStringLiteral(
+            "找不到代理服务器\n\n"
+            "可能原因：\n"
+            "- 代理地址填写错误\n"
+            "- 代理服务不可达\n\n"
+            "建议检查：\n"
+            "- 确认代理地址和端口配置");
         break;
 
     case QNetworkReply::ProxyTimeoutError:
-        diagnosis = QStringLiteral("âŒ ä»£ç†è¿žæŽ¥è¶…æ—¶\n\n"
-                                   "å¯èƒ½åŽŸå› ï¼š\n"
-                                   "â€¢ ä»£ç†æœåŠ¡å™¨å“åº”ç¼“æ…¢\n"
-                                   "â€¢ ä»£ç†æœåŠ¡å™¨ä¸å¯è¾¾\n\n"
-                                   "å»ºè®®æ£€æŸ¥ï¼š\n"
-                                   "â€¢ ç¡®è®¤ä»£ç†æœåŠ¡å™¨å¯ç”¨\n"
-                                   "â€¢ å°è¯•ä¸ä½¿ç”¨ä»£ç†ç›´æŽ¥è¿žæŽ¥");
+        diagnosis = QStringLiteral(
+            "代理连接超时\n\n"
+            "可能原因：\n"
+            "- 代理响应较慢\n"
+            "- 代理不可达\n\n"
+            "建议检查：\n"
+            "- 确认代理服务可用\n"
+            "- 尝试直连测试");
         break;
 
     case QNetworkReply::ProxyAuthenticationRequiredError:
-        diagnosis = QStringLiteral("âŒ ä»£ç†éœ€è¦èº«ä»½éªŒè¯\n\n"
-                                   "å»ºè®®æ£€æŸ¥ï¼šä»£ç†ç”¨æˆ·åå’Œå¯†ç æ˜¯å¦æ­£ç¡®");
+        diagnosis = QStringLiteral(
+            "代理需要身份验证\n\n"
+            "建议检查：\n"
+            "- 确认代理用户名和密码正确");
         break;
 
     case QNetworkReply::ContentAccessDenied:
     case QNetworkReply::AuthenticationRequiredError:
-        diagnosis = QStringLiteral("âŒ è®¿é—®è¢«æ‹’ç»ï¼ˆHTTP 401/403ï¼‰\n\n"
-                                   "å¯èƒ½åŽŸå› ï¼šAPI Key æ— æ•ˆæˆ–è¿‡æœŸ\n\n"
-                                   "å»ºè®®æ£€æŸ¥ï¼šAPI Key æ˜¯å¦æ­£ç¡®");
+        diagnosis = QStringLiteral(
+            "访问被拒绝（HTTP 401/403）\n\n"
+            "可能原因：\n"
+            "- API Key 无效、缺失或已过期\n\n"
+            "建议检查：\n"
+            "- 确认 API Key 正确");
         break;
 
     case QNetworkReply::ContentNotFoundError:
-        diagnosis = QStringLiteral("âŒ æŽ¥å£è·¯å¾„ä¸å­˜åœ¨ï¼ˆHTTP 404ï¼‰\n\n"
-                                   "å»ºè®®æ£€æŸ¥ï¼šç«¯ç‚¹è·¯å¾„ï¼ˆEndpointï¼‰æ˜¯å¦æ­£ç¡®");
+        diagnosis = QStringLiteral(
+            "接口路径不存在（HTTP 404）\n\n"
+            "建议检查：\n"
+            "- 确认 Endpoint 配置正确");
         break;
 
     case QNetworkReply::ProtocolInvalidOperationError:
-        diagnosis = QStringLiteral("âŒ è¯·æ±‚æ–¹æ³•ä¸å…è®¸ï¼ˆHTTP 405ï¼‰\n\n"
-                                   "å¯èƒ½åŽŸå› ï¼šAPI ä¸æ”¯æŒè¯¥è¯·æ±‚æ–¹æ³•\n\n"
-                                   "å»ºè®®æ£€æŸ¥ï¼šAPI æ ¼å¼è®¾ç½®æ˜¯å¦æ­£ç¡®ï¼ˆOpenAI/Ollamaï¼‰");
+        diagnosis = QStringLiteral(
+            "请求方法不被允许（HTTP 405）\n\n"
+            "可能原因：\n"
+            "- 当前 API 不支持该请求格式\n\n"
+            "建议检查：\n"
+            "- 确认接口格式与服务端兼容");
         break;
 
     case QNetworkReply::ContentReSendError:
-        diagnosis = QStringLiteral("âŒ é‡å®šå‘é”™è¯¯\n\n"
-                                   "å¯èƒ½åŽŸå› ï¼šæœåŠ¡å™¨è¿”å›žäº†é‡å®šå‘ï¼Œä½†è¢«æ‹¦æˆª\n\n"
-                                   "å»ºè®®æ£€æŸ¥ï¼šä½¿ç”¨æµè§ˆå™¨è®¿é—®çœ‹æ˜¯å¦è‡ªåŠ¨è·³è½¬");
+        diagnosis = QStringLiteral(
+            "重定向错误\n\n"
+            "可能原因：\n"
+            "- 服务端返回了重定向，但请求被拦截\n\n"
+            "建议检查：\n"
+            "- 在浏览器中访问同一地址确认是否发生跳转");
         break;
 
     case QNetworkReply::ServiceUnavailableError:
     case QNetworkReply::InternalServerError:
-        diagnosis = QStringLiteral("âŒ æœåŠ¡å™¨å†…éƒ¨é”™è¯¯ï¼ˆHTTP 5xxï¼‰\n\n"
-                                   "å¯èƒ½åŽŸå› ï¼šæœåŠ¡å™¨æš‚æ—¶ä¸å¯ç”¨\n\n"
-                                   "å»ºè®®ï¼šç¨åŽå†è¯•");
+        diagnosis = QStringLiteral(
+            "服务端错误（HTTP 5xx）\n\n"
+            "可能原因：\n"
+            "- 服务端暂时不可用\n\n"
+            "建议检查：\n"
+            "- 稍后重试");
         break;
 
     case QNetworkReply::UnknownNetworkError:
         if (httpStatus == 0)
         {
-            diagnosis = QStringLiteral("âŒ ç½‘ç»œé”™è¯¯ï¼ˆHTTP 0ï¼‰\n\n"
-                                       "å¯èƒ½åŽŸå› ï¼š\n"
-                                       "â€¢ è¯·æ±‚è¶…æ—¶ï¼ˆè¶…è¿‡ 8 ç§’ï¼‰\n"
-                                       "â€¢ ç½‘ç»œè¿žæŽ¥ä¸­æ–­\n"
-                                       "â€¢ è¯·æ±‚è¢«é˜²ç«å¢™/æ€æ¯’è½¯ä»¶æ‹¦æˆª\n"
-                                       "â€¢ æœåŠ¡å™¨æ— å“åº”\n\n"
-                                       "å»ºè®®æ£€æŸ¥ï¼š\n"
-                                       "1. æ£€æŸ¥ Base URL æ ¼å¼æ˜¯å¦æ­£ç¡®ï¼ˆéœ€åŒ…å« https://ï¼‰\n"
-                                       "2. åœ¨æµè§ˆå™¨ä¸­è®¿é—®ç›¸åŒåœ°å€æµ‹è¯•\n"
-                                       "3. æ£€æŸ¥ç½‘ç»œè¿žæŽ¥å’Œä»£ç†è®¾ç½®\n"
-                                       "4. æš‚æ—¶å…³é—­é˜²ç«å¢™/æ€æ¯’è½¯ä»¶æµ‹è¯•");
+            diagnosis = QStringLiteral(
+                "网络错误（HTTP 0）\n\n"
+                "可能原因：\n"
+                "- 请求超时\n"
+                "- 网络连接中断\n"
+                "- 请求被防火墙或安全软件拦截\n"
+                "- 服务端无响应\n\n"
+                "建议检查：\n"
+                "1. 确认 Base URL 格式正确\n"
+                "2. 在浏览器中访问相同地址测试\n"
+                "3. 检查网络连接和代理设置\n"
+                "4. 暂时关闭防火墙或安全软件后重试");
         }
         else
         {
-            diagnosis = QStringLiteral("âŒ æœªçŸ¥ç½‘ç»œé”™è¯¯");
+            diagnosis = QStringLiteral("未知网络错误");
         }
         break;
 
     default:
-        diagnosis = QStringLiteral("ç½‘ç»œé”™è¯¯ (%1)").arg(error);
+        diagnosis = QStringLiteral("网络错误（%1）").arg(error);
         break;
     }
 
-    QString result = QStringLiteral("æµ‹è¯•å¤±è´¥ï¼ˆHTTP %1ï¼‰\n\n").arg(httpStatus);
+    QString result = QStringLiteral("测试失败（HTTP %1）\n\n").arg(httpStatus);
     result += diagnosis;
-    result += QStringLiteral("\n\næŠ€æœ¯ä¿¡æ¯ï¼š\nâ€¢ é”™è¯¯ç±»åž‹: %1\nâ€¢ åŽŸå§‹é”™è¯¯: %2\nâ€¢ è¯·æ±‚åœ°å€: %3")
+    result += QStringLiteral("\n\n技术信息：\n- 错误类型: %1\n- 原始错误: %2\n- 请求地址: %3")
                   .arg(error)
                   .arg(errorString)
                   .arg(url.toString());
@@ -322,4 +354,3 @@ QString loadAdvancedApiTestImageBase64()
     return QStringLiteral("iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAMElEQVR4nGK68+H//w//iScZ/3/4f5eBQZmBgUiSiSTVygwMozaM2jBgNgACAAD//8tKvDmEFTFvAAAAAElFTkSuQmCC");
 }
 } // namespace ConfigDialogNetworkTestUtils
-

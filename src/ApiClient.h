@@ -10,6 +10,7 @@
 #include <QHash>
 #include <QJsonValue>
 #include <QPointer>
+#include <QtGlobal>
 
 enum class ApiProvider
 {
@@ -35,8 +36,9 @@ public:
     void processImages(const QList<QByteArray> &base64Images, const QString &promptText, const QString &requestId = QString());
 
 signals:
-    void success(const QString &text, const QString &originalBase64, const QString &originalPrompt, const QString &requestId);
-    void error(const QString &errorMessage, const QString &requestId);
+    void success(const QString &text, const QString &originalBase64, const QString &originalPrompt,
+                 const QString &requestId, qint64 elapsedMs);
+    void error(const QString &errorMessage, const QString &requestId, qint64 elapsedMs);
 
 private:
     struct RequestSettings
@@ -50,6 +52,7 @@ private:
         QString proxyUrl;
         bool useAdvancedApi = false;
         QString advancedApiTemplate;
+        int requestTimeoutMs = 30000;
     };
 
     QString m_apiKey;
@@ -62,7 +65,7 @@ private:
     bool m_useAdvancedApi = false;
     QString m_advancedApiTemplate;
 
-    static constexpr int kRequestTimeoutMs = 30000;
+    static constexpr int kDefaultRequestTimeoutMs = 30000;
     static constexpr int kMaxNetworkRetries = 1;
 
     RequestSettings currentRequestSettings() const;
@@ -85,7 +88,8 @@ private:
     QString getEndpoint(const RequestSettings &settings) const;
     void setProviderHeaders(QNetworkRequest &request, const RequestSettings &settings) const;
     void processImagesInternal(const QList<QByteArray> &base64Images, const QString &promptText,
-                               const QString &requestId, int retryCount, const RequestSettings &settings);
+                               const QString &requestId, int retryCount, const RequestSettings &settings,
+                               qint64 requestStartMs);
     bool buildAdvancedRequest(const RequestSettings &settings, const QList<QByteArray> &base64Images,
                               const QString &promptText,
                               QNetworkRequest &request, QByteArray &payload,

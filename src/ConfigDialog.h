@@ -21,6 +21,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QHash>
+#include <QtGlobal>
 
 #include "ConfigManager.h"
 
@@ -223,6 +224,7 @@ private:
     QPlainTextEdit *m_advancedApiResultEdit = nullptr;
     QJsonDocument m_lastAdvancedApiTestJson;
     bool m_hasLastAdvancedApiTestJson = false;
+    qint64 m_lastAdvancedApiTestElapsedMs = 0;
 
     void loadFromConfig();
     void updateProfileList();

@@ -3,6 +3,7 @@
 #include "ConfigDialog_NetworkTestUtils.h"
 #include "TranslationManager.h"
 
+#include <QDateTime>
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -16,6 +17,53 @@
 #include <QPointer>
 #include <QTimer>
 #include <QUrl>
+
+#include <limits>
+
+namespace
+{
+int parseAdvancedTimeoutMs(const QJsonObject &root, int fallbackMs)
+{
+    bool ok = false;
+    qint64 timeoutMs = -1;
+
+    const QJsonValue timeoutMsValue = root.value("timeout_ms");
+    if (timeoutMsValue.isDouble())
+    {
+        timeoutMs = static_cast<qint64>(timeoutMsValue.toDouble());
+        ok = true;
+    }
+    else if (timeoutMsValue.isString())
+    {
+        timeoutMs = timeoutMsValue.toString().trimmed().toLongLong(&ok);
+    }
+
+    if (!ok || timeoutMs <= 0)
+    {
+        ok = false;
+        qint64 timeoutSeconds = -1;
+        const QJsonValue timeoutSecondsValue = root.value("timeout_seconds");
+        if (timeoutSecondsValue.isDouble())
+        {
+            timeoutSeconds = static_cast<qint64>(timeoutSecondsValue.toDouble());
+            ok = true;
+        }
+        else if (timeoutSecondsValue.isString())
+        {
+            timeoutSeconds = timeoutSecondsValue.toString().trimmed().toLongLong(&ok);
+        }
+
+        if (ok && timeoutSeconds > 0)
+            timeoutMs = timeoutSeconds * 1000;
+    }
+
+    if (timeoutMs <= 0)
+        return fallbackMs;
+    if (timeoutMs > std::numeric_limits<int>::max())
+        return std::numeric_limits<int>::max();
+    return static_cast<int>(timeoutMs);
+}
+} // namespace
 
 void ConfigDialog::onTestConnection()
 {
@@ -42,7 +90,7 @@ void ConfigDialog::onTestConnection()
     const QString apiKey = m_apiKeyEdit ? m_apiKeyEdit->text().trimmed() : QString();
     const bool useProxy = m_useProxyCheck ? m_useProxyCheck->isChecked() : false;
     const QString proxyUrl = m_proxyUrlEdit ? m_proxyUrlEdit->text().trimmed() : QString();
-    const QString providerStr = m_apiProviderCombo ? m_apiProviderCombo->currentData().toString().trimmed().toLower() : QString("openai");
+    const QString providerStr = m_apiProviderCombo ? m_apiProviderCombo->currentData().toString().trimmed().toLower() : QStringLiteral("openai");
 
     if (baseUrl.isEmpty())
     {
@@ -85,7 +133,7 @@ void ConfigDialog::onTestConnection()
     req.setRawHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
     QByteArray payload;
-    if (providerStr == "openai")
+    if (providerStr == QStringLiteral("openai"))
     {
         const QString model = m_modelNameEdit ? m_modelNameEdit->text().trimmed() : QString();
         if (model.isEmpty())
@@ -146,7 +194,7 @@ void ConfigDialog::onTestConnection()
                         m_testConnectionBtn->setEnabled(true);
 
                     const int status = activeReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-                    const QByteArray body = activeReply->readAll();
+                    activeReply->readAll();
 
                     const bool okHttp = (status >= 200 && status < 300) || status == 401 || status == 403 || status == 405;
                     if ((activeReply->error() == QNetworkReply::NoError || activeReply->error() == QNetworkReply::ContentOperationNotPermittedError) && okHttp)
@@ -205,7 +253,7 @@ void ConfigDialog::onTestConnection()
                     m_testConnectionBtn->setEnabled(true);
 
                 const int status = activeReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-                const QByteArray body = activeReply->readAll();
+                activeReply->readAll();
 
                 const bool okHttp = (status >= 200 && status < 300) || status == 401 || status == 403 || status == 405;
                 if ((activeReply->error() == QNetworkReply::NoError || activeReply->error() == QNetworkReply::ContentOperationNotPermittedError) && okHttp)
@@ -243,6 +291,7 @@ void ConfigDialog::onTestAdvancedApi()
         m_advancedApiResultEdit->clear();
     m_lastAdvancedApiTestJson = QJsonDocument();
     m_hasLastAdvancedApiTestJson = false;
+    m_lastAdvancedApiTestElapsedMs = 0;
     updateAdvancedJsonFieldsButtonState();
 
     QJsonObject root;
@@ -263,12 +312,13 @@ void ConfigDialog::onTestAdvancedApi()
                                                      : (m_useProxyCheck ? m_useProxyCheck->isChecked() : false);
     const QString proxyUrl = root.contains("proxy") ? root.value("proxy").toString().trimmed()
                                                     : (m_proxyUrlEdit ? m_proxyUrlEdit->text().trimmed() : QString());
+    const int timeoutMs = parseAdvancedTimeoutMs(root, 30000);
 
     const QUrl testUrl = ConfigDialogNetworkTestUtils::joinBaseAndEndpointUi(baseUrl, endpoint);
     if (baseUrl.isEmpty() || !testUrl.isValid() || testUrl.scheme().isEmpty() || testUrl.host().isEmpty())
     {
         if (m_advancedApiResultEdit)
-            m_advancedApiResultEdit->setPlainText("base_url æˆ– endpoint æ— æ•ˆã€‚");
+            m_advancedApiResultEdit->setPlainText(QStringLiteral("base_url 或 endpoint 无效。"));
         return;
     }
 
@@ -286,7 +336,7 @@ void ConfigDialog::onTestAdvancedApi()
         if (!ConfigDialogNetworkTestUtils::tryBuildProxyFromUrl(proxyUrl, proxy, proxyErr))
         {
             if (m_advancedApiResultEdit)
-                m_advancedApiResultEdit->setPlainText(QString("ä»£ç†é…ç½®æ— æ•ˆï¼š%1").arg(proxyErr));
+                m_advancedApiResultEdit->setPlainText(QStringLiteral("代理配置无效：%1").arg(proxyErr));
             return;
         }
 
@@ -321,9 +371,9 @@ void ConfigDialog::onTestAdvancedApi()
                                         QJsonObject{{"type", "text"}, {"text", prompt}}}).toJson(QJsonDocument::Compact))},
     };
 
-    if (provider == "openai" && !apiKey.isEmpty())
+    if (provider == QStringLiteral("openai") && !apiKey.isEmpty())
         req.setRawHeader("Authorization", QByteArray("Bearer ") + apiKey.toUtf8());
-    if (provider == "claude" && !apiKey.isEmpty())
+    if (provider == QStringLiteral("claude") && !apiKey.isEmpty())
     {
         req.setRawHeader("x-api-key", apiKey.toUtf8());
         req.setRawHeader("anthropic-version", "2023-06-01");
@@ -365,10 +415,11 @@ void ConfigDialog::onTestAdvancedApi()
     QNetworkReply *issuedReply = m_testNam->post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
     m_testReply = issuedReply;
     QPointer<QNetworkReply> activeReply = issuedReply;
+    const qint64 requestStartMs = QDateTime::currentMSecsSinceEpoch();
 
     QTimer *timeoutTimer = new QTimer(this);
     timeoutTimer->setSingleShot(true);
-    timeoutTimer->setInterval(8000);
+    timeoutTimer->setInterval(timeoutMs);
     connect(timeoutTimer, &QTimer::timeout, this, [activeReply]()
             {
                 if (activeReply && activeReply->isRunning())
@@ -376,7 +427,7 @@ void ConfigDialog::onTestAdvancedApi()
             });
     timeoutTimer->start();
 
-    connect(issuedReply, &QNetworkReply::finished, this, [this, timeoutTimer, activeReply]()
+    connect(issuedReply, &QNetworkReply::finished, this, [this, timeoutTimer, activeReply, requestStartMs]()
             {
                 timeoutTimer->stop();
                 timeoutTimer->deleteLater();
@@ -396,8 +447,11 @@ void ConfigDialog::onTestAdvancedApi()
                 if (m_testAdvancedApiBtn)
                     m_testAdvancedApiBtn->setEnabled(true);
 
+                m_lastAdvancedApiTestElapsedMs =
+                    qMax<qint64>(0, QDateTime::currentMSecsSinceEpoch() - requestStartMs);
+
                 const int status = activeReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-                const QByteArray body = activeReply->readAll();
+                const QByteArray bodyBytes = activeReply->readAll();
                 QString output;
                 if (status == 0 || activeReply->error() != QNetworkReply::NoError)
                 {
@@ -407,8 +461,8 @@ void ConfigDialog::onTestAdvancedApi()
                 {
                     output = QString("HTTP %1").arg(status);
                 }
-                if (!body.isEmpty())
-                    output += QString("\n\nå“åº”å†…å®¹ï¼š\n%1").arg(QString::fromUtf8(body));
+                if (!bodyBytes.isEmpty())
+                    output += QStringLiteral("\n\n响应内容：\n%1").arg(QString::fromUtf8(bodyBytes));
                 if (m_advancedApiResultEdit)
                     m_advancedApiResultEdit->setPlainText(output);
 
@@ -417,7 +471,7 @@ void ConfigDialog::onTestAdvancedApi()
                 if (status >= 200 && status < 300)
                 {
                     QJsonParseError jerr;
-                    const QJsonDocument doc = QJsonDocument::fromJson(body, &jerr);
+                    const QJsonDocument doc = QJsonDocument::fromJson(bodyBytes, &jerr);
                     if (!doc.isNull() && (doc.isObject() || doc.isArray()) && jerr.error == QJsonParseError::NoError)
                     {
                         m_lastAdvancedApiTestJson = doc;
@@ -428,4 +482,3 @@ void ConfigDialog::onTestAdvancedApi()
                 activeReply->deleteLater();
             });
 }
-
