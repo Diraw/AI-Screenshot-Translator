@@ -4,7 +4,7 @@
 [Setup]
 ; 程序基本信息
 AppName={#MyAppName}
-AppVersion=1.0.5-beta
+AppVersion=1.0.5
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 SetupIconFile={#SourcePath}\assets\icon.ico
@@ -56,7 +56,7 @@ Type: files; Name: "{app}\debug.log"
 [Files]
 ; Let Inno use normal version checks for versioned binaries.
 Source: "{#SourcePath}\build\Release\{#MyAppExeName}"; DestDir: "{app}"
-Source: "{#SourcePath}\build\Release\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs; Excludes: "{#MyAppExeName},storage,*.log,.stfolder,.stfolder\*"
+Source: "{#SourcePath}\build\Release\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs; Excludes: "{#MyAppExeName},*.log,.stfolder,.stfolder\*"
 ; Preserve an existing user-maintained .env during upgrades.
 Source: "{#SourcePath}\.env"; DestDir: "{app}"; Flags: onlyifdoesntexist
 
@@ -69,7 +69,6 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-Type: filesandordirs; Name: "{app}\storage\*"
 Type: filesandordirs; Name: "{app}\wkf.log"
 Type: filesandordirs; Name: "{app}\debug.log"
 
