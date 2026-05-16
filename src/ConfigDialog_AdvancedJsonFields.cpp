@@ -231,6 +231,8 @@ void ConfigDialog::onPickAdvancedJsonFields()
     }
 
     m_advancedTemplateDetached = true;
+    if (!selectedFields.isEmpty() && m_showAdvancedDebugInResultCheck)
+        m_showAdvancedDebugInResultCheck->setChecked(true);
     updateAdvancedTemplateStatusLabel();
 
     if (m_advancedApiResultEdit)
